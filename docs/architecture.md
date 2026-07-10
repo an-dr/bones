@@ -150,13 +150,8 @@ concern):
 
 ## Repository shape (target)
 
-```text
-bones/
-├── core/            # native engine: platform, renderer, bus, host, logging
-├── wit/             # WIT package defining the extension world
-├── extensions/      # example / first-party extensions (one dir each)
-└── docs/            # this document + ADRs
-```
+See [structure.md](structure.md) for the component inventory, dependency
+rules, and source layout.
 
 ## Out of scope for this design
 
