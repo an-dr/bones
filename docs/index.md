@@ -60,3 +60,4 @@ Immutable ADRs in [adr/](adr/):
 - [ADR-012](adr/ADR-012-injected-logging-sink.md) — logging via an injected sink trait, resolved at kernel construction
 - [ADR-013](adr/ADR-013-bus-on-pubsub-bus.md) — bus built on pubsub-bus, with a persistent adapter and deferred dispatch
 - [ADR-014](adr/ADR-014-headless-runner-skeleton.md) — headless runner skeleton: step-driven, injected bus, virtual clock
+- [ADR-015](adr/ADR-015-deferred-dispatch-remains-mandatory.md) — deferred dispatch remains mandatory regardless of the pubsub-bus fix
