@@ -1,7 +1,8 @@
 # hello
 
-Minimal WASM extension proving the rung-1 contract (`wit/core.wit`): calls
-the `log` import from `init` and from every `on-tick`.
+Reference WASM extension exercising the full contract (`wit/core.wit`):
+subscribes to `core/tick` in `init`, then logs on every `init`, `on-tick`,
+and `on-message`.
 
 ## Build
 

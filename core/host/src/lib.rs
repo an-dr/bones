@@ -1,7 +1,9 @@
 //! Extension host (architecture.md): loads one WASM component against the
-//! minimal contract (`wit/core.wit`) and calls its exports. Registers as an
-//! ordinary bus endpoint — structure.md: modules and extensions are
-//! indistinguishable on the bus — subscribed to `core/tick`.
+//! contract (`wit/core.wit`) and calls its exports. Registers as an ordinary
+//! bus endpoint — structure.md: modules and extensions are indistinguishable
+//! on the bus. Topic subscriptions (including `core/tick`) are opt-in,
+//! requested by the extension itself via the `subscribe` import during
+//! `init` (messaging.md).
 
 use std::sync::Mutex;
 
@@ -32,6 +34,7 @@ struct State {
     logger: Logger,
     wasi: wasmtime_wasi::WasiCtx,
     table: wasmtime_wasi::ResourceTable,
+    requested_topics: Vec<String>,
 }
 
 impl HostApiImports for State {
@@ -43,6 +46,10 @@ impl HostApiImports for State {
             Level::Warn => self.logger.warn(category, &message),
             Level::Error => self.logger.error(category, &message),
         }
+    }
+
+    fn subscribe(&mut self, topic: String) {
+        self.requested_topics.push(topic);
     }
 }
 
@@ -81,6 +88,7 @@ impl Host {
                 logger,
                 wasi: wasmtime_wasi::WasiCtxBuilder::new().build(),
                 table: wasmtime_wasi::ResourceTable::new(),
+                requested_topics: Vec::new(),
             },
         );
         let bindings = Extension::instantiate(&mut store, &component, &linker)?;
@@ -91,19 +99,32 @@ impl Host {
             bindings,
         })
     }
+
+    /// Topics the extension asked for via `subscribe` during `init` (only —
+    /// this rung has no later opportunity to subscribe). Drains the list;
+    /// meant to be read once, right after `load`, by whoever registers this
+    /// `Host` on the bus.
+    pub fn requested_topics(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.store.get_mut().unwrap().data_mut().requested_topics)
+    }
 }
 
 impl Handler for Host {
-    /// Only `core/tick` matters at this rung — no `on-message` export yet.
     /// `&mut self` already gives exclusive access (the bus never calls a
-    /// handler concurrently, ADR-013), so this never contends.
+    /// handler concurrently, ADR-013), so the inner `Mutex` never contends.
     fn handle(&mut self, envelope: &Envelope) {
-        let Some(dt) = tick_dt(envelope) else {
-            return;
-        };
         let store = self.store.get_mut().unwrap();
-        if let Err(err) = self.bindings.call_on_tick(&mut *store, dt) {
-            store.data().logger.error("host", &format!("on-tick trapped: {err}"));
+        let result = match tick_dt(envelope) {
+            Some(dt) => self.bindings.call_on_tick(&mut *store, dt),
+            None => self.bindings.call_on_message(
+                &mut *store,
+                &envelope.topic,
+                &envelope.sender,
+                &envelope.payload,
+            ),
+        };
+        if let Err(err) = result {
+            store.data().logger.error("host", &format!("handler trapped: {err}"));
         }
     }
 }
@@ -136,6 +157,39 @@ mod tests {
         assert!(
             records.iter().any(|(_, _, msg)| msg.contains("init")),
             "expected an init log line, got {records:?}"
+        );
+    }
+
+    #[test]
+    fn requested_topics_reflects_what_init_subscribed_to() {
+        let mut host = load_hello(Logger::default());
+        assert_eq!(host.requested_topics(), vec![TICK_TOPIC.to_string()]);
+        assert!(host.requested_topics().is_empty(), "must drain, not repeat");
+    }
+
+    #[test]
+    fn on_message_is_dispatched_for_non_tick_topics() {
+        let sink = RecordingSink::new();
+        let host = load_hello(Logger::new(Arc::new(sink.clone())));
+
+        let bus = Bus::new();
+        let ep = bus.register("hello", host);
+        ep.subscribe("test/event");
+
+        bus.publish(Envelope {
+            topic: "test/event".to_string(),
+            sender: "someone".to_string(),
+            correlation: None,
+            payload: Vec::new(),
+        });
+        bus.dispatch();
+
+        let records = sink.records();
+        assert!(
+            records
+                .iter()
+                .any(|(_, _, msg)| msg.contains("message on test/event from someone")),
+            "expected an on-message log line, got {records:?}"
         );
     }
 

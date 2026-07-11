@@ -7,4 +7,8 @@ edition = "2021"
 bus = { path = "../bus" }
 host = { path = "../host" }
 logging = { path = "../logging" }
+platform = { path = "../platform" }
 wasmtime = { version = "46.0.1", features = ["component-model"] }
+
+[dev-dependencies]
+sdl3 = { version = "0.18.4", features = ["build-from-source-static"] }

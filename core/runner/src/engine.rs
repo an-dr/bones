@@ -10,7 +10,7 @@ use std::time::Duration;
 use host::Host;
 use logging::Logger;
 
-use crate::{Runner, TICK_TOPIC};
+use crate::Runner;
 
 const DEFAULT_TICK_HZ: f64 = 60.0;
 
@@ -18,6 +18,7 @@ pub struct Engine {
     extensions_dir: Option<PathBuf>,
     logger: Logger,
     tick_hz: f64,
+    window: Option<(String, u32, u32)>,
 }
 
 impl Engine {
@@ -26,6 +27,7 @@ impl Engine {
             extensions_dir: None,
             logger: Logger::default(),
             tick_hz: DEFAULT_TICK_HZ,
+            window: None,
         }
     }
 
@@ -46,14 +48,26 @@ impl Engine {
         self
     }
 
-    /// Wires the bus and every `.wasm` file found in `extensions_dir`, each
+    /// Opens one SDL window (platform/design.md) and feeds its keyboard
+    /// events onto `input/*` each frame of `run`'s loop. No window
+    /// configured here means no platform at all — a headless engine.
+    pub fn window(mut self, title: impl Into<String>, width: u32, height: u32) -> Self {
+        self.window = Some((title.into(), width, height));
+        self
+    }
+
+    /// Wires the bus, every `.wasm` file found in `extensions_dir` (each
     /// registered as a bus endpoint named after its file stem and
-    /// subscribed to `core/tick`. A file that fails to load is logged and
-    /// skipped — one bad extension never stops the others (or startup)
-    /// from proceeding. Exposed publicly (not just used by `run`) since a
-    /// future driver (platform's own event pump, rung 2) will want the
-    /// wired-up `Runner` without this module's sleep-loop attached to it.
-    pub fn build(self) -> wasmtime::Result<Runner> {
+    /// subscribed to whatever topics it requested via `subscribe` during
+    /// its own `init` — opt-in, including `core/tick`, messaging.md), and
+    /// the window if `.window(...)` was set. A file that fails to load is
+    /// logged and skipped — one bad extension never stops the others (or
+    /// startup) from proceeding. Exposed publicly (not just used by `run`)
+    /// since a future driver (platform's own vsync-paced loop) will want
+    /// the wired-up `Runner`/`Platform` without this module's sleep-loop
+    /// attached to them — `run` is exactly that: `build` plus timing.
+    pub fn build(mut self) -> wasmtime::Result<(Runner, Option<platform::Platform>)> {
+        let window = self.window.take();
         let bus = bus::Bus::new();
         let wasm_engine = host::new_engine()?;
 
@@ -61,11 +75,16 @@ impl Engine {
             for path in find_wasm_files(dir) {
                 let name = derive_extension_name(&path);
                 match Host::load(&wasm_engine, &path.to_string_lossy(), self.logger.clone()) {
-                    Ok(extension) => {
+                    Ok(mut extension) => {
+                        let topics = extension.requested_topics();
                         let ep = bus.register(name.clone(), extension);
-                        ep.subscribe(TICK_TOPIC);
-                        self.logger
-                            .info("engine", &format!("loaded '{name}' from {}", path.display()));
+                        for topic in &topics {
+                            ep.subscribe(topic);
+                        }
+                        self.logger.info(
+                            "engine",
+                            &format!("loaded '{name}' from {} (subscribed: {topics:?})", path.display()),
+                        );
                     }
                     Err(err) => {
                         self.logger
@@ -75,7 +94,14 @@ impl Engine {
             }
         }
 
-        Ok(Runner::new(bus, self.logger))
+        let platform = match window {
+            Some((title, width, height)) => {
+                Some(platform::Platform::new(&title, width, height).map_err(wasmtime::Error::msg)?)
+            }
+            None => None,
+        };
+
+        Ok((Runner::new(bus, self.logger), platform))
     }
 
     /// Runs forever at `tick_hz` until the process is killed. A thin
@@ -86,12 +112,20 @@ impl Engine {
     /// `dt` passed to `step` is the *measured* time since the previous
     /// tick, not the nominal period — if a tick runs long, extensions see
     /// that in `dt` rather than being told a fixed value that didn't happen.
+    ///
+    /// If `.window(...)` was set, every iteration polls it first (input
+    /// events land on the bus before `step`'s dispatch), matching the
+    /// frame-phase order in architecture.md: poll input, then dispatch/tick.
     pub fn run(self) -> wasmtime::Result<()> {
         let period = Duration::from_secs_f64(1.0 / self.tick_hz);
-        let runner = self.build()?;
+        let (runner, mut platform) = self.build()?;
 
         let mut last = std::time::Instant::now() - period;
         loop {
+            if let Some(platform) = &mut platform {
+                platform.poll_events(runner.bus(), "platform");
+            }
+
             let now = std::time::Instant::now();
             let dt = (now - last).as_secs_f32();
             last = now;
@@ -138,6 +172,11 @@ mod tests {
         env!("CARGO_MANIFEST_DIR"),
         "/../../extensions/hello/target/wasm32-wasip2/release"
     );
+    // Built by extensions/keyecho/build.ps1 (see its README).
+    const KEYECHO_DIR: &str = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../extensions/keyecho/target/wasm32-wasip2/release"
+    );
 
     #[test]
     fn tick_hz_defaults_to_60_and_is_overridable() {
@@ -176,11 +215,12 @@ mod tests {
         let sink = RecordingSink::new();
         let logger = Logger::new(Arc::new(sink.clone()));
 
-        let runner = Engine::builder()
+        let (runner, platform) = Engine::builder()
             .extensions_dir(HELLO_DIR)
             .logger(logger)
             .build()
             .expect("build extensions/hello first: pwsh extensions/hello/build.ps1");
+        assert!(platform.is_none(), "no .window() was set");
 
         runner.step(1.0 / 60.0);
 
@@ -204,7 +244,7 @@ mod tests {
         let sink = RecordingSink::new();
         let logger = Logger::new(Arc::new(sink.clone()));
 
-        let runner = Engine::builder()
+        let (runner, _platform) = Engine::builder()
             .extensions_dir(&dir)
             .logger(logger)
             .build()
@@ -217,6 +257,42 @@ mod tests {
         assert!(
             records.iter().any(|(_, _, msg)| msg.contains("failed to load")),
             "expected a load failure to be logged, got {records:?}"
+        );
+    }
+
+    #[test]
+    fn a_synthetic_keypress_reaches_an_extension_through_a_real_window() {
+        let sink = RecordingSink::new();
+        let logger = Logger::new(Arc::new(sink.clone()));
+
+        let (runner, platform) = Engine::builder()
+            .extensions_dir(KEYECHO_DIR)
+            .logger(logger)
+            .window("test", 64, 64)
+            .build()
+            .expect("build extensions/keyecho first: pwsh extensions/keyecho/build.ps1");
+        let mut platform = platform.expect(".window() was set");
+
+        platform
+            .inject_event(sdl3::event::Event::KeyDown {
+                timestamp: 0,
+                window_id: 0,
+                keycode: Some(sdl3::keyboard::Keycode::A),
+                scancode: Some(sdl3::keyboard::Scancode::A),
+                keymod: sdl3::keyboard::Mod::empty(),
+                repeat: false,
+                which: 0,
+                raw: 0,
+            })
+            .expect("inject should succeed");
+
+        platform.poll_events(runner.bus(), "platform");
+        runner.step(1.0 / 60.0);
+
+        let records = sink.records();
+        assert!(
+            records.iter().any(|(_, _, msg)| msg.contains("key pressed: A")),
+            "expected keyecho to log the injected keypress, got {records:?}"
         );
     }
 }
