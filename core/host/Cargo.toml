@@ -1,0 +1,11 @@
+[package]
+name = "host"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bus = { path = "../bus" }
+contract = { path = "../contract" }
+logging = { path = "../logging" }
+wasmtime = { version = "46.0.1", features = ["component-model"] }
+wasmtime-wasi = "46.0.1"
