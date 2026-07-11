@@ -2,15 +2,38 @@
 
 Map of all documentation in this repo.
 
+## Documentation policy
+
+Docs capture **behavior and boundaries, not code**. Each layer has an
+altitude, and staying above code details is deliberate:
+
+- [architecture.md](architecture.md) — system altitude: components, message
+  flows, lifecycles.
+- `design/` — one level more detailed than architecture: behavior contracts
+  (semantics, guarantees, state machines) and logical structure. Never exact
+  signatures, function names, or file-level layout.
+- `adr/` — immutable decisions with rationale; superseded by new ADRs, never
+  edited.
+- [roadmap.md](roadmap.md) — remaining work only; completed increments are
+  deleted, not checked off.
+
+The altitude test: **an average refactoring must not require a documentation
+update.** Docs change when observable behavior, a contract, or a component
+boundary changes — not when code moves, splits, or gets renamed. If a doc
+keeps needing updates during refactorings, it is written too low; raise its
+altitude instead of maintaining it.
+
 ## Architecture
 
 - [architecture.md](architecture.md) — engine design overview: core components, messaging, extension model, diagrams.
 - [structure.md](structure.md) — static structure: components, dependency rules, source layout.
+- [roadmap.md](roadmap.md) — remaining implementation increments with demo milestones.
 
 ## Detailed design
 
 - [design/messaging.md](design/messaging.md) — envelope, topics, request/reply, delivery guarantees, flow control.
 - [design/extensions.md](design/extensions.md) — extension contract, execution model, lifecycle, faults, hot reload.
+- [design/modules.md](design/modules.md) — native modules, frame phases, service traits, composition root, embedding.
 - [design/presentation.md](design/presentation.md) — gfx/ui/web backends, input and focus routing.
 - [design/platform.md](design/platform.md) — window, tray, input, frame loop, shutdown.
 
@@ -32,3 +55,5 @@ Immutable ADRs in [adr/](adr/):
 - [ADR-007](adr/ADR-007-watchdog-quarantine.md) — extension watchdog and quarantine
 - [ADR-008](adr/ADR-008-layered-input-focus.md) — layered input focus, top layer consumes
 - [ADR-009](adr/ADR-009-delivery-semantics.md) — bus delivery: per-sender FIFO, at-most-once
+- [ADR-010](adr/ADR-010-synchronous-send.md) — synchronous send: request/reply completes within the call
+- [ADR-011](adr/ADR-011-native-core-modules.md) — native core modules: kernel plus consumer-composed modules

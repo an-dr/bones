@@ -2,6 +2,14 @@
 
 bones is a universal extendable engine: a small native core that owns the platform (windows, tray icon, input via SDL), logging, rendering, and a message bus. All product behavior — game logic, GUI applications, tools — lives in extensions\*\*: WASM components written in any language, exchanging messages through the core.
 
+The core itself is two tiers ([ADR-011](adr/ADR-011-native-core-modules.md)):
+a fixed **kernel** (bus, host, platform, logging, runner) and swappable
+**native modules** — renderer, UI layer, web panels. Most projects use the
+shipped engine app as-is and write only extensions; projects with native
+needs embed bones as a library, own the composition root, and inject their
+own modules. On the bus, modules are indistinguishable from extensions. See
+[design/modules.md](design/modules.md).
+
 Decisions behind this design are recorded in [adr/](adr/).
 
 ## System overview
@@ -137,6 +145,10 @@ flowchart TD
     Collect --> Render["Renderer executes commands,<br/>presents frame"]
     Render --> Poll
 ```
+
+These loop steps are the named **frame phases** native modules hook
+(`input → dispatch → tick → render → present`, ADR-011): the renderer module
+owns `render`/`present`, and a headless build simply leaves them empty.
 
 ## Extension interface (sketch)
 

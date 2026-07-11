@@ -1,6 +1,6 @@
 # Messaging
 
-Detailed design of the message bus. Decisions: [ADR-003](../adr/ADR-003-hybrid-messaging.md) (hybrid topology), [ADR-009](../adr/ADR-009-delivery-semantics.md) (delivery semantics).
+Detailed design of the message bus. Decisions: [ADR-003](../adr/ADR-003-hybrid-messaging.md) (hybrid topology), [ADR-009](../adr/ADR-009-delivery-semantics.md) (delivery semantics), [ADR-010](../adr/ADR-010-synchronous-send.md) (synchronous send).
 
 ## Message envelope
 
@@ -46,6 +46,11 @@ the core never inspects them.
 - Every request carries a deadline. The outcome is always one of: a reply, an
   error reply (target faulted, reloading, unknown), or a deadline error. No
   request ends in silence.
+- **Synchronous** (ADR-010): the caller blocks and the reply is the return
+  value of `send`. The target's handler runs as soon as its per-extension
+  serialization allows and under its own time budget; the caller's budget
+  clock pauses while it waits. Call cycles (A→B→A) fail immediately with an
+  error reply.
 
 ```mermaid
 sequenceDiagram
@@ -62,6 +67,15 @@ sequenceDiagram
         Bus-->>A: error reply (same correlation)
     end
 ```
+
+## Boundary pattern: chunky, not chatty
+
+Every message crossing the bus copies its payload twice (components do not
+share memory), so the cost scales with message *count* more than size. Design
+extension boundaries around events and coarse data transfers — publish a
+snapshot or event stream per frame, send static data once at load — rather
+than fine-grained queries on hot paths. Synchronous send (ADR-010) makes
+per-frame queries *possible*; this pattern is why they should stay rare.
 
 ## Guarantees and limits
 
