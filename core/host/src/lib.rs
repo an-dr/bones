@@ -101,7 +101,7 @@ impl Host {
     }
 
     /// Topics the extension asked for via `subscribe` during `init` (only —
-    /// this rung has no later opportunity to subscribe). Drains the list;
+    /// there's no later opportunity to subscribe yet). Drains the list;
     /// meant to be read once, right after `load`, by whoever registers this
     /// `Host` on the bus.
     pub fn requested_topics(&mut self) -> Vec<String> {

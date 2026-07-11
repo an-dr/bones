@@ -1,5 +1,5 @@
-//! Rung 1 demo (roadmap.md): a tick loop over native test endpoints,
-//! showing topic routing and FIFO delivery order (ADR-009).
+//! A tick loop over native test endpoints, showing topic routing and FIFO
+//! delivery order (ADR-009).
 //! Run with: cargo run -p runner --example kernel_demo
 
 use bus::{Bus, Envelope, Handler};

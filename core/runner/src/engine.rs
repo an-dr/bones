@@ -2,7 +2,7 @@
 //! and runs them. `bones::Engine` in the design sketch — lives here as
 //! `runner::Engine` until a top-level facade crate exists to re-export it.
 //! No `.module(...)` yet — that arrives once a real native module
-//! (renderer) exists to shape that part of the API (rung 8's job).
+//! (renderer) exists to shape that part of the API.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;

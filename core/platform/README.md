@@ -1,9 +1,9 @@
 # platform
 
-The only component touching the OS (design/platform.md). This rung: one SDL
-window plus keyboard events onto `input/*` — ADR-008's web/egui layers don't
-exist yet, so every event reaches `input/*` directly. Window/tray/mouse/
-controller/timing are later work.
+The only component touching the OS (design/platform.md). Opens one SDL
+window and publishes keyboard events onto `input/*` — ADR-008's web/egui
+layers don't exist yet, so every event reaches `input/*` directly. Window/
+tray/mouse/controller/timing aren't implemented yet.
 
 - `Platform::new(title, w, h)` — opens one SDL window.
 - `Platform::poll_events(&bus, sender)` — publishes an `input/key-down` or

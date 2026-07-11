@@ -1,7 +1,7 @@
 //! Platform layer (design/platform.md): the only component touching the OS.
-//! This rung: one SDL window, keyboard events onto `input/*` (ADR-008's
+//! Opens one SDL window, publishes keyboard events onto `input/*` (ADR-008's
 //! web/egui layers don't exist yet, so every event reaches `input/*`
-//! directly). Window/tray/mouse/controller/timing are later work.
+//! directly). Window/tray/mouse/controller/timing aren't implemented yet.
 
 use bus::{Bus, Envelope};
 
