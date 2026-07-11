@@ -1,6 +1,9 @@
 use bus::{Bus, Envelope};
 use logging::Logger;
 
+mod engine;
+pub use engine::Engine;
+
 pub const TICK_TOPIC: &str = "core/tick";
 
 /// Reads `dt` back out of a `core/tick` envelope, `None` if the topic

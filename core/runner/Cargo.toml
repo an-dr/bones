@@ -5,4 +5,6 @@ edition = "2021"
 
 [dependencies]
 bus = { path = "../bus" }
+host = { path = "../host" }
 logging = { path = "../logging" }
+wasmtime = { version = "46.0.1", features = ["component-model"] }
