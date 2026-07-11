@@ -57,3 +57,6 @@ Immutable ADRs in [adr/](adr/):
 - [ADR-009](adr/ADR-009-delivery-semantics.md) — bus delivery: per-sender FIFO, at-most-once
 - [ADR-010](adr/ADR-010-synchronous-send.md) — synchronous send: request/reply completes within the call
 - [ADR-011](adr/ADR-011-native-core-modules.md) — native core modules: kernel plus consumer-composed modules
+- [ADR-012](adr/ADR-012-injected-logging-sink.md) — logging via an injected sink trait, resolved at kernel construction
+- [ADR-013](adr/ADR-013-bus-on-pubsub-bus.md) — bus built on pubsub-bus, with a persistent adapter and deferred dispatch
+- [ADR-014](adr/ADR-014-headless-runner-skeleton.md) — headless runner skeleton: step-driven, injected bus, virtual clock
