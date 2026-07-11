@@ -7,18 +7,18 @@ a demonstrable result, not just progress.
 is complete, delete it — git history is the record of what shipped. If the
 plan changes, rewrite the rungs; do not annotate them.
 
-The order below is a dependency ordering, not a strict sequence: after rung 1,
-the renderer, ui, web, and watchdog rungs can proceed in parallel.
+The order below is a dependency ordering, not a strict sequence: renderer,
+ui, web, and watchdog can all proceed in parallel from here — platform
+(their shared prerequisite) is done.
 
 | # | Increment | Demo that proves it |
 | - | --------- | ------------------- |
-| 1 | platform: SDL window, input events onto the bus | Extension logs keypresses |
-| 2 | renderer module + `gfx/*` vocabulary | Extension draws a sprite — the windowed app distribution exists from here |
-| 3 | Synchronous send (ADR-010), `core/lifecycle`, hot reload | Live level reload: edit a level extension, watch it swap in |
-| 4 | Watchdog and budgets (ADR-007) | Runaway extension is faulted and quarantined; engine keeps running |
-| 5 | ui module (egui) + `ui/*` vocabulary | The "notes" example ([examples/egui-app.md](examples/egui-app.md)) runs |
-| 6 | web module (wry) + `web/*` vocabulary | The "dashboard" example ([examples/web-app.md](examples/web-app.md)) runs |
-| 7 | Full builder API: custom native-module injection, embedding demo | A parent project injects a custom module and builds its own engine binary |
+| 1 | renderer module + `gfx/*` vocabulary | Extension draws a sprite — the windowed app distribution exists from here |
+| 2 | Synchronous send (ADR-010), `core/lifecycle`, hot reload | Live level reload: edit a level extension, watch it swap in |
+| 3 | Watchdog and budgets (ADR-007) | Runaway extension is faulted and quarantined; engine keeps running |
+| 4 | ui module (egui) + `ui/*` vocabulary | The "notes" example ([examples/egui-app.md](examples/egui-app.md)) runs |
+| 5 | web module (wry) + `web/*` vocabulary | The "dashboard" example ([examples/web-app.md](examples/web-app.md)) runs |
+| 6 | Full builder API: custom native-module injection, embedding demo | A parent project injects a custom module and builds its own engine binary |
 
 Guardrails while climbing:
 
