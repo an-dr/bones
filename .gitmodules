@@ -1,0 +1,3 @@
+[submodule "vendor/pubsub-bus"]
+	path = vendor/pubsub-bus
+	url = https://github.com/an-dr/pubsub-bus.git

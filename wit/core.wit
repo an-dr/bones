@@ -1,0 +1,19 @@
+package bones:core@0.1.0;
+
+interface host-api {
+    enum level {
+        debug,
+        info,
+        warn,
+        error,
+    }
+
+    log: func(level: level, message: string);
+}
+
+world extension {
+    import host-api;
+
+    export init: func();
+    export on-tick: func(dt: f32);
+}
