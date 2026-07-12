@@ -5,7 +5,9 @@
 //! requested by the extension itself via the `subscribe` import during
 //! `init` (messaging.md).
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+use std::time::Duration;
 
 use bus::{Bus, Envelope, Handler};
 use contract::bones::core::host_api::{Host as HostApiImports, Level};
@@ -15,11 +17,31 @@ use wasmtime::component::{Component, HasSelf, Linker};
 use wasmtime::{Config, Engine, Store};
 
 const TICK_TOPIC: &str = "core/tick";
+/// How often the background thread `new_engine` spawns advances the shared
+/// epoch counter every loaded extension's calls are budgeted against.
+const EPOCH_TICK_INTERVAL: Duration = Duration::from_millis(5);
+/// Per-call time budget (ADR-007), in epoch ticks: 10 * 5ms = 50ms. A call
+/// that hasn't returned by then traps, faulting the extension.
+const CALL_BUDGET_TICKS: u64 = 10;
+/// Budget for `instantiate` + `init` (200 ticks * 5ms = 1s): cold JIT
+/// compilation is a legitimate one-time cost `CALL_BUDGET_TICKS` isn't
+/// meant to cover.
+const LOAD_BUDGET_TICKS: u64 = 200;
 
 /// The only `Engine` configuration `Host` works with — component model
 /// support is not optional here, so this avoids a caller forgetting it.
+/// Epoch interruption (ADR-007's time budget) needs a ticker advancing the
+/// shared epoch counter for `Store::set_epoch_deadline` to mean anything in
+/// wall-clock terms; runs for the engine's lifetime, no shutdown needed for
+/// a process-lifetime `Engine`.
 pub fn new_engine() -> wasmtime::Result<Engine> {
-    Engine::new(Config::new().wasm_component_model(true))
+    let engine = Engine::new(Config::new().wasm_component_model(true).epoch_interruption(true))?;
+    let ticker = engine.clone();
+    std::thread::spawn(move || loop {
+        std::thread::sleep(EPOCH_TICK_INTERVAL);
+        ticker.increment_epoch();
+    });
+    Ok(engine)
 }
 
 fn tick_dt(envelope: &Envelope) -> Option<f32> {
@@ -83,12 +105,19 @@ pub struct Host {
     // already serializes per-endpoint calls, ADR-013).
     store: Mutex<Store<State>>,
     bindings: Extension,
+    /// Set once a call traps or exceeds its time budget (ADR-007) and never
+    /// cleared — a faulted `Host` is done; quarantining it (dropping this
+    /// instance, releasing its registrations) is whoever holds it's job,
+    /// not this flag's.
+    faulted: AtomicBool,
 }
 
 impl Host {
     /// Loads `wasm_path`, links the `log`/`subscribe`/`publish` imports, and
-    /// calls `init` once. `name` is this extension's bus endpoint id — the
-    /// `sender` on envelopes it publishes; `bus` is what `publish` reaches.
+    /// calls `init` once — under the same time budget as any other call, so
+    /// a hanging `init` faults instead of blocking `load` forever. `name` is
+    /// this extension's bus endpoint id — the `sender` on envelopes it
+    /// publishes; `bus` is what `publish` reaches.
     pub fn load(
         engine: &Engine,
         wasm_path: &str,
@@ -112,12 +141,17 @@ impl Host {
                 requested_topics: Vec::new(),
             },
         );
+        // Epoch interruption traps immediately on any check once enabled
+        // (Config::epoch_interruption) until a deadline is set — must be
+        // set before instantiate, which can itself run guest code.
+        store.set_epoch_deadline(LOAD_BUDGET_TICKS);
         let bindings = Extension::instantiate(&mut store, &component, &linker)?;
         bindings.call_init(&mut store)?;
 
         Ok(Self {
             store: Mutex::new(store),
             bindings,
+            faulted: AtomicBool::new(false),
         })
     }
 
@@ -128,13 +162,27 @@ impl Host {
     pub fn requested_topics(&mut self) -> Vec<String> {
         std::mem::take(&mut self.store.get_mut().unwrap().data_mut().requested_topics)
     }
+
+    /// Whether a call has ever trapped or exceeded its time budget
+    /// (ADR-007). Sticky — checked before every later call so a faulted
+    /// extension is never called into again.
+    pub fn is_faulted(&self) -> bool {
+        self.faulted.load(Ordering::Relaxed)
+    }
 }
 
 impl Handler for Host {
     /// `&mut self` already gives exclusive access (the bus never calls a
     /// handler concurrently, ADR-013), so the inner `Mutex` never contends.
+    /// A no-op once faulted — quarantine (dropping/unregistering this
+    /// instance) is the caller's job, not this method's; until that
+    /// happens, silently ignoring further deliveries is the safe default.
     fn handle(&mut self, envelope: &Envelope) {
+        if self.is_faulted() {
+            return;
+        }
         let store = self.store.get_mut().unwrap();
+        store.set_epoch_deadline(CALL_BUDGET_TICKS);
         let result = match tick_dt(envelope) {
             Some(dt) => self.bindings.call_on_tick(&mut *store, dt),
             None => self.bindings.call_on_message(
@@ -146,6 +194,7 @@ impl Handler for Host {
         };
         if let Err(err) = result {
             store.data().logger.error("host", &format!("handler trapped: {err}"));
+            self.faulted.store(true, Ordering::Relaxed);
         }
     }
 }
@@ -160,6 +209,11 @@ mod tests {
     const HELLO_WASM: &str = concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../extensions/hello/target/wasm32-wasip2/release/hello.wasm"
+    );
+    // Built by extensions/runaway_demo/build.ps1 (see its README).
+    const RUNAWAY_WASM: &str = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../extensions/runaway_demo/target/wasm32-wasip2/release/runaway_demo.wasm"
     );
 
     fn load_hello(bus: Bus, logger: Logger) -> Host {
@@ -263,5 +317,46 @@ mod tests {
             got.iter().any(|e| e.topic == "hello/received" && e.sender == "hello"),
             "expected hello's publish to reach another subscriber, got {got:?}"
         );
+    }
+
+    fn tick_envelope() -> Envelope {
+        Envelope {
+            topic: TICK_TOPIC.to_string(),
+            sender: "test".to_string(),
+            correlation: None,
+            payload: (1.0f32 / 60.0).to_le_bytes().to_vec(),
+        }
+    }
+
+    #[test]
+    fn a_call_that_never_returns_traps_and_faults_instead_of_hanging_forever() {
+        let sink = RecordingSink::new();
+        let engine = new_engine().unwrap();
+        let mut host = Host::load(&engine, RUNAWAY_WASM, "runaway", Bus::new(), Logger::new(Arc::new(sink.clone())))
+            .expect("build extensions/runaway_demo first: pwsh extensions/runaway_demo/build.ps1");
+        assert!(!host.is_faulted(), "must not start out faulted");
+
+        host.handle(&tick_envelope()); // blocks for ~the time budget, then traps
+
+        assert!(host.is_faulted(), "an on-tick that never returns must fault the extension");
+        let records = sink.records();
+        assert!(
+            records.iter().any(|(_, _, msg)| msg.contains("handler trapped")),
+            "expected a trap log line, got {records:?}"
+        );
+    }
+
+    #[test]
+    fn a_faulted_host_ignores_further_deliveries_instead_of_hanging_again() {
+        let engine = new_engine().unwrap();
+        let mut host = Host::load(&engine, RUNAWAY_WASM, "runaway", Bus::new(), Logger::default())
+            .expect("build extensions/runaway_demo first: pwsh extensions/runaway_demo/build.ps1");
+        host.handle(&tick_envelope());
+        assert!(host.is_faulted());
+
+        // If this didn't short-circuit on is_faulted(), it would hang for
+        // another full time budget (or forever, without epoch interruption
+        // active a second time) instead of returning immediately.
+        host.handle(&tick_envelope());
     }
 }

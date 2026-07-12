@@ -12,8 +12,14 @@ indistinguishable from any other endpoint.
   during `init` (opt-in, including `core/tick` — messaging.md); read once by
   whoever registers the `Host` on the bus.
 - Deliveries dispatch to `on-tick` (for `core/tick`) or `on-message` (every
-  other subscribed topic). Traps are logged, not fatal — there's no
-  watchdog or quarantine yet.
+  other subscribed topic). Every call, `init` included, runs under a
+  per-call time budget (ADR-007) enforced by wasmtime's epoch interruption;
+  `new_engine` spawns the ticker that advances it. A call that traps or
+  exceeds its budget marks the `Host` permanently faulted
+  (`Host::is_faulted`) — further deliveries are silently ignored rather than
+  risking another hang. Quarantining a faulted `Host` (dropping it,
+  releasing its bus/registry registrations) is the caller's job, not this
+  crate's.
 
 Also wires in `wasmtime-wasi` with a deny-by-default `WasiCtx`: any
 `wasm32-wasip2` component imports some WASI Preview 2 interfaces via Rust's
