@@ -20,13 +20,13 @@ const TICK_TOPIC: &str = "core/tick";
 /// How often the background thread `new_engine` spawns advances the shared
 /// epoch counter every loaded extension's calls are budgeted against.
 const EPOCH_TICK_INTERVAL: Duration = Duration::from_millis(5);
-/// Per-call time budget (ADR-007), in epoch ticks: 10 * 5ms = 50ms. A call
-/// that hasn't returned by then traps, faulting the extension.
-const CALL_BUDGET_TICKS: u64 = 10;
-/// Budget for `instantiate` + `init` (200 ticks * 5ms = 1s): cold JIT
-/// compilation is a legitimate one-time cost `CALL_BUDGET_TICKS` isn't
+/// Per-call timeout (ADR-007's time budget), in epoch ticks: 10 * 5ms =
+/// 50ms. A call that hasn't returned by then traps, faulting the extension.
+const CALL_TIMEOUT_TICKS: u64 = 10;
+/// Timeout for `instantiate` + `init` (200 ticks * 5ms = 1s): cold JIT
+/// compilation is a legitimate one-time cost `CALL_TIMEOUT_TICKS` isn't
 /// meant to cover.
-const LOAD_BUDGET_TICKS: u64 = 200;
+const LOAD_TIMEOUT_TICKS: u64 = 200;
 
 /// The only `Engine` configuration `Host` works with — component model
 /// support is not optional here, so this avoids a caller forgetting it.
@@ -144,7 +144,7 @@ impl Host {
         // Epoch interruption traps immediately on any check once enabled
         // (Config::epoch_interruption) until a deadline is set — must be
         // set before instantiate, which can itself run guest code.
-        store.set_epoch_deadline(LOAD_BUDGET_TICKS);
+        store.set_epoch_deadline(LOAD_TIMEOUT_TICKS);
         let bindings = Extension::instantiate(&mut store, &component, &linker)?;
         bindings.call_init(&mut store)?;
 
@@ -182,7 +182,7 @@ impl Handler for Host {
             return;
         }
         let store = self.store.get_mut().unwrap();
-        store.set_epoch_deadline(CALL_BUDGET_TICKS);
+        store.set_epoch_deadline(CALL_TIMEOUT_TICKS);
         let result = match tick_dt(envelope) {
             Some(dt) => self.bindings.call_on_tick(&mut *store, dt),
             None => self.bindings.call_on_message(
