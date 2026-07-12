@@ -4,7 +4,7 @@ wit_bindgen::generate!({
 });
 
 use bones::core::host_api::{log, publish, subscribe, Level};
-use wire::Writer;
+use buffer_rw::Writer;
 
 const SPRITE_PNG: &[u8] = include_bytes!("assets/robot_william.png");
 const SPRITE_ID: u32 = 1;

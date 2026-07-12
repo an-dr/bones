@@ -42,31 +42,31 @@ fn parse_command<'a>(topic: &str, payload: &'a [u8]) -> Option<Result<Command<'a
 }
 
 fn parse_clear(payload: &[u8]) -> Result<Command<'_>, String> {
-    let mut r = wire::Reader::new(payload);
-    let red = r.read_u8().map_err(|e| e.to_string())?;
-    let green = r.read_u8().map_err(|e| e.to_string())?;
-    let blue = r.read_u8().map_err(|e| e.to_string())?;
-    let alpha = r.read_u8().map_err(|e| e.to_string())?;
-    r.finish().map_err(|e| e.to_string())?;
+    let mut r = buffer_rw::Reader::new(payload);
+    let red = r.read_u8()?;
+    let green = r.read_u8()?;
+    let blue = r.read_u8()?;
+    let alpha = r.read_u8()?;
+    r.finish()?;
     Ok(Command::Clear { r: red, g: green, b: blue, a: alpha })
 }
 
 fn parse_load_sprite(payload: &[u8]) -> Result<Command<'_>, String> {
-    let mut r = wire::Reader::new(payload);
-    let id = r.read_u32().map_err(|e| e.to_string())?;
+    let mut r = buffer_rw::Reader::new(payload);
+    let id = r.read_u32()?;
     Ok(Command::LoadSprite { id, png_bytes: r.read_rest() })
 }
 
 fn parse_draw_sprite(payload: &[u8]) -> Result<Command<'_>, String> {
-    let mut r = wire::Reader::new(payload);
-    let id = r.read_u32().map_err(|e| e.to_string())?;
-    let dst_x = r.read_i32().map_err(|e| e.to_string())?;
-    let dst_y = r.read_i32().map_err(|e| e.to_string())?;
-    let src_x = r.read_i32().map_err(|e| e.to_string())?;
-    let src_y = r.read_i32().map_err(|e| e.to_string())?;
-    let src_w = r.read_u32().map_err(|e| e.to_string())?;
-    let src_h = r.read_u32().map_err(|e| e.to_string())?;
-    r.finish().map_err(|e| e.to_string())?;
+    let mut r = buffer_rw::Reader::new(payload);
+    let id = r.read_u32()?;
+    let dst_x = r.read_i32()?;
+    let dst_y = r.read_i32()?;
+    let src_x = r.read_i32()?;
+    let src_y = r.read_i32()?;
+    let src_w = r.read_u32()?;
+    let src_h = r.read_u32()?;
+    r.finish()?;
     Ok(Command::DrawSprite { id, dst_x, dst_y, src_x, src_y, src_w, src_h })
 }
 

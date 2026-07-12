@@ -10,4 +10,4 @@ crate-type = ["cdylib"]
 
 [dependencies]
 wit-bindgen = "0.59.0"
-wire = { path = "../../wire" }
+buffer_rw = { path = "../../buffer_rw" }
