@@ -2,8 +2,9 @@ use std::sync::{Arc, Mutex};
 
 use pubsub_bus::{BusEvent, Subscriber};
 
-/// Every message on the bus (messaging.md). `correlation` is unused until
-/// direct send (ADR-010) but present now to avoid reshaping call sites later.
+/// Every message on the bus (messaging.md). TODO: `correlation` is unused
+/// until direct send (ADR-010) lands; present now to avoid reshaping call
+/// sites later.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Envelope {
     pub topic: String,

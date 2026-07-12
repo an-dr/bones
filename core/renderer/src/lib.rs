@@ -1,7 +1,7 @@
 //! Renderer module (design/modules.md, ADR-002): executes `gfx/*` draw
-//! commands against one SDL window. Not a generic Module yet — directly
-//! wired into Engine, same as host and platform, until the module trait
-//! exists to design from real examples.
+//! commands against one SDL window. TODO: not a generic Module yet —
+//! directly wired into Engine, same as host and platform, until the module
+//! trait exists to design from real examples.
 
 use std::collections::HashMap;
 

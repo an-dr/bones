@@ -1,8 +1,8 @@
 //! The public builder API (design/modules.md): discovers WASM extensions
-//! and runs them. `bones::Engine` in the design sketch — lives here as
-//! `runner::Engine` until a top-level facade crate exists to re-export it.
-//! No `.module(...)` yet — that arrives once a real native module
-//! (renderer) exists to shape that part of the API.
+//! and runs them. TODO: `bones::Engine` in the design sketch — lives here
+//! as `runner::Engine` until a top-level facade crate exists to re-export
+//! it. TODO: no `.module(...)` yet for injecting custom native modules —
+//! renderer is wired directly into this crate instead of through one.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};

@@ -121,10 +121,10 @@ impl Host {
         })
     }
 
-    /// Topics the extension asked for via `subscribe` during `init` (only —
-    /// there's no later opportunity to subscribe yet). Drains the list;
-    /// meant to be read once, right after `load`, by whoever registers this
-    /// `Host` on the bus.
+    /// Topics the extension asked for via `subscribe` during `init`. TODO:
+    /// `init` is the only opportunity to subscribe today — no way to
+    /// subscribe again later. Drains the list; meant to be read once, right
+    /// after `load`, by whoever registers this `Host` on the bus.
     pub fn requested_topics(&mut self) -> Vec<String> {
         std::mem::take(&mut self.store.get_mut().unwrap().data_mut().requested_topics)
     }
