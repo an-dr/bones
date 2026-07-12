@@ -4,7 +4,7 @@
 //! Build the extension first: pwsh extensions/hello/build.ps1
 //! Then: cargo run -p host --example hello_extension
 
-use bus::{Bus, Envelope};
+use bus::{Bus, Envelope, Registry};
 use host::Host;
 use logging::Logger;
 
@@ -28,7 +28,7 @@ fn main() -> wasmtime::Result<()> {
     let engine = host::new_engine()?;
     let bus = Bus::new();
 
-    let mut hello = Host::load(&engine, HELLO_WASM, "hello", bus.clone(), Logger::default())?;
+    let mut hello = Host::load(&engine, HELLO_WASM, "hello", bus.clone(), Registry::new(), Logger::default())?;
     let topics = hello.requested_topics();
     let ep = bus.register("hello", hello);
     for topic in &topics {

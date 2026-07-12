@@ -2,9 +2,10 @@ use std::sync::{Arc, Mutex};
 
 use pubsub_bus::{BusEvent, Subscriber};
 
-/// Every message on the bus (messaging.md). TODO: `correlation` is unused
-/// until direct send (ADR-010) lands; present now to avoid reshaping call
-/// sites later.
+/// Every message on the bus (messaging.md). TODO: `correlation` stays
+/// unused — synchronous send's (ADR-010) reply is the call's return value,
+/// not a separate correlated message; kept for a future async pattern that
+/// needs one.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Envelope {
     pub topic: String,
@@ -22,6 +23,107 @@ pub trait Handler: Send + Sync {
 impl<F: FnMut(&Envelope) + Send + Sync> Handler for F {
     fn handle(&mut self, envelope: &Envelope) {
         self(envelope);
+    }
+}
+
+/// Answers a direct `send` (ADR-010, messaging.md) with a reply, unlike
+/// `Handler` which never returns anything back to the sender.
+pub trait Respond: Send + Sync {
+    fn respond(&self, sender: &str, payload: &[u8]) -> Option<Vec<u8>>;
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum SendError {
+    UnknownEndpoint,
+    /// TODO: dispatch is single-threaded today, so a target is never
+    /// actually busy long enough to need waiting out — this variant exists
+    /// for the contract (messaging.md) but nothing currently returns it.
+    /// Meaningful once dispatch can run targets concurrently.
+    Timeout,
+    Cycle,
+}
+
+struct RegistryInner {
+    targets: std::collections::HashMap<String, Arc<dyn Respond>>,
+    /// Endpoints currently inside a synchronous call chain, outermost
+    /// first — lets a request see its own name further up the chain and
+    /// fail immediately instead of deadlocking (ADR-010).
+    call_chain: Vec<String>,
+}
+
+/// Directory of endpoints reachable by name for direct `send` (ADR-010) —
+/// separate from `Bus`'s pub/sub registration, which is by topic, not name.
+/// Cheap to clone; every clone shares the same directory.
+#[derive(Clone)]
+pub struct Registry {
+    inner: Arc<Mutex<RegistryInner>>,
+}
+
+impl Registry {
+    pub fn new() -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(RegistryInner {
+                targets: std::collections::HashMap::new(),
+                call_chain: Vec::new(),
+            })),
+        }
+    }
+
+    pub fn insert(&self, name: impl Into<String>, target: Arc<dyn Respond>) {
+        self.inner.lock().unwrap().targets.insert(name.into(), target);
+    }
+
+    pub fn remove(&self, name: &str) {
+        self.inner.lock().unwrap().targets.remove(name);
+    }
+
+    /// Synchronously calls `to` on behalf of `from`, returning its reply
+    /// (empty if `to` chose not to reply). Fails immediately — never waits —
+    /// if `to` is already somewhere in the current call chain, `from`
+    /// included (a cycle, self-sends counting as the shortest one, would
+    /// otherwise deadlock both sides).
+    pub fn call(&self, from: &str, to: &str, payload: &[u8]) -> Result<Vec<u8>, SendError> {
+        let (target, pushed_root) = {
+            let mut inner = self.inner.lock().unwrap();
+            // `from` is already "running" even on the first call in a chain
+            // (that's what's calling `send` right now) — pushing it before
+            // the cycle check is what makes a self-send (from == to) count
+            // as a cycle instead of slipping through.
+            let pushed_root = inner.call_chain.is_empty();
+            if pushed_root {
+                inner.call_chain.push(from.to_string());
+            }
+            if inner.call_chain.iter().any(|name| name == to) {
+                if pushed_root {
+                    inner.call_chain.pop();
+                }
+                return Err(SendError::Cycle);
+            }
+            let Some(target) = inner.targets.get(to).cloned() else {
+                if pushed_root {
+                    inner.call_chain.pop();
+                }
+                return Err(SendError::UnknownEndpoint);
+            };
+            inner.call_chain.push(to.to_string());
+            (target, pushed_root)
+        };
+
+        let reply = target.respond(from, payload);
+
+        let mut inner = self.inner.lock().unwrap();
+        inner.call_chain.pop(); // `to`
+        if pushed_root {
+            inner.call_chain.pop(); // `from`
+        }
+
+        Ok(reply.unwrap_or_default())
+    }
+}
+
+impl Default for Registry {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -364,5 +466,123 @@ mod tests {
 
         bus.dispatch();
         assert_eq!(received_b.lock().unwrap().len(), 1);
+    }
+
+    struct Echo;
+    impl Respond for Echo {
+        fn respond(&self, sender: &str, payload: &[u8]) -> Option<Vec<u8>> {
+            let mut reply = sender.as_bytes().to_vec();
+            reply.extend_from_slice(payload);
+            Some(reply)
+        }
+    }
+
+    struct Silent;
+    impl Respond for Silent {
+        fn respond(&self, _sender: &str, _payload: &[u8]) -> Option<Vec<u8>> {
+            None
+        }
+    }
+
+    struct Forwarding {
+        registry: Registry,
+        target: String,
+    }
+    impl Respond for Forwarding {
+        fn respond(&self, sender: &str, payload: &[u8]) -> Option<Vec<u8>> {
+            self.registry.call(sender, &self.target, payload).ok()
+        }
+    }
+
+    #[test]
+    fn call_reaches_the_named_target_and_returns_its_reply() {
+        let registry = Registry::new();
+        registry.insert("echo", Arc::new(Echo));
+
+        let reply = registry.call("caller", "echo", b"hi").unwrap();
+
+        assert_eq!(reply, b"callerhi");
+    }
+
+    #[test]
+    fn call_to_an_unknown_endpoint_errors() {
+        let registry = Registry::new();
+        assert_eq!(registry.call("caller", "nobody", b"hi"), Err(SendError::UnknownEndpoint));
+    }
+
+    #[test]
+    fn a_target_choosing_not_to_reply_gets_an_empty_reply() {
+        let registry = Registry::new();
+        registry.insert("silent", Arc::new(Silent));
+
+        assert_eq!(registry.call("caller", "silent", b"hi"), Ok(Vec::new()));
+    }
+
+    #[test]
+    fn removed_endpoint_is_unreachable() {
+        let registry = Registry::new();
+        registry.insert("echo", Arc::new(Echo));
+        registry.remove("echo");
+
+        assert_eq!(registry.call("caller", "echo", b"hi"), Err(SendError::UnknownEndpoint));
+    }
+
+    #[test]
+    fn a_self_send_is_a_cycle_of_one_instead_of_deadlocking() {
+        let registry = Registry::new();
+        registry.insert("echo", Arc::new(Echo));
+
+        assert_eq!(registry.call("echo", "echo", b"hi"), Err(SendError::Cycle));
+    }
+
+    #[test]
+    fn a_direct_cycle_fails_immediately_instead_of_deadlocking() {
+        let registry = Registry::new();
+        // "a" calls "b", whose handler calls back into "a" — must not hang.
+        registry.insert(
+            "b",
+            Arc::new(Forwarding {
+                registry: registry.clone(),
+                target: "a".to_string(),
+            }),
+        );
+        registry.insert(
+            "a",
+            Arc::new(Forwarding {
+                registry: registry.clone(),
+                target: "b".to_string(),
+            }),
+        );
+
+        let result = registry.call("test", "a", b"go");
+
+        assert_eq!(result, Ok(Vec::new()), "b's call back to a fails, but a's own call to b still completes");
+    }
+
+    #[test]
+    fn call_chain_is_clear_again_after_a_cycle_is_rejected() {
+        let registry = Registry::new();
+        registry.insert(
+            "b",
+            Arc::new(Forwarding {
+                registry: registry.clone(),
+                target: "a".to_string(),
+            }),
+        );
+        registry.insert(
+            "a",
+            Arc::new(Forwarding {
+                registry: registry.clone(),
+                target: "b".to_string(),
+            }),
+        );
+        registry.call("test", "a", b"go").unwrap();
+
+        // A fresh, independent call must not be mistaken for still being
+        // inside the previous (already-finished) call chain.
+        registry.insert("echo", Arc::new(Echo));
+        let reply = registry.call("test", "echo", b"x");
+
+        assert_eq!(reply, Ok(b"testx".to_vec()));
     }
 }

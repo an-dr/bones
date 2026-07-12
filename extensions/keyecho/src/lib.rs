@@ -15,11 +15,12 @@ impl Guest for Component {
 
     fn on_tick(_dt: f32) {}
 
-    fn on_message(topic: String, _sender: String, payload: Vec<u8>) {
+    fn on_message(topic: String, _sender: String, payload: Vec<u8>) -> Option<Vec<u8>> {
         if topic == "input/key-down" {
             let key = String::from_utf8_lossy(&payload);
             log(Level::Info, &format!("key pressed: {key}"));
         }
+        None
     }
 }
 

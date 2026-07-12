@@ -8,9 +8,16 @@ interface host-api {
         error,
     }
 
+    enum send-error {
+        unknown-endpoint,
+        timeout,
+        cycle,
+    }
+
     log: func(level: level, message: string);
     subscribe: func(topic: string);
     publish: func(topic: string, payload: list<u8>);
+    send: func(endpoint: string, payload: list<u8>, deadline-ms: u32) -> result<list<u8>, send-error>;
 }
 
 world extension {
@@ -18,5 +25,8 @@ world extension {
 
     export init: func();
     export on-tick: func(dt: f32);
-    export on-message: func(topic: string, sender: string, payload: list<u8>);
+    // Topic is empty for a direct send (ADR-010) - it has no topic, only a
+    // sender and payload. The returned payload is the reply; only read for
+    // direct sends, ignored for pub/sub deliveries.
+    export on-message: func(topic: string, sender: string, payload: list<u8>) -> option<list<u8>>;
 }

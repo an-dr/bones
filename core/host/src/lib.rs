@@ -9,8 +9,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 
-use bus::{Bus, Envelope, Handler};
-use contract::bones::core::host_api::{Host as HostApiImports, Level};
+use bus::{Bus, Envelope, Handler, Registry};
+use contract::bones::core::host_api::{Host as HostApiImports, Level, SendError};
 use contract::Extension;
 use logging::Logger;
 use wasmtime::component::{Component, HasSelf, Linker};
@@ -27,6 +27,14 @@ const CALL_TIMEOUT_TICKS: u64 = 10;
 /// compilation is a legitimate one-time cost `CALL_TIMEOUT_TICKS` isn't
 /// meant to cover.
 const LOAD_TIMEOUT_TICKS: u64 = 200;
+
+fn map_send_error(err: bus::SendError) -> SendError {
+    match err {
+        bus::SendError::UnknownEndpoint => SendError::UnknownEndpoint,
+        bus::SendError::Timeout => SendError::Timeout,
+        bus::SendError::Cycle => SendError::Cycle,
+    }
+}
 
 /// The only `Engine` configuration `Host` works with — component model
 /// support is not optional here, so this avoids a caller forgetting it.
@@ -56,6 +64,7 @@ struct State {
     name: String,
     logger: Logger,
     bus: Bus,
+    registry: Registry,
     wasi: wasmtime_wasi::WasiCtx,
     table: wasmtime_wasi::ResourceTable,
     requested_topics: Vec<String>,
@@ -83,6 +92,13 @@ impl HostApiImports for State {
             correlation: None,
             payload,
         });
+    }
+
+    /// TODO: `deadline_ms` is accepted but not enforced — dispatch is
+    /// single-threaded, so a target is never actually busy long enough to
+    /// wait out; only cycle detection can fail a send today (ADR-010).
+    fn send(&mut self, endpoint: String, payload: Vec<u8>, _deadline_ms: u32) -> Result<Vec<u8>, SendError> {
+        self.registry.call(&self.name, &endpoint, &payload).map_err(map_send_error)
     }
 }
 
@@ -113,16 +129,19 @@ pub struct Host {
 }
 
 impl Host {
-    /// Loads `wasm_path`, links the `log`/`subscribe`/`publish` imports, and
-    /// calls `init` once — under the same time budget as any other call, so
-    /// a hanging `init` faults instead of blocking `load` forever. `name` is
-    /// this extension's bus endpoint id — the `sender` on envelopes it
-    /// publishes; `bus` is what `publish` reaches.
+    /// Loads `wasm_path`, links the `log`/`subscribe`/`publish`/`send`
+    /// imports, and calls `init` once — under the same time budget as any
+    /// other call, so a hanging `init` faults instead of blocking `load`
+    /// forever. `name` is this extension's bus endpoint id — the `sender`
+    /// on envelopes it publishes and the name `send` (ADR-010) reaches it
+    /// by; `bus` is what `publish` reaches, `registry` is what `send`
+    /// reaches.
     pub fn load(
         engine: &Engine,
         wasm_path: &str,
         name: &str,
         bus: Bus,
+        registry: Registry,
         logger: Logger,
     ) -> wasmtime::Result<Self> {
         let component = Component::from_file(engine, wasm_path)?;
@@ -136,6 +155,7 @@ impl Host {
                 name: name.to_string(),
                 logger,
                 bus,
+                registry,
                 wasi: wasmtime_wasi::WasiCtxBuilder::new().build(),
                 table: wasmtime_wasi::ResourceTable::new(),
                 requested_topics: Vec::new(),
@@ -169,6 +189,28 @@ impl Host {
     pub fn is_faulted(&self) -> bool {
         self.faulted.load(Ordering::Relaxed)
     }
+
+    /// Answers a direct `send` targeting this extension (ADR-010,
+    /// `bus::Respond`): calls `on-message` with an empty topic — direct
+    /// messages have none (messaging.md) — and returns its reply. Same
+    /// timeout/fault handling as `Handler::handle`: a no-op once faulted,
+    /// and a hang here faults the extension the same way a hang in
+    /// `on-tick`/`on-message` would.
+    pub fn respond(&mut self, sender: &str, payload: &[u8]) -> Option<Vec<u8>> {
+        if self.is_faulted() {
+            return None;
+        }
+        let store = self.store.get_mut().unwrap();
+        store.set_epoch_deadline(CALL_TIMEOUT_TICKS);
+        match self.bindings.call_on_message(&mut *store, "", sender, payload) {
+            Ok(reply) => reply,
+            Err(err) => {
+                store.data().logger.error("host", &format!("handler trapped during send: {err}"));
+                self.faulted.store(true, Ordering::Relaxed);
+                None
+            }
+        }
+    }
 }
 
 impl Handler for Host {
@@ -177,6 +219,9 @@ impl Handler for Host {
     /// A no-op once faulted — quarantine (dropping/unregistering this
     /// instance) is the caller's job, not this method's; until that
     /// happens, silently ignoring further deliveries is the safe default.
+    /// Any reply `on-message` returns is ignored here too — pub/sub
+    /// delivery has nowhere to send it back to; only a direct `send`
+    /// (`respond`) reads it.
     fn handle(&mut self, envelope: &Envelope) {
         if self.is_faulted() {
             return;
@@ -184,7 +229,7 @@ impl Handler for Host {
         let store = self.store.get_mut().unwrap();
         store.set_epoch_deadline(CALL_TIMEOUT_TICKS);
         let result = match tick_dt(envelope) {
-            Some(dt) => self.bindings.call_on_tick(&mut *store, dt),
+            Some(dt) => self.bindings.call_on_tick(&mut *store, dt).map(|()| None),
             None => self.bindings.call_on_message(
                 &mut *store,
                 &envelope.topic,
@@ -218,8 +263,74 @@ mod tests {
 
     fn load_hello(bus: Bus, logger: Logger) -> Host {
         let engine = new_engine().unwrap();
-        Host::load(&engine, HELLO_WASM, "hello", bus, logger)
+        Host::load(&engine, HELLO_WASM, "hello", bus, Registry::new(), logger)
             .expect("build extensions/hello first: pwsh extensions/hello/build.ps1")
+    }
+
+    fn test_state(name: &str, registry: Registry) -> State {
+        State {
+            name: name.to_string(),
+            logger: Logger::default(),
+            bus: Bus::new(),
+            registry,
+            wasi: wasmtime_wasi::WasiCtxBuilder::new().build(),
+            table: wasmtime_wasi::ResourceTable::new(),
+            requested_topics: Vec::new(),
+        }
+    }
+
+    struct EchoRespond;
+    impl bus::Respond for EchoRespond {
+        fn respond(&self, sender: &str, payload: &[u8]) -> Option<Vec<u8>> {
+            Some([sender.as_bytes(), payload].concat())
+        }
+    }
+
+    #[test]
+    fn send_reaches_a_registered_target_and_returns_its_reply() {
+        let registry = Registry::new();
+        registry.insert("echo", Arc::new(EchoRespond));
+        let mut state = test_state("caller", registry);
+
+        let reply = state.send("echo".to_string(), b"hi".to_vec(), 1000).unwrap();
+
+        assert_eq!(reply, b"callerhi");
+    }
+
+    #[test]
+    fn send_to_an_unknown_endpoint_maps_to_the_wit_error() {
+        let mut state = test_state("caller", Registry::new());
+
+        assert_eq!(
+            state.send("nobody".to_string(), Vec::new(), 1000),
+            Err(SendError::UnknownEndpoint)
+        );
+    }
+
+    #[test]
+    fn send_to_self_maps_to_the_wit_cycle_error() {
+        let registry = Registry::new();
+        registry.insert("caller", Arc::new(EchoRespond));
+        let mut state = test_state("caller", registry);
+
+        assert_eq!(
+            state.send("caller".to_string(), Vec::new(), 1000),
+            Err(SendError::Cycle)
+        );
+    }
+
+    #[test]
+    fn respond_calls_on_message_with_an_empty_topic() {
+        let sink = RecordingSink::new();
+        let mut host = load_hello(Bus::new(), Logger::new(Arc::new(sink.clone())));
+
+        host.respond("someone", b"data");
+
+        let records = sink.records();
+        assert!(
+            records.iter().any(|(_, _, msg)| msg.contains("message on  from someone")),
+            "expected on-message to run with an empty topic for a direct send, got {records:?}"
+        );
     }
 
     #[test]

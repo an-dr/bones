@@ -10,3 +10,15 @@ topics with exact and prefix-wildcard subscriptions, built on `pubsub-bus`.
 
 Publish only enqueues; delivery happens on `dispatch()`, deferred so a
 handler can safely publish in response to what it just received (ADR-015).
+
+## Direct send (ADR-010)
+
+`Registry` addresses endpoints by name, separately from `Bus`'s by-topic
+pub/sub:
+
+- `Respond` — implemented by anything answerable via direct send; returns a
+  reply instead of nothing.
+- `Registry` — register/unregister named targets; `call(from, to, payload)`
+  invokes `to` synchronously and returns its reply. A `to` already in the
+  current call chain fails immediately with `SendError::Cycle` rather than
+  deadlocking.
