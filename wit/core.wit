@@ -9,6 +9,8 @@ interface host-api {
     }
 
     log: func(level: level, message: string);
+    subscribe: func(topic: string);
+    publish: func(topic: string, payload: list<u8>);
 }
 
 world extension {
@@ -16,4 +18,5 @@ world extension {
 
     export init: func();
     export on-tick: func(dt: f32);
+    export on-message: func(topic: string, sender: string, payload: list<u8>);
 }

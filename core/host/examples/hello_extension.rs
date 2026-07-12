@@ -1,6 +1,5 @@
-//! Rung 1 demo (roadmap.md): loads the `hello` WASM extension and drives it
-//! through a few ticks over a real bus, proving the log line flows through
-//! the engine end to end.
+//! Loads the `hello` WASM extension and drives it through a few ticks over
+//! a real bus, proving the log line flows through the engine end to end.
 //!
 //! Build the extension first: pwsh extensions/hello/build.ps1
 //! Then: cargo run -p host --example hello_extension
@@ -29,9 +28,12 @@ fn main() -> wasmtime::Result<()> {
     let engine = host::new_engine()?;
     let bus = Bus::new();
 
-    let hello = Host::load(&engine, HELLO_WASM, Logger::default())?;
+    let mut hello = Host::load(&engine, HELLO_WASM, "hello", bus.clone(), Logger::default())?;
+    let topics = hello.requested_topics();
     let ep = bus.register("hello", hello);
-    ep.subscribe(TICK_TOPIC);
+    for topic in &topics {
+        ep.subscribe(topic);
+    }
 
     println!("-- running 3 ticks --");
     for _ in 0..3 {

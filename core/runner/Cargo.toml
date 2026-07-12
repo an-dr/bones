@@ -7,4 +7,11 @@ edition = "2021"
 bus = { path = "../bus" }
 host = { path = "../host" }
 logging = { path = "../logging" }
+platform = { path = "../platform" }
+renderer = { path = "../renderer" }
 wasmtime = { version = "46.0.1", features = ["component-model"] }
+
+[dev-dependencies]
+# test-mode: cargo test runs tests on worker threads, not the process's
+# main thread; SDL refuses to init anywhere else unless this is set.
+sdl3 = { version = "0.18.4", features = ["build-from-source-static", "test-mode"] }

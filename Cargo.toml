@@ -1,3 +1,4 @@
 [workspace]
 resolver = "2"
-members = ["hello_world", "core/logging", "core/bus", "core/runner", "core/contract", "core/host", "core/app"]
+members = ["hello_world", "core/logging", "core/bus", "core/runner", "core/contract", "core/host", "core/app", "core/platform", "core/renderer"]
+exclude = ["wire"]

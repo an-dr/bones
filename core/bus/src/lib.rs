@@ -2,8 +2,9 @@ use std::sync::{Arc, Mutex};
 
 use pubsub_bus::{BusEvent, Subscriber};
 
-/// Every message on the bus (messaging.md). `correlation` is unused until
-/// direct send (ADR-010) but present now to avoid reshaping call sites later.
+/// Every message on the bus (messaging.md). TODO: `correlation` is unused
+/// until direct send (ADR-010) lands; present now to avoid reshaping call
+/// sites later.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Envelope {
     pub topic: String,
@@ -77,14 +78,20 @@ impl Endpoint {
     }
 }
 
+/// Cheap to clone: an extension's `publish` import needs to hold a handle
+/// to the same bus it's registered on. `pubsub-bus`'s `EventBus` is already
+/// `Arc`-backed internally but doesn't derive `Clone` itself (vendored —
+/// ADR-013 wraps it rather than modifying it), so the `Arc` here is bones'
+/// own.
+#[derive(Clone)]
 pub struct Bus {
-    inner: pubsub_bus::EventBus<Envelope, ()>,
+    inner: Arc<pubsub_bus::EventBus<Envelope, ()>>,
 }
 
 impl Bus {
     pub fn new() -> Self {
         Self {
-            inner: pubsub_bus::EventBus::new(),
+            inner: Arc::new(pubsub_bus::EventBus::new()),
         }
     }
 
@@ -143,6 +150,20 @@ mod tests {
         let sink = received.clone();
         let handler = move |e: &Envelope| sink.lock().unwrap().push(e.clone());
         (handler, received)
+    }
+
+    #[test]
+    fn a_clone_publishes_into_the_same_bus() {
+        let bus = Bus::new();
+        let (handler, received) = recording_handler();
+        let ep = bus.register("level", handler);
+        ep.subscribe("core/tick");
+
+        let clone = bus.clone();
+        clone.publish(envelope("core/tick", "runner"));
+        bus.dispatch();
+
+        assert_eq!(received.lock().unwrap().len(), 1);
     }
 
     #[test]

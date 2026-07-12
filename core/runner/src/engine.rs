@@ -1,23 +1,39 @@
 //! The public builder API (design/modules.md): discovers WASM extensions
-//! and runs them. `bones::Engine` in the design sketch — lives here as
-//! `runner::Engine` until a top-level facade crate exists to re-export it.
-//! No `.module(...)` yet — that arrives once a real native module
-//! (renderer) exists to shape that part of the API (rung 8's job).
+//! and runs them. TODO: `bones::Engine` in the design sketch — lives here
+//! as `runner::Engine` until a top-level facade crate exists to re-export
+//! it. TODO: no `.module(...)` yet for injecting custom native modules —
+//! renderer is wired directly into this crate instead of through one.
 
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use bus::{Envelope, Handler};
 use host::Host;
 use logging::Logger;
+use renderer::Renderer;
 
-use crate::{Runner, TICK_TOPIC};
+use crate::Runner;
 
 const DEFAULT_TICK_HZ: f64 = 60.0;
+const GFX_TOPICS: &str = "gfx/*";
+
+/// Forwards bus deliveries to a `Renderer` shared with `Engine` itself (for
+/// the `present()` call each frame, outside normal message delivery).
+struct SharedRenderer(Arc<Mutex<Renderer>>);
+
+impl Handler for SharedRenderer {
+    fn handle(&mut self, envelope: &Envelope) {
+        self.0.lock().unwrap().handle(envelope);
+    }
+}
 
 pub struct Engine {
     extensions_dir: Option<PathBuf>,
     logger: Logger,
     tick_hz: f64,
+    window: Option<(String, u32, u32)>,
+    renderer_enabled: bool,
 }
 
 impl Engine {
@@ -26,6 +42,8 @@ impl Engine {
             extensions_dir: None,
             logger: Logger::default(),
             tick_hz: DEFAULT_TICK_HZ,
+            window: None,
+            renderer_enabled: false,
         }
     }
 
@@ -46,26 +64,57 @@ impl Engine {
         self
     }
 
-    /// Wires the bus and every `.wasm` file found in `extensions_dir`, each
+    /// Opens one SDL window (platform/design.md) and feeds its keyboard
+    /// events onto `input/*` each frame of `run`'s loop. No window
+    /// configured here means no platform at all — a headless engine.
+    pub fn window(mut self, title: impl Into<String>, width: u32, height: u32) -> Self {
+        self.window = Some((title.into(), width, height));
+        self
+    }
+
+    /// Attaches a renderer to the window (design/modules.md, ADR-002):
+    /// executes `gfx/*` draw commands published by extensions and presents
+    /// once per `run` iteration. Requires `.window(...)` — `build`/`run`
+    /// error if this is set without one.
+    pub fn renderer(mut self) -> Self {
+        self.renderer_enabled = true;
+        self
+    }
+
+    /// Wires the bus, every `.wasm` file found in `extensions_dir` (each
     /// registered as a bus endpoint named after its file stem and
-    /// subscribed to `core/tick`. A file that fails to load is logged and
-    /// skipped — one bad extension never stops the others (or startup)
-    /// from proceeding. Exposed publicly (not just used by `run`) since a
-    /// future driver (platform's own event pump, rung 2) will want the
-    /// wired-up `Runner` without this module's sleep-loop attached to it.
-    pub fn build(self) -> wasmtime::Result<Runner> {
+    /// subscribed to whatever topics it requested via `subscribe` during
+    /// its own `init` — opt-in, including `core/tick`, messaging.md), the
+    /// window if `.window(...)` was set, and the renderer if `.renderer()`
+    /// was set. A file that fails to load is logged and skipped — one bad
+    /// extension never stops the others (or startup) from proceeding.
+    /// Exposed publicly (not just used by `run`) since a future driver
+    /// (platform's own vsync-paced loop) will want the wired-up pieces
+    /// without this module's sleep-loop attached to them — `run` is
+    /// exactly that: `build` plus timing.
+    #[allow(clippy::type_complexity)]
+    pub fn build(
+        mut self,
+    ) -> wasmtime::Result<(Runner, Option<platform::Platform>, Option<Arc<Mutex<Renderer>>>)> {
+        let window = self.window.take();
+        let renderer_enabled = self.renderer_enabled;
         let bus = bus::Bus::new();
         let wasm_engine = host::new_engine()?;
 
         if let Some(dir) = &self.extensions_dir {
             for path in find_wasm_files(dir) {
                 let name = derive_extension_name(&path);
-                match Host::load(&wasm_engine, &path.to_string_lossy(), self.logger.clone()) {
-                    Ok(extension) => {
+                match Host::load(&wasm_engine, &path.to_string_lossy(), &name, bus.clone(), self.logger.clone()) {
+                    Ok(mut extension) => {
+                        let topics = extension.requested_topics();
                         let ep = bus.register(name.clone(), extension);
-                        ep.subscribe(TICK_TOPIC);
-                        self.logger
-                            .info("engine", &format!("loaded '{name}' from {}", path.display()));
+                        for topic in &topics {
+                            ep.subscribe(topic);
+                        }
+                        self.logger.info(
+                            "engine",
+                            &format!("loaded '{name}' from {} (subscribed: {topics:?})", path.display()),
+                        );
                     }
                     Err(err) => {
                         self.logger
@@ -75,7 +124,29 @@ impl Engine {
             }
         }
 
-        Ok(Runner::new(bus, self.logger))
+        let mut platform = match window {
+            Some((title, width, height)) => {
+                Some(platform::Platform::new(&title, width, height).map_err(wasmtime::Error::msg)?)
+            }
+            None => None,
+        };
+
+        let renderer = if renderer_enabled {
+            let platform = platform
+                .as_mut()
+                .ok_or_else(|| wasmtime::Error::msg(".renderer() needs .window(...) too"))?;
+            let window = platform
+                .take_window()
+                .ok_or_else(|| wasmtime::Error::msg("window already taken"))?;
+            let shared = Arc::new(Mutex::new(Renderer::new(window, self.logger.clone())));
+            let ep = bus.register("renderer", SharedRenderer(shared.clone()));
+            ep.subscribe(GFX_TOPICS);
+            Some(shared)
+        } else {
+            None
+        };
+
+        Ok((Runner::new(bus, self.logger), platform, renderer))
     }
 
     /// Runs forever at `tick_hz` until the process is killed. A thin
@@ -86,17 +157,33 @@ impl Engine {
     /// `dt` passed to `step` is the *measured* time since the previous
     /// tick, not the nominal period — if a tick runs long, extensions see
     /// that in `dt` rather than being told a fixed value that didn't happen.
+    ///
+    /// If `.window(...)` was set, every iteration polls it first (input
+    /// events land on the bus before `step`'s dispatch), matching the
+    /// frame-phase order in architecture.md: poll input, then dispatch/tick.
+    /// If `.renderer()` was set, presents once after `step`'s dispatch —
+    /// gfx/* commands an extension publishes reactively during its own
+    /// `on-tick` land one frame later (ADR-015's deferred dispatch), same
+    /// as any other reactive publish; invisible at any real frame rate.
     pub fn run(self) -> wasmtime::Result<()> {
         let period = Duration::from_secs_f64(1.0 / self.tick_hz);
-        let runner = self.build()?;
+        let (runner, mut platform, renderer) = self.build()?;
 
         let mut last = std::time::Instant::now() - period;
         loop {
+            if let Some(platform) = &mut platform {
+                platform.poll_events(runner.bus(), "platform");
+            }
+
             let now = std::time::Instant::now();
             let dt = (now - last).as_secs_f32();
             last = now;
 
             runner.step(dt);
+
+            if let Some(renderer) = &renderer {
+                renderer.lock().unwrap().present();
+            }
 
             let elapsed = now.elapsed();
             if elapsed < period {
@@ -131,12 +218,31 @@ fn derive_extension_name(path: &Path) -> String {
 mod tests {
     use super::*;
     use logging::RecordingSink;
-    use std::sync::Arc;
+    use std::sync::{Arc, Mutex, OnceLock};
+
+    // SDL can't create windows concurrently across threads even with the
+    // test-mode feature (which only lifts the main-thread-only check) —
+    // cargo runs tests in parallel by default, so tests that open a real
+    // window take this lock to never run concurrently with each other.
+    fn sdl_test_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
 
     // Built by extensions/hello/build.ps1 (see its README).
     const HELLO_DIR: &str = concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../extensions/hello/target/wasm32-wasip2/release"
+    );
+    // Built by extensions/keyecho/build.ps1 (see its README).
+    const KEYECHO_DIR: &str = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../extensions/keyecho/target/wasm32-wasip2/release"
+    );
+    // Built by extensions/sprite_demo/build.ps1 (see its README).
+    const SPRITE_DEMO_DIR: &str = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../extensions/sprite_demo/target/wasm32-wasip2/release"
     );
 
     #[test]
@@ -176,11 +282,13 @@ mod tests {
         let sink = RecordingSink::new();
         let logger = Logger::new(Arc::new(sink.clone()));
 
-        let runner = Engine::builder()
+        let (runner, platform, renderer) = Engine::builder()
             .extensions_dir(HELLO_DIR)
             .logger(logger)
             .build()
             .expect("build extensions/hello first: pwsh extensions/hello/build.ps1");
+        assert!(platform.is_none(), "no .window() was set");
+        assert!(renderer.is_none(), "no .renderer() was set");
 
         runner.step(1.0 / 60.0);
 
@@ -204,7 +312,7 @@ mod tests {
         let sink = RecordingSink::new();
         let logger = Logger::new(Arc::new(sink.clone()));
 
-        let runner = Engine::builder()
+        let (runner, _platform, _renderer) = Engine::builder()
             .extensions_dir(&dir)
             .logger(logger)
             .build()
@@ -217,6 +325,77 @@ mod tests {
         assert!(
             records.iter().any(|(_, _, msg)| msg.contains("failed to load")),
             "expected a load failure to be logged, got {records:?}"
+        );
+    }
+
+    #[test]
+    fn a_key_down_envelope_reaches_an_extension_through_a_real_window() {
+        // Real SDL event *pumping* (Platform::poll_events) asserts on the
+        // OS-level main thread inside SDL's own C code — a check test-mode
+        // doesn't lift, and cargo test's worker threads aren't it. That
+        // exact mechanism (inject_event + poll_events) is already proven in
+        // isolation by core/platform's own test suite, the only place in
+        // this workspace that calls poll_events in a #[test]. Here, publish
+        // the envelope directly to prove Engine's wiring (window +
+        // extension + subscription) without pumping real SDL events.
+        let _guard = sdl_test_lock().lock().unwrap();
+        let sink = RecordingSink::new();
+        let logger = Logger::new(Arc::new(sink.clone()));
+
+        let (runner, platform, _renderer) = Engine::builder()
+            .extensions_dir(KEYECHO_DIR)
+            .logger(logger)
+            .window("test", 64, 64)
+            .build()
+            .expect("build extensions/keyecho first: pwsh extensions/keyecho/build.ps1");
+        assert!(platform.is_some(), ".window() was set");
+
+        runner.bus().publish(Envelope {
+            topic: "input/key-down".to_string(),
+            sender: "platform".to_string(),
+            correlation: None,
+            payload: b"A".to_vec(),
+        });
+        runner.step(1.0 / 60.0);
+
+        let records = sink.records();
+        assert!(
+            records.iter().any(|(_, _, msg)| msg.contains("key pressed: A")),
+            "expected keyecho to log the injected keypress, got {records:?}"
+        );
+    }
+
+    #[test]
+    fn a_real_extension_draws_a_sprite_through_a_real_renderer() {
+        let _guard = sdl_test_lock().lock().unwrap();
+        let sink = RecordingSink::new();
+        let logger = Logger::new(Arc::new(sink.clone()));
+
+        let (runner, _platform, renderer) = Engine::builder()
+            .extensions_dir(SPRITE_DEMO_DIR)
+            .logger(logger)
+            .window("test", 400, 300)
+            .renderer()
+            .build()
+            .expect("build extensions/sprite_demo first: pwsh extensions/sprite_demo/build.ps1");
+        let renderer = renderer.expect(".renderer() was set");
+
+        // First tick: gfx/load-sprite (queued during init) gets delivered.
+        // Second: gfx/clear + gfx/draw-sprite (queued reactively from the
+        // first tick's on-tick) get delivered — ADR-015's deferred dispatch.
+        runner.step(1.0 / 60.0);
+        renderer.lock().unwrap().present();
+        runner.step(1.0 / 60.0);
+        renderer.lock().unwrap().present();
+
+        let records = sink.records();
+        assert!(
+            records.iter().any(|(_, _, msg)| msg.contains("sprite loaded")),
+            "expected sprite_demo's init log, got {records:?}"
+        );
+        assert!(
+            records.iter().all(|(_, category, _)| category != "renderer"),
+            "expected no renderer errors (bad PNG decode or unknown sprite id), got {records:?}"
         );
     }
 }
