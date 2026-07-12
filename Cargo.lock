@@ -1018,6 +1018,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "lifecycle"
+version = "0.1.0"
+dependencies = [
+ "buffer_rw",
+ "bus",
+]
+
+[[package]]
 name = "linux-raw-sys"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1290,6 +1298,7 @@ version = "0.1.0"
 dependencies = [
  "bus",
  "host",
+ "lifecycle",
  "logging",
  "platform",
  "renderer",

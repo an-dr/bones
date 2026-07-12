@@ -17,6 +17,7 @@ a fixed **kernel** and optional, consumer-injectable **native modules**
 | contract  | The WIT package — the extension-facing API definition             | —                     |
 | platform  | SDL window, tray, input sources, timing, event pump; headless mode | logging                |
 | runner    | Frame-phase loop skeleton, module & service registries, builder API | bus, host, platform, logging |
+| lifecycle | `core/lifecycle` topic: publishes/parses extension state transitions | bus                  |
 | logging   | Structured sink, per-extension tagging, drop counters              | —                     |
 
 ## Native modules (first-party)
@@ -46,8 +47,10 @@ graph TD
     Runner --> Bus["bus"]
     Runner --> Host["host"]
     Runner --> Platform["platform"]
+    Runner --> Lifecycle["lifecycle"]
     Host --> Bus
     Host --> Contract["contract (WIT)"]
+    Lifecycle --> Bus
     subgraph Modules["native modules (optional, consumer-injectable)"]
         Renderer["renderer"]
         UI["ui"]
@@ -85,6 +88,7 @@ bones/
 │   ├── host/      #
 │   ├── platform/  #  kernel
 │   ├── runner/    #
+│   ├── lifecycle/ #
 │   ├── logging/   #
 │   ├── renderer/  #
 │   ├── ui/        #  first-party native modules
