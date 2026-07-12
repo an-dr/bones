@@ -6,9 +6,9 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
-use bus::{Bus, Endpoint, Envelope, Handler};
+use bus::{Bus, Endpoint, Envelope, Handler, Registry, Respond};
 use host::Host;
 use lifecycle::Event;
 use logging::Logger;
@@ -31,8 +31,11 @@ impl Handler for SharedRenderer {
     }
 }
 
-/// Forwards bus deliveries to a `Host` shared with the `Watchdog` (which
-/// needs `Host::is_faulted` after every call to know when to quarantine it).
+/// One extension `Host`, shared between its `Bus` registration (pub/sub
+/// delivery), its `Registry` registration (direct send, ADR-010), and the
+/// `Supervisor` (which needs `Host::is_faulted` after every call to know
+/// when to quarantine it) — all three need the same instance, not
+/// independent copies, so state stays consistent across all of them.
 #[derive(Clone)]
 struct SharedHost(Arc<Mutex<Host>>);
 
@@ -42,43 +45,115 @@ impl Handler for SharedHost {
     }
 }
 
+impl Respond for SharedHost {
+    fn respond(&self, sender: &str, payload: &[u8]) -> Option<Vec<u8>> {
+        self.0.lock().unwrap().respond(sender, payload)
+    }
+}
+
 impl SharedHost {
     fn is_faulted(&self) -> bool {
         self.0.lock().unwrap().is_faulted()
     }
 }
 
+fn file_mtime(path: &Path) -> SystemTime {
+    std::fs::metadata(path)
+        .and_then(|metadata| metadata.modified())
+        .unwrap_or(SystemTime::UNIX_EPOCH)
+}
+
 struct TrackedExtension {
     name: String,
+    path: PathBuf,
+    mtime: SystemTime,
     endpoint: Endpoint,
     shared: SharedHost,
     /// Set once quarantined, so a later sweep doesn't re-log/re-publish for
-    /// an already-handled fault every iteration forever.
+    /// an already-handled fault every check forever.
     quarantined: bool,
 }
 
-/// Sweeps loaded extensions for a fault (ADR-007's time/queue budgets,
-/// enforced inside `Host`) and quarantines any newly-faulted one: drops its
-/// bus registration and publishes `Faulted` (`core/lifecycle`). The engine,
-/// and every other extension, keeps running regardless.
-pub struct Watchdog {
+/// Watches every loaded extension for a fault (ADR-007's time/queue
+/// budgets, enforced inside `Host`) or a changed file
+/// (design/extensions.md's Reloading state; the roadmap's "edit a level
+/// extension, watch it swap in" demo), and reacts: quarantines a
+/// newly-faulted one (drops its bus registration, publishes `Faulted`) or
+/// hot-swaps a changed one in place (drop old, load new, publish
+/// `Reloading`/`Reloaded`). The engine, and every other extension, keeps
+/// running regardless.
+pub struct Supervisor {
+    wasm_engine: wasmtime::Engine,
     bus: Bus,
+    registry: Registry,
     logger: Logger,
     tracked: Mutex<Vec<TrackedExtension>>,
 }
 
-impl Watchdog {
+impl Supervisor {
+    /// Checks every tracked extension once: quarantines it if newly
+    /// faulted, then (regardless) reloads it if its file changed since —
+    /// a file change after a fault is exactly the "user fixed it and
+    /// rebuilt" case, and reuses this same path rather than a separate
+    /// explicit-reload mechanism. A replacement that fails to load is
+    /// logged and the *old* instance (or nothing, if just quarantined)
+    /// keeps running — a broken edit never takes an extension further
+    /// down (ADR-007's "the engine itself never dies" spirit).
     pub fn check(&self) {
         let mut tracked = self.tracked.lock().unwrap();
         for extension in tracked.iter_mut() {
-            if extension.quarantined || !extension.shared.is_faulted() {
+            if !extension.quarantined && extension.shared.is_faulted() {
+                self.bus.unregister(&extension.endpoint);
+                extension.quarantined = true;
+                self.logger
+                    .error("engine", &format!("'{}' faulted and was quarantined", extension.name));
+                lifecycle::publish(&self.bus, ENGINE_SENDER, &extension.name, Event::Faulted);
+            }
+
+            let mtime = file_mtime(&extension.path);
+            if mtime <= extension.mtime {
                 continue;
             }
-            self.bus.unregister(&extension.endpoint);
-            extension.quarantined = true;
-            self.logger
-                .error("engine", &format!("'{}' faulted and was quarantined", extension.name));
-            lifecycle::publish(&self.bus, ENGINE_SENDER, &extension.name, Event::Faulted);
+
+            lifecycle::publish(&self.bus, ENGINE_SENDER, &extension.name, Event::Reloading);
+            match Host::load(
+                &self.wasm_engine,
+                &extension.path.to_string_lossy(),
+                &extension.name,
+                self.bus.clone(),
+                self.registry.clone(),
+                self.logger.clone(),
+            ) {
+                Ok(mut new_host) => {
+                    let topics = new_host.requested_topics();
+                    let shared = SharedHost(Arc::new(Mutex::new(new_host)));
+
+                    if !extension.quarantined {
+                        self.bus.unregister(&extension.endpoint);
+                    }
+                    let ep = self.bus.register(extension.name.clone(), shared.clone());
+                    for topic in &topics {
+                        ep.subscribe(topic);
+                    }
+                    self.registry.insert(extension.name.clone(), Arc::new(shared.clone()));
+
+                    extension.endpoint = ep;
+                    extension.shared = shared;
+                    extension.mtime = mtime;
+                    extension.quarantined = false;
+                    self.logger.info(
+                        "engine",
+                        &format!("reloaded '{}' (subscribed: {topics:?})", extension.name),
+                    );
+                    lifecycle::publish(&self.bus, ENGINE_SENDER, &extension.name, Event::Reloaded);
+                }
+                Err(err) => {
+                    self.logger.error(
+                        "engine",
+                        &format!("reload of '{}' failed, keeping the running instance: {err}", extension.name),
+                    );
+                }
+            }
         }
     }
 }
@@ -143,8 +218,9 @@ impl Engine {
     /// window if `.window(...)` was set, and the renderer if `.renderer()`
     /// was set. A file that fails to load is logged and skipped — one bad
     /// extension never stops the others (or startup) from proceeding.
-    /// Also returns a `Watchdog`: every loaded extension is tracked so
-    /// `Watchdog::check` can quarantine one that faults (ADR-007).
+    /// Also returns a `Supervisor`: every loaded extension is tracked so
+    /// `Supervisor::check` can quarantine one that faults (ADR-007) or
+    /// hot-swap one whose file changes.
     /// Exposed publicly (not just used by `run`) since a future driver
     /// (platform's own vsync-paced loop) will want the wired-up pieces
     /// without this module's sleep-loop attached to them — `run` is
@@ -152,17 +228,18 @@ impl Engine {
     #[allow(clippy::type_complexity)]
     pub fn build(
         mut self,
-    ) -> wasmtime::Result<(Runner, Option<platform::Platform>, Option<Arc<Mutex<Renderer>>>, Watchdog)> {
+    ) -> wasmtime::Result<(Runner, Option<platform::Platform>, Option<Arc<Mutex<Renderer>>>, Supervisor)> {
         let window = self.window.take();
         let renderer_enabled = self.renderer_enabled;
         let bus = bus::Bus::new();
+        let registry = Registry::new();
         let wasm_engine = host::new_engine()?;
         let mut tracked = Vec::new();
 
         if let Some(dir) = &self.extensions_dir {
             for path in find_wasm_files(dir) {
                 let name = derive_extension_name(&path);
-                match Host::load(&wasm_engine, &path.to_string_lossy(), &name, bus.clone(), self.logger.clone()) {
+                match Host::load(&wasm_engine, &path.to_string_lossy(), &name, bus.clone(), registry.clone(), self.logger.clone()) {
                     Ok(mut extension) => {
                         let topics = extension.requested_topics();
                         let shared = SharedHost(Arc::new(Mutex::new(extension)));
@@ -170,6 +247,7 @@ impl Engine {
                         for topic in &topics {
                             ep.subscribe(topic);
                         }
+                        registry.insert(name.clone(), Arc::new(shared.clone()));
                         self.logger.info(
                             "engine",
                             &format!("loaded '{name}' from {} (subscribed: {topics:?})", path.display()),
@@ -177,6 +255,8 @@ impl Engine {
                         lifecycle::publish(&bus, ENGINE_SENDER, &name, Event::Loaded);
                         tracked.push(TrackedExtension {
                             name,
+                            mtime: file_mtime(&path),
+                            path,
                             endpoint: ep,
                             shared,
                             quarantined: false,
@@ -191,8 +271,10 @@ impl Engine {
             }
         }
 
-        let watchdog = Watchdog {
+        let supervisor = Supervisor {
+            wasm_engine,
             bus: bus.clone(),
+            registry,
             logger: self.logger.clone(),
             tracked: Mutex::new(tracked),
         };
@@ -219,7 +301,7 @@ impl Engine {
             None
         };
 
-        Ok((Runner::new(bus, self.logger), platform, renderer, watchdog))
+        Ok((Runner::new(bus, self.logger), platform, renderer, supervisor))
     }
 
     /// Runs forever at `tick_hz` until the process is killed. A thin
@@ -234,16 +316,19 @@ impl Engine {
     /// If `.window(...)` was set, every iteration polls it first (input
     /// events land on the bus before `step`'s dispatch), matching the
     /// frame-phase order in architecture.md: poll input, then dispatch/tick.
+    /// `Supervisor::check` runs both before and after `step` — before, so a
+    /// swapped-in extension's first tick already runs against the new
+    /// code; after, so a fault from that same tick is quarantined this
+    /// iteration rather than one later. `check` does both jobs (reload,
+    /// quarantine) either time it's called; calling it twice just lets
+    /// each keep its own ideal timing without the other compromising it.
     /// If `.renderer()` was set, presents once after `step`'s dispatch —
     /// gfx/* commands an extension publishes reactively during its own
     /// `on-tick` land one frame later (ADR-015's deferred dispatch), same
     /// as any other reactive publish; invisible at any real frame rate.
-    /// Checks for newly-faulted extensions once per iteration too
-    /// (`Watchdog::check`), right after `step` so a fault is quarantined
-    /// the same iteration it happens in, not one later.
     pub fn run(self) -> wasmtime::Result<()> {
         let period = Duration::from_secs_f64(1.0 / self.tick_hz);
-        let (runner, mut platform, renderer, watchdog) = self.build()?;
+        let (runner, mut platform, renderer, supervisor) = self.build()?;
 
         let mut last = std::time::Instant::now() - period;
         loop {
@@ -251,12 +336,14 @@ impl Engine {
                 platform.poll_events(runner.bus(), "platform");
             }
 
+            supervisor.check();
+
             let now = std::time::Instant::now();
             let dt = (now - last).as_secs_f32();
             last = now;
 
             runner.step(dt);
-            watchdog.check();
+            supervisor.check();
 
             if let Some(renderer) = &renderer {
                 renderer.lock().unwrap().present();
@@ -364,7 +451,7 @@ mod tests {
         let sink = RecordingSink::new();
         let logger = Logger::new(Arc::new(sink.clone()));
 
-        let (runner, platform, renderer, _watchdog) = Engine::builder()
+        let (runner, platform, renderer, _supervisor) = Engine::builder()
             .extensions_dir(HELLO_DIR)
             .logger(logger)
             .build()
@@ -394,7 +481,7 @@ mod tests {
         let sink = RecordingSink::new();
         let logger = Logger::new(Arc::new(sink.clone()));
 
-        let (runner, _platform, _renderer, _watchdog) = Engine::builder()
+        let (runner, _platform, _renderer, _supervisor) = Engine::builder()
             .extensions_dir(&dir)
             .logger(logger)
             .build()
@@ -424,7 +511,7 @@ mod tests {
         let sink = RecordingSink::new();
         let logger = Logger::new(Arc::new(sink.clone()));
 
-        let (runner, platform, _renderer, _watchdog) = Engine::builder()
+        let (runner, platform, _renderer, _supervisor) = Engine::builder()
             .extensions_dir(KEYECHO_DIR)
             .logger(logger)
             .window("test", 64, 64)
@@ -453,7 +540,7 @@ mod tests {
         let sink = RecordingSink::new();
         let logger = Logger::new(Arc::new(sink.clone()));
 
-        let (runner, _platform, renderer, _watchdog) = Engine::builder()
+        let (runner, _platform, renderer, _supervisor) = Engine::builder()
             .extensions_dir(SPRITE_DEMO_DIR)
             .logger(logger)
             .window("test", 400, 300)
@@ -495,7 +582,7 @@ mod tests {
         let bus_events = Arc::new(Mutex::new(Vec::new()));
         let sink_events = bus_events.clone();
 
-        let (runner, _platform, _renderer, watchdog) =
+        let (runner, _platform, _renderer, supervisor) =
             Engine::builder().extensions_dir(&dir).logger(logger).build().unwrap();
         let watcher = runner.bus().register("watcher", move |e: &Envelope| {
             sink_events.lock().unwrap().push(e.clone());
@@ -505,9 +592,9 @@ mod tests {
         // hello ticks fine; runaway_demo hangs for its whole time budget
         // (~50ms) before trapping — this call blocks that long, same as a
         // real runaway extension would stall one frame before the
-        // watchdog catches it.
+        // supervisor catches it.
         runner.step(1.0 / 60.0);
-        watchdog.check();
+        supervisor.check();
 
         // A second step must not hang again (quarantined, not called into)
         // and hello must still be ticking normally.
@@ -534,6 +621,71 @@ mod tests {
         assert!(
             events.contains(&(Event::Faulted, "runaway_demo".to_string())),
             "expected a Faulted lifecycle event, got {events:?}"
+        );
+    }
+
+    #[test]
+    fn a_changed_wasm_file_is_hot_reloaded_in_place() {
+        let dir = std::env::temp_dir().join("bones-engine-test-hot-reload");
+        std::fs::create_dir_all(&dir).unwrap();
+        let wasm_path = dir.join("level.wasm");
+        std::fs::copy(format!("{HELLO_DIR}/hello.wasm"), &wasm_path)
+            .expect("build extensions/hello first: pwsh extensions/hello/build.ps1");
+
+        let sink = RecordingSink::new();
+        let logger = Logger::new(Arc::new(sink.clone()));
+        let bus_events = Arc::new(Mutex::new(Vec::new()));
+        let sink_events = bus_events.clone();
+
+        let (runner, _platform, _renderer, supervisor) = Engine::builder()
+            .extensions_dir(&dir)
+            .logger(logger)
+            .build()
+            .unwrap();
+        let watcher = runner.bus().register("watcher", move |e: &Envelope| {
+            sink_events.lock().unwrap().push(e.clone());
+        });
+        watcher.subscribe(lifecycle::TOPIC);
+        runner.step(1.0 / 60.0);
+
+        // "Edit" the file: same bytes, but a deliberately later mtime so
+        // the supervisor's polling notices — a real edit's mtime is
+        // real-clock-later too, this just avoids a flaky sleep in the test.
+        let original_mtime = std::fs::metadata(&wasm_path).unwrap().modified().unwrap();
+        let file = std::fs::File::options().write(true).open(&wasm_path).unwrap();
+        file.set_modified(original_mtime + Duration::from_secs(1)).unwrap();
+        drop(file);
+
+        supervisor.check();
+        runner.step(1.0 / 60.0);
+
+        std::fs::remove_dir_all(&dir).ok();
+
+        let records = sink.records();
+        let init_count = records.iter().filter(|(_, _, msg)| msg.contains("hello extension: init")).count();
+        assert_eq!(init_count, 2, "expected init to run again for the reloaded instance, got {records:?}");
+        assert!(
+            records.iter().any(|(_, _, msg)| msg.contains("reloaded 'level'")),
+            "expected a reload confirmation, got {records:?}"
+        );
+
+        let events: Vec<_> = bus_events
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|e| lifecycle::parse(&e.payload).unwrap())
+            .collect();
+        assert!(
+            events.contains(&(Event::Loaded, "level".to_string())),
+            "expected a Loaded lifecycle event, got {events:?}"
+        );
+        assert!(
+            events.contains(&(Event::Reloading, "level".to_string())),
+            "expected a Reloading lifecycle event, got {events:?}"
+        );
+        assert!(
+            events.contains(&(Event::Reloaded, "level".to_string())),
+            "expected a Reloaded lifecycle event, got {events:?}"
         );
     }
 }

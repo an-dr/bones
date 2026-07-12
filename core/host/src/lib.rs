@@ -443,7 +443,7 @@ mod tests {
     fn a_call_that_never_returns_traps_and_faults_instead_of_hanging_forever() {
         let sink = RecordingSink::new();
         let engine = new_engine().unwrap();
-        let mut host = Host::load(&engine, RUNAWAY_WASM, "runaway", Bus::new(), Logger::new(Arc::new(sink.clone())))
+        let mut host = Host::load(&engine, RUNAWAY_WASM, "runaway", Bus::new(), Registry::new(), Logger::new(Arc::new(sink.clone())))
             .expect("build extensions/runaway_demo first: pwsh extensions/runaway_demo/build.ps1");
         assert!(!host.is_faulted(), "must not start out faulted");
 
@@ -460,7 +460,7 @@ mod tests {
     #[test]
     fn a_faulted_host_ignores_further_deliveries_instead_of_hanging_again() {
         let engine = new_engine().unwrap();
-        let mut host = Host::load(&engine, RUNAWAY_WASM, "runaway", Bus::new(), Logger::default())
+        let mut host = Host::load(&engine, RUNAWAY_WASM, "runaway", Bus::new(), Registry::new(), Logger::default())
             .expect("build extensions/runaway_demo first: pwsh extensions/runaway_demo/build.ps1");
         host.handle(&tick_envelope());
         assert!(host.is_faulted());

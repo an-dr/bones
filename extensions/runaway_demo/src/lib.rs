@@ -25,7 +25,9 @@ impl Guest for Component {
         }
     }
 
-    fn on_message(_topic: String, _sender: String, _payload: Vec<u8>) {}
+    fn on_message(_topic: String, _sender: String, _payload: Vec<u8>) -> Option<Vec<u8>> {
+        None
+    }
 }
 
 export!(Component);
