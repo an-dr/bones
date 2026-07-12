@@ -17,9 +17,10 @@ impl Guest for Component {
         log(Level::Debug, &format!("hello extension: tick dt={dt}"));
     }
 
-    fn on_message(topic: String, sender: String, _payload: Vec<u8>) {
+    fn on_message(topic: String, sender: String, _payload: Vec<u8>) -> Option<Vec<u8>> {
         log(Level::Debug, &format!("hello extension: message on {topic} from {sender}"));
         publish("hello/received", topic.as_bytes());
+        None
     }
 }
 

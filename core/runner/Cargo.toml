@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 bus = { path = "../bus" }
 host = { path = "../host" }
+lifecycle = { path = "../lifecycle" }
 logging = { path = "../logging" }
 platform = { path = "../platform" }
 renderer = { path = "../renderer" }

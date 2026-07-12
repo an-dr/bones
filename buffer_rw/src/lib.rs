@@ -49,6 +49,14 @@ impl std::fmt::Display for Error {
     }
 }
 
+/// Lets callers that model their own errors as `String` use `?` directly on
+/// `Reader` methods instead of `.map_err(|e| e.to_string())` at every call.
+impl From<Error> for String {
+    fn from(err: Error) -> Self {
+        err.to_string()
+    }
+}
+
 /// Bounds-checked reader over a byte slice; every method advances past what
 /// it read.
 pub struct Reader<'a> {
@@ -137,5 +145,14 @@ mod tests {
         let mut r = Reader::new(&[1, 2, 3, 4, 5]);
         r.read_u8().unwrap();
         assert_eq!(r.read_rest(), &[2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn error_converts_to_a_string_via_question_mark() {
+        fn parse(payload: &[u8]) -> Result<u32, String> {
+            Ok(Reader::new(payload).read_u32()?)
+        }
+        assert_eq!(parse(&[1, 0, 0, 0]), Ok(1));
+        assert!(parse(&[]).is_err());
     }
 }

@@ -86,6 +86,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "buffer_rw"
+version = "0.1.0"
+
+[[package]]
 name = "bumpalo"
 version = "3.20.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1014,6 +1018,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "lifecycle"
+version = "0.1.0"
+dependencies = [
+ "buffer_rw",
+ "bus",
+]
+
+[[package]]
 name = "linux-raw-sys"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1266,12 +1278,12 @@ dependencies = [
 name = "renderer"
 version = "0.1.0"
 dependencies = [
+ "buffer_rw",
  "bus",
  "logging",
  "platform",
  "sdl3",
  "send_wrapper",
- "wire",
 ]
 
 [[package]]
@@ -1286,6 +1298,7 @@ version = "0.1.0"
 dependencies = [
  "bus",
  "host",
+ "lifecycle",
  "logging",
  "platform",
  "renderer",
@@ -2485,10 +2498,6 @@ dependencies = [
  "bitflags",
  "windows-sys 0.59.0",
 ]
-
-[[package]]
-name = "wire"
-version = "0.1.0"
 
 [[package]]
 name = "wit-parser"

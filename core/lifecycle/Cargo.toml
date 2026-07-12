@@ -1,13 +1,8 @@
-[workspace]
-
 [package]
-name = "sprite_demo"
+name = "lifecycle"
 version = "0.1.0"
 edition = "2021"
 
-[lib]
-crate-type = ["cdylib"]
-
 [dependencies]
-wit-bindgen = "0.59.0"
+bus = { path = "../bus" }
 buffer_rw = { path = "../../buffer_rw" }

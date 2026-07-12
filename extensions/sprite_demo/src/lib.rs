@@ -4,7 +4,7 @@ wit_bindgen::generate!({
 });
 
 use bones::core::host_api::{log, publish, subscribe, Level};
-use wire::Writer;
+use buffer_rw::Writer;
 
 const SPRITE_PNG: &[u8] = include_bytes!("assets/robot_william.png");
 const SPRITE_ID: u32 = 1;
@@ -44,7 +44,9 @@ impl Guest for Component {
         publish("gfx/draw-sprite", &draw_sprite_payload());
     }
 
-    fn on_message(_topic: String, _sender: String, _payload: Vec<u8>) {}
+    fn on_message(_topic: String, _sender: String, _payload: Vec<u8>) -> Option<Vec<u8>> {
+        None
+    }
 }
 
 export!(Component);
