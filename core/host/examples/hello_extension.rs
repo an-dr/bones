@@ -28,7 +28,7 @@ fn main() -> wasmtime::Result<()> {
     let engine = host::new_engine()?;
     let bus = Bus::new();
 
-    let mut hello = Host::load(&engine, HELLO_WASM, Logger::default())?;
+    let mut hello = Host::load(&engine, HELLO_WASM, "hello", bus.clone(), Logger::default())?;
     let topics = hello.requested_topics();
     let ep = bus.register("hello", hello);
     for topic in &topics {

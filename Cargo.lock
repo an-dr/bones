@@ -1261,6 +1261,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "renderer"
+version = "0.1.0"
+dependencies = [
+ "bus",
+ "logging",
+ "platform",
+ "sdl3",
+ "send_wrapper",
+]
+
+[[package]]
 name = "rpkg-config"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1274,6 +1285,7 @@ dependencies = [
  "host",
  "logging",
  "platform",
+ "renderer",
  "sdl3",
  "wasmtime",
 ]
@@ -1422,6 +1434,12 @@ dependencies = [
  "serde",
  "serde_core",
 ]
+
+[[package]]
+name = "send_wrapper"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd0b0ec5f1c1ca621c432a25813d8d60c88abe6d3e08a3eb9cf37d97a0fe3d73"
 
 [[package]]
 name = "serde"

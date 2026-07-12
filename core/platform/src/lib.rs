@@ -7,7 +7,9 @@ use bus::{Bus, Envelope};
 
 pub struct Platform {
     sdl: sdl3::Sdl,
-    _window: sdl3::video::Window,
+    // `Option` so the window can be handed to a renderer later (`take_window`)
+    // — event polling only needs the `Sdl` context, not this value itself.
+    window: Option<sdl3::video::Window>,
     events: sdl3::EventPump,
 }
 
@@ -24,9 +26,16 @@ impl Platform {
 
         Ok(Self {
             sdl,
-            _window: window,
+            window: Some(window),
             events,
         })
+    }
+
+    /// Hands the window over (e.g. to a renderer needing it for a `Canvas`).
+    /// `None` if already taken. Keyboard input keeps working either way —
+    /// `poll_events` only needs the `Sdl` context, never this value.
+    pub fn take_window(&mut self) -> Option<sdl3::video::Window> {
+        self.window.take()
     }
 
     /// Publishes an `input/*` envelope for every pending keyboard event.

@@ -10,6 +10,7 @@ interface host-api {
 
     log: func(level: level, message: string);
     subscribe: func(topic: string);
+    publish: func(topic: string, payload: list<u8>);
 }
 
 world extension {

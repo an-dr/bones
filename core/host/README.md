@@ -4,8 +4,10 @@ Loads a WASM component against the `bones:core` contract and calls its
 exports. Registers as an ordinary bus `Handler` — on the bus, the host is
 indistinguishable from any other endpoint.
 
-- `Host::load` — instantiates a component, links `log`/`subscribe` imports,
-  calls `init` once.
+- `Host::load` — takes the extension's bus endpoint name and a `Bus` handle,
+  instantiates the component, links `log`/`subscribe`/`publish` imports,
+  calls `init` once. `publish` forwards straight to that same `Bus`, stamped
+  with the extension's name as sender.
 - `Host::requested_topics` — topics the extension asked for via `subscribe`
   during `init` (opt-in, including `core/tick` — messaging.md); read once by
   whoever registers the `Host` on the bus.

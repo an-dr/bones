@@ -3,7 +3,7 @@ wit_bindgen::generate!({
     world: "extension",
 });
 
-use bones::core::host_api::{log, subscribe, Level};
+use bones::core::host_api::{log, publish, subscribe, Level};
 
 struct Component;
 
@@ -19,6 +19,7 @@ impl Guest for Component {
 
     fn on_message(topic: String, sender: String, _payload: Vec<u8>) {
         log(Level::Debug, &format!("hello extension: message on {topic} from {sender}"));
+        publish("hello/received", topic.as_bytes());
     }
 }
 

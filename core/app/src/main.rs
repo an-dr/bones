@@ -5,6 +5,7 @@ fn main() {
     if let Err(err) = runner::Engine::builder()
         .extensions_dir("extensions")
         .window("bones", 800, 600)
+        .renderer()
         .run()
     {
         eprintln!("fatal: {err}");
