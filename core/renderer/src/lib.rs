@@ -42,34 +42,32 @@ fn parse_command<'a>(topic: &str, payload: &'a [u8]) -> Option<Result<Command<'a
 }
 
 fn parse_clear(payload: &[u8]) -> Result<Command<'_>, String> {
-    let [r, g, b, a] = <[u8; 4]>::try_from(payload).map_err(|_| "gfx/clear needs 4 bytes (r,g,b,a)".to_string())?;
-    Ok(Command::Clear { r, g, b, a })
+    let mut r = wire::Reader::new(payload);
+    let red = r.read_u8().map_err(|e| e.to_string())?;
+    let green = r.read_u8().map_err(|e| e.to_string())?;
+    let blue = r.read_u8().map_err(|e| e.to_string())?;
+    let alpha = r.read_u8().map_err(|e| e.to_string())?;
+    r.finish().map_err(|e| e.to_string())?;
+    Ok(Command::Clear { r: red, g: green, b: blue, a: alpha })
 }
 
 fn parse_load_sprite(payload: &[u8]) -> Result<Command<'_>, String> {
-    if payload.len() < 4 {
-        return Err("gfx/load-sprite needs at least a 4-byte id".to_string());
-    }
-    let id = u32::from_le_bytes(payload[0..4].try_into().unwrap());
-    Ok(Command::LoadSprite {
-        id,
-        png_bytes: &payload[4..],
-    })
+    let mut r = wire::Reader::new(payload);
+    let id = r.read_u32().map_err(|e| e.to_string())?;
+    Ok(Command::LoadSprite { id, png_bytes: r.read_rest() })
 }
 
 fn parse_draw_sprite(payload: &[u8]) -> Result<Command<'_>, String> {
-    let fields: [u8; 28] = payload
-        .try_into()
-        .map_err(|_| "gfx/draw-sprite needs 28 bytes (id, dst_x, dst_y, src_x, src_y, src_w, src_h)".to_string())?;
-    Ok(Command::DrawSprite {
-        id: u32::from_le_bytes(fields[0..4].try_into().unwrap()),
-        dst_x: i32::from_le_bytes(fields[4..8].try_into().unwrap()),
-        dst_y: i32::from_le_bytes(fields[8..12].try_into().unwrap()),
-        src_x: i32::from_le_bytes(fields[12..16].try_into().unwrap()),
-        src_y: i32::from_le_bytes(fields[16..20].try_into().unwrap()),
-        src_w: u32::from_le_bytes(fields[20..24].try_into().unwrap()),
-        src_h: u32::from_le_bytes(fields[24..28].try_into().unwrap()),
-    })
+    let mut r = wire::Reader::new(payload);
+    let id = r.read_u32().map_err(|e| e.to_string())?;
+    let dst_x = r.read_i32().map_err(|e| e.to_string())?;
+    let dst_y = r.read_i32().map_err(|e| e.to_string())?;
+    let src_x = r.read_i32().map_err(|e| e.to_string())?;
+    let src_y = r.read_i32().map_err(|e| e.to_string())?;
+    let src_w = r.read_u32().map_err(|e| e.to_string())?;
+    let src_h = r.read_u32().map_err(|e| e.to_string())?;
+    r.finish().map_err(|e| e.to_string())?;
+    Ok(Command::DrawSprite { id, dst_x, dst_y, src_x, src_y, src_w, src_h })
 }
 
 struct Inner {

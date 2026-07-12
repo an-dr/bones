@@ -8,6 +8,7 @@ bus = { path = "../bus" }
 logging = { path = "../logging" }
 sdl3 = { version = "0.18.4", features = ["build-from-source-static", "image", "unsafe_textures"] }
 send_wrapper = "0.6.0"
+wire = { path = "../../wire" }
 
 [dev-dependencies]
 platform = { path = "../platform" }

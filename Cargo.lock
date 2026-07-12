@@ -1269,6 +1269,7 @@ dependencies = [
  "platform",
  "sdl3",
  "send_wrapper",
+ "wire",
 ]
 
 [[package]]
@@ -2458,6 +2459,10 @@ dependencies = [
  "bitflags",
  "windows-sys 0.59.0",
 ]
+
+[[package]]
+name = "wire"
+version = "0.1.0"
 
 [[package]]
 name = "wit-parser"
