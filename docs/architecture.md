@@ -135,7 +135,9 @@ subscribe to the `core/tick` topic and receive `on-tick(dt)` callbacks;
 GUI-style extensions simply stay idle between messages.
 
 ```mermaid
+
 flowchart TD
+
     Poll["Poll SDL events"] --> Translate["Translate to bus messages<br/>(input/*, window/*, tray/*)"]
     Translate --> Dispatch["Dispatch bus:<br/>call on-message on subscribers,<br/>route direct request/reply"]
     Dispatch --> TickCheck{"Tick due?"}
