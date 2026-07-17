@@ -1,8 +1,10 @@
 # Native modules and the composition root
 
-Detailed design of the module system. Decision:
+Detailed design of the module system. Decisions:
 [ADR-011](../adr/ADR-011-native-core-modules.md) (kernel + consumer-composed
-modules).
+modules), [ADR-017](../adr/ADR-017-native-module-trait-and-typed-service-registry.md)
+(the concrete `Module` trait and service registry). `renderer` implements
+this contract for real; `ui` and `web` don't yet (see structure.md).
 
 ## What a module is
 
@@ -27,14 +29,21 @@ native game-core module with WASM level extensions.
 
 ## Module contract
 
-Concept level; exact signatures are an implementation-increment concern:
+A `Module` (crate: `bus`) requires `Handler` as a supertrait — a module is a
+bus endpoint exactly like an extension, so `dispatch` and `tick` need no
+separate hook: they already ride `Handler::handle` and a `core/tick`
+subscription, the same as any extension.
 
 - `name()` — the bus endpoint id, checked unique at registration.
-- `init(ctx)` — register subscriptions, provide/consume services.
-- `on-message(msg)` — bus deliveries, same semantics as extensions
-  (per-module serialization included).
-- Frame-phase hooks — see below; a module hooks only the phases it needs.
-- `shutdown()`.
+- `init(ctx) -> Result<(), String>` — request subscriptions (applied by the
+  caller after registration, mirroring how a WASM extension's own `init`
+  requests them) and provide/consume services.
+- `handle(&mut self, envelope)` (`Handler`) — bus deliveries, same semantics
+  as extensions (per-module serialization included).
+- `render()`, `present()` — frame-phase hooks, both default no-op; a module
+  overrides only the phases it needs.
+- `shutdown()` — declared, not yet called by `Engine::run` (the full
+  shutdown sequence is a separate roadmap rung, design/platform.md).
 
 ## Frame phases
 
@@ -44,8 +53,8 @@ within one phase, registration order breaks ties.
 | Phase      | Kernel work                            | Typical module hooks        |
 | ---------- | -------------------------------------- | --------------------------- |
 | `input`    | Platform pumps events → bus messages   | —                           |
-| `dispatch` | Bus delivers to subscribers            | ui consumes `ui/*` specs    |
-| `tick`     | `on-tick(dt)` to tick subscribers      | game-core simulation        |
+| `dispatch` | Bus delivers to subscribers            | ui consumes `ui/*` specs (`Handler::handle`) |
+| `tick`     | `on-tick(dt)` to tick subscribers      | game-core simulation (`Handler::handle` on `core/tick`) |
 | `render`   | —                                      | renderer executes gfx batches, draws ui output |
 | `present`  | —                                      | renderer presents the frame |
 
@@ -54,21 +63,29 @@ A headless build (no presentation modules) simply has empty `render` and
 
 ## Services
 
-The bus carries *behavior*; **service traits** carry in-process plumbing that
-must not be per-frame message traffic. The runner holds a typed service
-registry: providers register in `init`, consumers look up by trait. The
-allowed services are enumerated here — adding one is a design change, not a
-convenience:
+The bus carries *behavior*; **services** carry in-process plumbing that must
+not be per-frame message traffic. The registry is `TypeId`-keyed and
+single-consumer (`consume` removes the value — no service has more than one
+consumer yet, so ownership transfer is enough; revisit if one needs to,
+e.g. `window-surface` once `web` exists): providers register in `init`,
+consumers look up by type. The allowed services are enumerated here —
+adding one is a design change, not a convenience:
 
 | Service        | Provider          | Consumers      | Carries                     |
 | -------------- | ----------------- | -------------- | --------------------------- |
-| window-surface | platform (kernel) | renderer, web  | window handle, size, DPI    |
-| draw-target    | renderer module   | ui             | draw-data submission (egui triangles) |
+| window-surface | platform (kernel), via `Engine::build` | renderer, web | `sdl3::video::Window` |
+| draw-target    | *renderer module*  | *ui*           | *draw-data submission (egui triangles)* |
+
+`window-surface` is real — `renderer`'s `init` consumes it. `draw-target`
+is still aspirational: `ui` direct-wires to `renderer`'s crate instead
+(docs/structure.md) rather than consuming a service, pending its own
+migration onto `Module`.
 
 Modules never depend on each other's crates — only on kernel crates and on
-service traits (which the kernel defines). This is what lets an embedder swap
-the SDL renderer for its own: any module providing `draw-target` slots in
-under the unchanged ui module.
+services (which the kernel or a providing module defines by registering a
+value of a given type). This is what lets an embedder swap the SDL renderer
+for its own: any module providing the same service types slots in under an
+unchanged consumer.
 
 ## Trust model
 

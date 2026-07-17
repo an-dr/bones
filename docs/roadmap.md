@@ -8,15 +8,14 @@ is complete, delete it — git history is the record of what shipped. If the
 plan changes, rewrite the rungs; do not annotate them.
 
 The order below is a dependency ordering, not a strict sequence: platform,
-renderer, watchdog, synchronous send/lifecycle, and ui (web's remaining
-prerequisite) are all done.
+renderer, watchdog, synchronous send/lifecycle, ui, and the module/service
+registry are all done.
 
 | # | Increment | Demo that proves it |
 | - | --------- | ------------------- |
-| 1 | Full builder API: custom native-module injection, embedding demo | A parent project injects a custom module and builds its own engine binary |
-| 2 | Full shutdown sequence: WIT `shutdown` export, close-request published as an event extensions can react to, `Stopped` lifecycle event (design/platform.md) | Closing the window runs every extension's `shutdown()` before the process exits |
-| 3 | ADR-007's queue budget: bounded inbound queue, per-frame publish allowance, drop counters (only the time budget is enforced today) | A flooding extension is faulted instead of starving its peers |
-| 4 | web module (wry) + `web/*` vocabulary | The "dashboard" example ([examples/web-app.md](examples/web-app.md)) runs |
+| 1 | Full shutdown sequence: WIT `shutdown` export, close-request published as an event extensions can react to, `Stopped` lifecycle event (design/platform.md) | Closing the window runs every extension's `shutdown()` before the process exits |
+| 2 | ADR-007's queue budget: bounded inbound queue, per-frame publish allowance, drop counters (only the time budget is enforced today) | A flooding extension is faulted instead of starving its peers |
+| 3 | web module (wry) + `web/*` vocabulary | The "dashboard" example ([examples/web-app.md](examples/web-app.md)) runs |
 
 Guardrails while climbing:
 

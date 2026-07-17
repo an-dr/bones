@@ -15,11 +15,11 @@ Responsibilities in *italics* are not yet built — see
 
 | Component | Responsibility                                                     | Depends on             |
 | --------- | ------------------------------------------------------------------ | ---------------------- |
-| bus       | Topics, direct request/reply, delivery semantics; *queue budgets*  | logging                |
+| bus       | Topics, direct request/reply, delivery semantics, the `Module` contract and typed service registry (ADR-017); *queue budgets* | logging |
 | host      | Loads/instantiates extensions, dispatches handler calls, watchdog  | bus, contract, logging |
 | contract  | The WIT package — the extension-facing API definition             | —                     |
 | platform  | SDL window, tray, input sources, timing, event pump; headless mode | logging                |
-| runner    | Frame-phase loop skeleton, builder API; *module & service registries* | bus, host, platform, logging |
+| runner    | Frame-phase loop skeleton, builder API (`.module(...)` injection)  | bus, host, platform, logging |
 | lifecycle | `core/lifecycle` topic: publishes/parses extension state transitions | bus                  |
 | logging   | Structured sink, per-extension tagging; *drop counters*            | —                     |
 
@@ -67,9 +67,9 @@ graph TD
     Web -. "window-surface" .-> Platform
 ```
 
-- Solid arrows are crate dependencies; dashed arrows are **service traits**
-  (defined by the kernel, listed in design/modules.md) — the consumer depends
-  on the trait, not on the provider's crate.
+- Solid arrows are crate dependencies; dashed arrows are **services**
+  (typed values in the registry `bus::Module` defines, listed in design/
+  modules.md) — the consumer depends on `bus`, not on the provider's crate.
 - Anything not drawn is a design violation (e.g. bus depending on host,
   platform depending on renderer, module depending on another module's crate)
   — except `UI --> Renderer`, direct-wired the same way renderer itself is
@@ -97,7 +97,7 @@ bones/
 │   ├── lifecycle/ #
 │   ├── logging/   #
 │   ├── renderer/  #
-│   ├── ui/        #  first-party native modules (planned)
+│   ├── ui/        #  first-party native modules
 │   ├── web/       #  (planned)
 │   └── app/       #  the engine executable (default composition)
 ├── wit/           # contract: the WIT package
@@ -105,7 +105,8 @@ bones/
 │   └── bones-messages/ # typed core messages + payload codecs (tick, gfx, ...)
 ├── vendor/        # tracked upstream dependencies (submodules)
 │   └── pubsub-bus/   # the bus's underlying pub/sub primitive
-└── extensions/    # first-party & example extensions, one directory each
+├── extensions/    # first-party & example extensions, one directory each
+└── embedding-demo/ # separate workspace proving .module(...) needs no privileged access
 ```
 
 How directories map to build units (workspace members, features) is an
