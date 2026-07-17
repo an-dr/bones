@@ -1,15 +1,15 @@
-//! The public builder API (design/modules.md): discovers WASM extensions
-//! and runs them. TODO: `bones::Engine` in the design sketch — lives here
+//! The public builder API (design/modules.md, ADR-017): discovers WASM
+//! extensions and runs them, plus `.module(...)` for injecting custom
+//! native modules. TODO: `bones::Engine` in the design sketch — lives here
 //! as `runner::Engine` until a top-level facade crate exists to re-export
-//! it. TODO: no `.module(...)` yet for injecting custom native modules —
-//! renderer is wired directly into this crate instead of through one.
+//! it.
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use bones_messages::Message;
-use bus::{Envelope, Handler, Registry};
+use bus::{Envelope, Handler, Module, ModuleContext, Registry, ServiceRegistry};
 use lifecycle::Event;
 use logging::Logger;
 use renderer::Renderer;
@@ -23,35 +23,71 @@ use crate::Supervisor;
 const DEFAULT_TICK_HZ: f64 = 60.0;
 const GFX_TOPICS: &str = "gfx/*";
 
-/// Forwards bus deliveries to a `Renderer` shared with `Engine` itself (for
-/// the `present()` call each frame, outside normal message delivery).
-struct SharedRenderer(Arc<Mutex<Renderer>>);
+/// Forwards bus deliveries to a `T` shared with `Engine` itself, for calls
+/// outside normal message delivery — `renderer`'s `render`/`present` each
+/// frame, `ui`'s `update`, a boxed `Module`'s own hooks. `renderer`/`ui`
+/// stay their own typed `BuiltEngine` fields (not folded into the generic
+/// `modules` list) purely because `ui` still direct-wires to `renderer`
+/// (docs/structure.md) — everything about how either is built and driven
+/// otherwise goes through the real `Module` trait, same as any
+/// `.module(...)`-injected one.
+struct Shared<T: Handler>(Arc<Mutex<T>>);
 
-impl Handler for SharedRenderer {
+impl<T: Handler> Handler for Shared<T> {
     fn handle(&mut self, envelope: &Envelope) {
         self.0.lock().unwrap().handle(envelope);
     }
 }
 
-/// Same forwarding as `SharedRenderer`, for the ui module's own `update()`
-/// call each frame (outside normal message delivery).
-struct SharedUi(Arc<Mutex<Ui>>);
+/// Same shape as `Shared<T>`, but for a boxed `Module`: `Box<dyn Module>`
+/// can't satisfy `Shared<T>`'s `T: Handler` bound generically (it would
+/// need `impl Handler for Box<T>`, which conflicts with `bus`'s existing
+/// blanket impl for `FnMut` closures — a coherence conflict, not a design
+/// choice) — method-call syntax finds `handle` through auto-deref instead.
+struct SharedModule(Arc<Mutex<Box<dyn Module>>>);
 
-impl Handler for SharedUi {
+impl Handler for SharedModule {
     fn handle(&mut self, envelope: &Envelope) {
         self.0.lock().unwrap().handle(envelope);
     }
+}
+
+/// Runs `module.init`, registers it on the bus under its own name, and
+/// applies the subscriptions it requested — the same
+/// init-then-subscribe sequencing `attach_extension` uses for WASM
+/// extensions (ADR-017 mirrors that contract for native modules).
+fn register_module(
+    bus: &bus::Bus,
+    services: &mut ServiceRegistry,
+    modules: &mut Vec<Arc<Mutex<Box<dyn Module>>>>,
+    mut module: Box<dyn Module>,
+) -> Result<(), String> {
+    let topics = {
+        let mut ctx = ModuleContext::new(services);
+        module.init(&mut ctx)?;
+        ctx.into_subscriptions()
+    };
+    let name = module.name().to_string();
+    let shared = Arc::new(Mutex::new(module));
+    let ep = bus.register(name, SharedModule(shared.clone()));
+    for topic in topics {
+        ep.subscribe(topic);
+    }
+    modules.push(shared);
+    Ok(())
 }
 
 /// Everything `Engine::build` wires up: the step-driven `Runner`, the
 /// platform window (if `.window(...)` was set), the renderer (if
-/// `.renderer()` was set), the ui module (if `.ui()` was set), and the
-/// `Supervisor` sweeping loaded extensions for faults and file changes.
+/// `.renderer()` was set), the ui module (if `.ui()` was set), every
+/// `.module(...)`-injected native module, and the `Supervisor` sweeping
+/// loaded extensions for faults and file changes.
 pub struct BuiltEngine {
     pub runner: Runner,
     pub platform: Option<platform::Platform>,
     pub renderer: Option<Arc<Mutex<Renderer>>>,
     pub ui: Option<Arc<Mutex<Ui>>>,
+    pub modules: Vec<Arc<Mutex<Box<dyn Module>>>>,
     pub supervisor: Supervisor,
 }
 
@@ -62,6 +98,7 @@ pub struct Engine {
     window: Option<(String, u32, u32)>,
     renderer_enabled: bool,
     ui_enabled: bool,
+    modules: Vec<Box<dyn Module>>,
 }
 
 impl Engine {
@@ -73,6 +110,7 @@ impl Engine {
             window: None,
             renderer_enabled: false,
             ui_enabled: false,
+            modules: Vec::new(),
         }
     }
 
@@ -117,6 +155,16 @@ impl Engine {
     /// without one.
     pub fn ui(mut self) -> Self {
         self.ui_enabled = true;
+        self
+    }
+
+    /// Registers a custom native module (design/modules.md, ADR-017):
+    /// runs `init` in registration order at `build()` time, then hooks its
+    /// `render`/`present` each `run` iteration. The app is built solely on
+    /// this same method (via `.renderer()`/`.ui()`'s sugar) — no access an
+    /// embedder lacks.
+    pub fn module(mut self, module: impl Module + 'static) -> Self {
+        self.modules.push(Box::new(module));
         self
     }
 
@@ -180,15 +228,29 @@ impl Engine {
             None => None,
         };
 
+        // Build-time-only (ADR-017): every module's `init` runs against
+        // this. Seeded with `window-surface` unconditionally (not just for
+        // `.renderer()`) so a `.module(...)`-injected replacement renderer
+        // can consume it too, same as the built-in one — no privileged
+        // access (design/modules.md). Reclaimed by `platform` below if
+        // nothing ends up consuming it, so an unclaimed window stays open
+        // instead of closing with the registry it briefly lived in.
+        let mut services = ServiceRegistry::new();
+        if let Some(platform) = &mut platform {
+            platform.provide_window(&mut services);
+        }
+
         let renderer = if renderer_enabled {
-            let platform = platform
-                .as_mut()
-                .ok_or_else(|| wasmtime::Error::msg(".renderer() needs .window(...) too"))?;
-            let window = platform
-                .take_window()
-                .ok_or_else(|| wasmtime::Error::msg("window already taken"))?;
-            let shared = Arc::new(Mutex::new(Renderer::new(window, self.logger.clone())));
-            let ep = bus.register("renderer", SharedRenderer(shared.clone()));
+            if platform.is_none() {
+                return Err(wasmtime::Error::msg(".renderer() needs .window(...) too"));
+            }
+            let shared = Arc::new(Mutex::new(Renderer::new(self.logger.clone())));
+            {
+                let mut renderer = shared.lock().unwrap();
+                let mut ctx = ModuleContext::new(&mut services);
+                Module::init(&mut *renderer, &mut ctx).map_err(wasmtime::Error::msg)?;
+            }
+            let ep = bus.register("renderer", Shared(shared.clone()));
             ep.subscribe(GFX_TOPICS);
             Some(shared)
         } else {
@@ -200,18 +262,28 @@ impl Engine {
                 .as_ref()
                 .ok_or_else(|| wasmtime::Error::msg(".ui() needs .renderer() too"))?;
             let shared = Arc::new(Mutex::new(Ui::new(bus.clone(), self.logger.clone())));
-            let ep = bus.register("ui", SharedUi(shared.clone()));
+            let ep = bus.register("ui", Shared(shared.clone()));
             ep.subscribe(bones_messages::ui::Spec::TOPIC);
             Some(shared)
         } else {
             None
         };
 
+        let mut modules = Vec::new();
+        for module in self.modules.drain(..) {
+            register_module(&bus, &mut services, &mut modules, module).map_err(wasmtime::Error::msg)?;
+        }
+
+        if let Some(platform) = &mut platform {
+            platform.reclaim_window(&mut services);
+        }
+
         Ok(BuiltEngine {
             runner: Runner::new(bus, self.logger),
             platform,
             renderer,
             ui,
+            modules,
             supervisor,
         })
     }
@@ -230,6 +302,7 @@ impl Engine {
             mut platform,
             renderer,
             ui,
+            modules,
             mut supervisor,
         } = self.build()?;
 
@@ -262,9 +335,19 @@ impl Engine {
             runner.step(dt);
             supervisor.check();
 
+            // render phase (design/modules.md): gfx/ui draws already
+            // happened synchronously via `Handler::handle` during `step`'s
+            // dispatch above, so `render` is a no-op for renderer today —
+            // still called for any module that does need it.
+            if let Some(renderer) = &renderer {
+                renderer.lock().unwrap().render();
+            }
+            for module in &modules {
+                module.lock().unwrap().render();
+            }
+
             // ui draws above every gfx layer (design/presentation.md), so
-            // its `update` runs after `step`'s gfx dispatch and before
-            // `present`.
+            // its `update` runs between `render` and `present`.
             if let (Some(ui), Some(renderer)) = (&ui, &renderer) {
                 let mut renderer = renderer.lock().unwrap();
                 let (width, height) = renderer.size();
@@ -273,6 +356,9 @@ impl Engine {
 
             if let Some(renderer) = &renderer {
                 renderer.lock().unwrap().present();
+            }
+            for module in &modules {
+                module.lock().unwrap().present();
             }
 
             let elapsed = now.elapsed();

@@ -49,6 +49,27 @@ impl Platform {
         self.window.take()
     }
 
+    /// Provides the window as the `window-surface` service (design/
+    /// modules.md, ADR-017), for whichever module's `init` ends up
+    /// consuming it — a no-op if already taken. The only place that ever
+    /// provides a `Window`, so a duplicate-provide error here would mean a
+    /// logic bug in `Engine::build`, not a normal runtime condition.
+    pub fn provide_window(&mut self, services: &mut bus::ServiceRegistry) {
+        if let Some(window) = self.take_window() {
+            services.provide(window).expect("window-surface provided twice");
+        }
+    }
+
+    /// Takes back an unclaimed `window-surface` service (nothing consumed
+    /// it — e.g. `.window(...)` with no `.renderer()` and no custom module
+    /// wanting it) so it stays open for the rest of the run, instead of
+    /// being dropped — and closed — with the registry it briefly lived in.
+    pub fn reclaim_window(&mut self, services: &mut bus::ServiceRegistry) {
+        if let Some(window) = services.consume::<sdl3::video::Window>() {
+            self.window = Some(window);
+        }
+    }
+
     /// Publishes an `input/*` envelope for every pending keyboard event, and
     /// records a window-close request for `quit_requested` to report.
     /// Only enqueues (`Bus::publish`) — the caller decides when to dispatch.

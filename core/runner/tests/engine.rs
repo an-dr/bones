@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use bones_messages::lifecycle::{Event, LifecycleEvent};
 use bones_messages::{DecodeMessage, Message};
-use bus::Envelope;
+use bus::{Envelope, Handler, Module, ModuleContext};
 use logging::{Logger, RecordingSink};
 use runner::{BuiltEngine, Engine};
 
@@ -117,6 +117,54 @@ fn a_key_down_envelope_reaches_an_extension_through_a_real_window() {
 }
 
 #[test]
+fn a_window_with_no_renderer_or_module_is_not_dropped_with_the_service_registry() {
+    // window-surface is now seeded into the registry unconditionally
+    // (ADR-017, so a .module()-injected renderer can consume it too, not
+    // just .renderer()) — this proves an unclaimed one is handed back to
+    // `platform` instead of being dropped (and closing the window) with
+    // the registry it briefly lived in.
+    let _guard = sdl_test_lock().lock().unwrap();
+    let BuiltEngine { mut platform, .. } = Engine::new().window("test", 64, 64).build().unwrap();
+
+    assert!(
+        platform.as_mut().unwrap().take_window().is_some(),
+        "the window should still be available on `platform` when nothing claimed it"
+    );
+}
+
+#[test]
+fn a_custom_module_can_consume_window_surface_without_renderer() {
+    // The whole point of a generic service registry (ADR-017) over a
+    // renderer-only shortcut: an embedder's own `.module(...)` replacement
+    // renderer must be able to get the window the same way the built-in
+    // one does, with no `.renderer()` call and no privileged access.
+    let _guard = sdl_test_lock().lock().unwrap();
+
+    struct WantsWindow(Arc<Mutex<bool>>);
+    impl Handler for WantsWindow {
+        fn handle(&mut self, _envelope: &Envelope) {}
+    }
+    impl Module for WantsWindow {
+        fn name(&self) -> &str {
+            "wants-window"
+        }
+        fn init(&mut self, ctx: &mut ModuleContext) -> Result<(), String> {
+            *self.0.lock().unwrap() = ctx.consume_service::<sdl3::video::Window>().is_some();
+            Ok(())
+        }
+    }
+
+    let got_window = Arc::new(Mutex::new(false));
+    let BuiltEngine { .. } = Engine::new()
+        .window("test", 64, 64)
+        .module(WantsWindow(got_window.clone()))
+        .build()
+        .unwrap();
+
+    assert!(*got_window.lock().unwrap(), "expected the custom module to consume window-surface");
+}
+
+#[test]
 fn a_real_extension_draws_a_sprite_through_a_real_renderer() {
     let _guard = sdl_test_lock().lock().unwrap();
     let sink = RecordingSink::new();
@@ -221,6 +269,70 @@ fn a_runaway_extension_is_quarantined_while_the_engine_keeps_running() {
     assert!(
         events.contains(&(Event::Faulted, "runaway_demo".to_string())),
         "expected a Faulted lifecycle event, got {events:?}"
+    );
+}
+
+/// Records every `Module`/`Handler` call it receives — proves `.module()`
+/// runs the same init-then-subscribe-then-hook sequence a real module
+/// (`renderer`) goes through, without needing SDL or a wasm fixture.
+#[derive(Clone, Default)]
+struct RecordingModule(Arc<Mutex<Vec<String>>>);
+
+impl RecordingModule {
+    fn calls(&self) -> Vec<String> {
+        self.0.lock().unwrap().clone()
+    }
+}
+
+impl Handler for RecordingModule {
+    fn handle(&mut self, envelope: &Envelope) {
+        self.0.lock().unwrap().push(format!("handle:{}", envelope.topic));
+    }
+}
+
+impl Module for RecordingModule {
+    fn name(&self) -> &str {
+        "recording"
+    }
+
+    fn init(&mut self, ctx: &mut ModuleContext) -> Result<(), String> {
+        self.0.lock().unwrap().push("init".to_string());
+        ctx.subscribe("test/topic");
+        Ok(())
+    }
+
+    fn render(&mut self) {
+        self.0.lock().unwrap().push("render".to_string());
+    }
+
+    fn present(&mut self) {
+        self.0.lock().unwrap().push("present".to_string());
+    }
+}
+
+#[test]
+fn a_custom_module_is_initialized_subscribed_and_hooked() {
+    let module = RecordingModule::default();
+    let BuiltEngine { runner, modules, .. } = Engine::new().module(module.clone()).build().unwrap();
+
+    assert_eq!(modules.len(), 1, "expected the custom module to be registered");
+    assert_eq!(module.calls(), vec!["init"], "init should run at build time, before any message or hook");
+
+    runner.bus().publish(Envelope {
+        topic: "test/topic".to_string(),
+        sender: "test".to_string(),
+        correlation: None,
+        payload: Vec::new(),
+    });
+    runner.step(1.0 / 60.0);
+
+    modules[0].lock().unwrap().render();
+    modules[0].lock().unwrap().present();
+
+    assert_eq!(
+        module.calls(),
+        vec!["init", "handle:test/topic", "render", "present"],
+        "expected the subscription requested in init to be applied, and render/present to reach the same instance"
     );
 }
 
