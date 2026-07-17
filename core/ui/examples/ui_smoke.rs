@@ -4,7 +4,7 @@
 
 use bones_messages::ui::{Spec, Widget};
 use bones_messages::{EncodeMessage, Message};
-use bus::{Bus, Envelope, Handler};
+use bus::{Bus, Envelope, Handler, Module, ModuleContext, ServiceRegistry};
 use logging::Logger;
 use platform::Platform;
 use renderer::Renderer;
@@ -13,7 +13,12 @@ use ui::Ui;
 fn main() -> Result<(), String> {
     let mut platform = Platform::new("ui smoke test", 480, 320)?;
     let window = platform.take_window().expect("window should be available");
-    let mut renderer = Renderer::new(window, Logger::default());
+
+    let mut renderer = Renderer::new(Logger::default());
+    let mut services = ServiceRegistry::new();
+    services.provide(window)?;
+    let mut ctx = ModuleContext::new(&mut services);
+    renderer.init(&mut ctx)?;
 
     let bus = Bus::new();
     let mut ui = Ui::new(bus.clone(), Logger::default());

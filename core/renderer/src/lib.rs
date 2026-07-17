@@ -1,14 +1,15 @@
-//! Renderer module (design/modules.md, ADR-002): executes `gfx/*` draw
-//! commands against one SDL window. TODO: not a generic Module yet —
-//! directly wired into Engine, same as host and platform, until the module
-//! trait exists to design from real examples.
+//! Renderer module (design/modules.md, ADR-002, ADR-017): executes `gfx/*`
+//! draw commands against one SDL window. A `bus::Module`: construction is
+//! two-stage — `new` takes only a `Logger`, real SDL setup waits for
+//! `init` to consume the `window-surface` service (the window itself,
+//! provided by whoever configured one — `Engine::build` today).
 
 mod ui_mesh;
 
 use std::collections::HashMap;
 
 use bones_messages::gfx::Command;
-use bus::{Envelope, Handler};
+use bus::{Envelope, Handler, Module, ModuleContext};
 use logging::Logger;
 use sdl3::image::LoadTexture;
 use sdl3::pixels::{Color, FColor, PixelFormat};
@@ -30,7 +31,6 @@ struct Inner {
     // Separate id space from `textures` (gfx sprite ids are extension-
     // assigned `u32`s; ui texture ids are egui's own `u64` texture ids).
     ui_textures: HashMap<u64, Texture>,
-    logger: Logger,
 }
 
 impl Inner {
@@ -132,32 +132,38 @@ impl Inner {
 /// constraints on some platforms), but the vendored `pubsub-bus` crate
 /// requires both on anything registered as a bus endpoint. `SendWrapper`
 /// makes the type check pass while keeping the guarantee real: it panics
-/// (not silent UB) if `Inner` is ever actually touched from a thread other
+/// (not silent UB) if `State` is ever actually touched from a thread other
 /// than the one that created it — true today, since dispatch is single-
 /// threaded, but enforced rather than merely assumed.
-pub struct Renderer(SendWrapper<Inner>);
+pub struct Renderer(SendWrapper<State>);
+
+struct State {
+    logger: Logger,
+    // `None` until `Module::init` consumes `window-surface` and builds the
+    // real SDL state — every other method panics if called first (a
+    // caller/wiring bug, not a runtime condition to recover from).
+    inner: Option<Inner>,
+}
+
+impl State {
+    fn inner_mut(&mut self) -> &mut Inner {
+        self.inner.as_mut().expect("Renderer used before Module::init built its SDL state")
+    }
+}
 
 impl Renderer {
-    pub fn new(window: Window, logger: Logger) -> Self {
-        let canvas = window.into_canvas();
-        let texture_creator = canvas.texture_creator();
-        Self(SendWrapper::new(Inner {
-            canvas,
-            texture_creator,
-            textures: HashMap::new(),
-            ui_textures: HashMap::new(),
-            logger,
-        }))
+    pub fn new(logger: Logger) -> Self {
+        Self(SendWrapper::new(State { logger, inner: None }))
     }
 
     pub fn present(&mut self) {
-        self.0.canvas.present();
+        self.0.inner_mut().canvas.present();
     }
 
     /// Current window size in pixels, for callers (the ui module) that need
     /// to size their own output to match without holding a window handle.
     pub fn size(&self) -> (u32, u32) {
-        self.0.canvas.window().size()
+        self.0.inner.as_ref().expect("Renderer used before Module::init built its SDL state").canvas.window().size()
     }
 
     /// Registers or fully replaces the RGBA8 (straight alpha) texture the
@@ -165,7 +171,7 @@ impl Renderer {
     /// texture ids (font atlas plus any user textures). `rgba.len()` must
     /// be `width * height * 4`.
     pub fn set_ui_texture(&mut self, id: u64, width: u32, height: u32, rgba: &[u8]) -> Result<(), String> {
-        self.0.set_ui_texture(id, width, height, rgba)
+        self.0.inner_mut().set_ui_texture(id, width, height, rgba)
     }
 
     /// Patches a sub-rectangle of a texture already registered by
@@ -181,12 +187,12 @@ impl Renderer {
         height: u32,
         rgba: &[u8],
     ) -> Result<(), String> {
-        self.0.update_ui_texture_region(id, x, y, width, height, rgba)
+        self.0.inner_mut().update_ui_texture_region(id, x, y, width, height, rgba)
     }
 
     /// Drops a texture registered by `set_ui_texture` (egui's `TexturesDelta::free`).
     pub fn free_ui_texture(&mut self, id: u64) {
-        self.0.free_ui_texture(id);
+        self.0.inner_mut().free_ui_texture(id);
     }
 
     /// Draws one textured triangle mesh from egui's tessellated output
@@ -194,7 +200,7 @@ impl Renderer {
     /// above all gfx layers") — the caller is responsible for calling this
     /// after every `gfx/*` draw for the frame has already executed.
     pub fn draw_ui_mesh(&mut self, mesh: &UiMesh) -> Result<(), String> {
-        self.0.draw_ui_mesh(mesh)
+        self.0.inner_mut().draw_ui_mesh(mesh)
     }
 }
 
@@ -204,7 +210,7 @@ impl Handler for Renderer {
         // topic here is always a caller mistake (e.g. a typo'd command
         // name) worth surfacing rather than silently dropping.
         let result = match Command::decode(&envelope.topic, &envelope.payload) {
-            Ok(Some(command)) => self.0.execute(command),
+            Ok(Some(command)) => self.0.inner_mut().execute(command),
             Ok(None) => {
                 self.0.logger.warn(
                     "renderer",
@@ -223,5 +229,36 @@ impl Handler for Renderer {
                 &format!("{} from '{}': {err}", envelope.topic, envelope.sender),
             );
         }
+    }
+}
+
+impl Module for Renderer {
+    fn name(&self) -> &str {
+        "renderer"
+    }
+
+    /// Consumes the `window-surface` service (design/modules.md) and
+    /// builds the real SDL canvas/texture-creator state; errors if no
+    /// window was provided (e.g. `.renderer()` without `.window(...)`).
+    fn init(&mut self, ctx: &mut ModuleContext) -> Result<(), String> {
+        let window = ctx
+            .consume_service::<Window>()
+            .ok_or_else(|| "renderer needs a window-surface service (configure .window(...))".to_string())?;
+        let canvas = window.into_canvas();
+        let texture_creator = canvas.texture_creator();
+        self.0.inner = Some(Inner {
+            canvas,
+            texture_creator,
+            textures: HashMap::new(),
+            ui_textures: HashMap::new(),
+        });
+        Ok(())
+    }
+
+    // `render`: no-op — gfx/ui draws already happened synchronously via
+    // `Handler::handle` during this frame's bus dispatch.
+
+    fn present(&mut self) {
+        Renderer::present(self);
     }
 }
