@@ -1,61 +1,77 @@
 //! Fixed-layout little-endian byte encoding for bus payloads (ADR-001: any
 //! guest language must be able to produce/consume these, so no serde).
 
+/// Builder for the fixed-layout little-endian core-message encoding.
 #[derive(Default)]
 pub struct Writer(Vec<u8>);
 
 impl Writer {
+    /// Starts an empty payload.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Appends one unsigned byte.
     pub fn u8(mut self, v: u8) -> Self {
         self.0.push(v);
         self
     }
 
+    /// Appends a little-endian `u32`.
     pub fn u32(mut self, v: u32) -> Self {
         self.0.extend_from_slice(&v.to_le_bytes());
         self
     }
 
+    /// Appends a little-endian `i32`.
     pub fn i32(mut self, v: i32) -> Self {
         self.0.extend_from_slice(&v.to_le_bytes());
         self
     }
 
+    /// Appends a little-endian `f32`.
+    pub fn f32(mut self, v: f32) -> Self {
+        self.0.extend_from_slice(&v.to_le_bytes());
+        self
+    }
+
+    /// Appends bytes without a length prefix.
     pub fn bytes(mut self, v: &[u8]) -> Self {
         self.0.extend_from_slice(v);
         self
     }
 
+    /// Returns the completed payload.
     pub fn finish(self) -> Vec<u8> {
         self.0
     }
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum Error {
+/// A malformed core-defined message payload.
+pub enum DecodeError {
+    /// The payload ended before a complete field could be read.
     Truncated,
+    /// A fixed-shape message contained bytes after its final field.
     TrailingBytes,
+    /// A tagged enum contained a value not defined by its message contract.
+    InvalidTag { message: &'static str, tag: u8 },
+    /// A string field was not valid UTF-8.
+    InvalidUtf8,
 }
 
-impl std::fmt::Display for Error {
+impl std::fmt::Display for DecodeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Error::Truncated => write!(f, "payload ended before an expected field"),
-            Error::TrailingBytes => write!(f, "payload has bytes left after parsing"),
+            DecodeError::Truncated => write!(f, "payload ended before an expected field"),
+            DecodeError::TrailingBytes => write!(f, "payload has bytes left after decoding"),
+            DecodeError::InvalidTag { message, tag } => write!(f, "unknown {message} tag {tag}"),
+            DecodeError::InvalidUtf8 => write!(f, "payload contains invalid UTF-8"),
         }
     }
 }
 
-/// Lets callers that model their own errors as `String` use `?` directly on
-/// `Reader` methods instead of `.map_err(|e| e.to_string())` at every call.
-impl From<Error> for String {
-    fn from(err: Error) -> Self {
-        err.to_string()
-    }
-}
+impl std::error::Error for DecodeError {}
 
 /// Bounds-checked reader over a byte slice; every method advances past what
 /// it read.
@@ -65,20 +81,29 @@ pub struct Reader<'a> {
 }
 
 impl<'a> Reader<'a> {
+    /// Starts reading at the beginning of `bytes`.
     pub fn new(bytes: &'a [u8]) -> Self {
         Self { bytes, pos: 0 }
     }
 
-    pub fn read_u8(&mut self) -> Result<u8, Error> {
+    /// Reads one unsigned byte.
+    pub fn read_u8(&mut self) -> Result<u8, DecodeError> {
         self.read_array::<1>().map(|b| b[0])
     }
 
-    pub fn read_u32(&mut self) -> Result<u32, Error> {
+    /// Reads a little-endian `u32`.
+    pub fn read_u32(&mut self) -> Result<u32, DecodeError> {
         self.read_array::<4>().map(u32::from_le_bytes)
     }
 
-    pub fn read_i32(&mut self) -> Result<i32, Error> {
+    /// Reads a little-endian `i32`.
+    pub fn read_i32(&mut self) -> Result<i32, DecodeError> {
         self.read_array::<4>().map(i32::from_le_bytes)
+    }
+
+    /// Reads a little-endian `f32`.
+    pub fn read_f32(&mut self) -> Result<f32, DecodeError> {
+        self.read_array::<4>().map(f32::from_le_bytes)
     }
 
     /// Every remaining byte, regardless of length.
@@ -88,19 +113,24 @@ impl<'a> Reader<'a> {
         rest
     }
 
+    /// Reads every remaining byte as UTF-8 without allocating.
+    pub fn read_str_rest(&mut self) -> Result<&'a str, DecodeError> {
+        std::str::from_utf8(self.read_rest()).map_err(|_| DecodeError::InvalidUtf8)
+    }
+
     /// Errors if any bytes remain unread — call after a fixed-shape payload
     /// should be fully consumed.
-    pub fn finish(self) -> Result<(), Error> {
+    pub fn finish(self) -> Result<(), DecodeError> {
         if self.pos == self.bytes.len() {
             Ok(())
         } else {
-            Err(Error::TrailingBytes)
+            Err(DecodeError::TrailingBytes)
         }
     }
 
-    fn read_array<const N: usize>(&mut self) -> Result<[u8; N], Error> {
+    fn read_array<const N: usize>(&mut self) -> Result<[u8; N], DecodeError> {
         if self.bytes.len() - self.pos < N {
-            return Err(Error::Truncated);
+            return Err(DecodeError::Truncated);
         }
         let array: [u8; N] = self.bytes[self.pos..self.pos + N].try_into().unwrap();
         self.pos += N;
@@ -130,14 +160,14 @@ mod tests {
     #[test]
     fn reader_rejects_a_truncated_field() {
         let mut r = Reader::new(&[0, 0]);
-        assert_eq!(r.read_u32(), Err(Error::Truncated));
+        assert_eq!(r.read_u32(), Err(DecodeError::Truncated));
     }
 
     #[test]
     fn finish_rejects_trailing_bytes() {
         let mut r = Reader::new(&[1, 2, 3, 4, 5]);
         r.read_u32().unwrap();
-        assert_eq!(r.finish(), Err(Error::TrailingBytes));
+        assert_eq!(r.finish(), Err(DecodeError::TrailingBytes));
     }
 
     #[test]
@@ -148,11 +178,11 @@ mod tests {
     }
 
     #[test]
-    fn error_converts_to_a_string_via_question_mark() {
-        fn parse(payload: &[u8]) -> Result<u32, String> {
-            Ok(Reader::new(payload).read_u32()?)
-        }
-        assert_eq!(parse(&[1, 0, 0, 0]), Ok(1));
-        assert!(parse(&[]).is_err());
+    fn string_reader_borrows_valid_utf8_and_rejects_invalid_utf8() {
+        let mut valid = Reader::new(b"level");
+        assert_eq!(valid.read_str_rest(), Ok("level"));
+
+        let mut invalid = Reader::new(&[0xff]);
+        assert_eq!(invalid.read_str_rest(), Err(DecodeError::InvalidUtf8));
     }
 }

@@ -16,6 +16,8 @@ synchronous send/lifecycle (their shared prerequisites) are all done.
 | 1 | ui module (egui) + `ui/*` vocabulary | The "notes" example ([examples/egui-app.md](examples/egui-app.md)) runs |
 | 2 | web module (wry) + `web/*` vocabulary | The "dashboard" example ([examples/web-app.md](examples/web-app.md)) runs |
 | 3 | Full builder API: custom native-module injection, embedding demo | A parent project injects a custom module and builds its own engine binary |
+| 4 | Full shutdown sequence: WIT `shutdown` export, close-request published as an event extensions can react to, `Stopped` lifecycle event (design/platform.md) | Closing the window runs every extension's `shutdown()` before the process exits |
+| 5 | ADR-007's queue budget: bounded inbound queue, per-frame publish allowance, drop counters (only the time budget is enforced today) | A flooding extension is faulted instead of starving its peers |
 
 Guardrails while climbing:
 

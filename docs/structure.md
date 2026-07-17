@@ -8,17 +8,20 @@ Since [ADR-011](adr/ADR-011-native-core-modules.md) the core has two tiers:
 a fixed **kernel** and optional, consumer-injectable **native modules**
 (detailed in [design/modules.md](design/modules.md)).
 
+Responsibilities in *italics* are not yet built — see
+[roadmap.md](roadmap.md) for what's outstanding.
+
 ## Kernel components
 
 | Component | Responsibility                                                     | Depends on             |
 | --------- | ------------------------------------------------------------------ | ---------------------- |
-| bus       | Topics, direct request/reply, delivery semantics, budgets          | logging                |
+| bus       | Topics, direct request/reply, delivery semantics; *queue budgets*  | logging                |
 | host      | Loads/instantiates extensions, dispatches handler calls, watchdog  | bus, contract, logging |
 | contract  | The WIT package — the extension-facing API definition             | —                     |
 | platform  | SDL window, tray, input sources, timing, event pump; headless mode | logging                |
-| runner    | Frame-phase loop skeleton, module & service registries, builder API | bus, host, platform, logging |
+| runner    | Frame-phase loop skeleton, builder API; *module & service registries* | bus, host, platform, logging |
 | lifecycle | `core/lifecycle` topic: publishes/parses extension state transitions | bus                  |
-| logging   | Structured sink, per-extension tagging, drop counters              | —                     |
+| logging   | Structured sink, per-extension tagging; *drop counters*            | —                     |
 
 ## Native modules (first-party)
 
@@ -27,8 +30,8 @@ All feature-flagged and individually optional; embedders may add their own.
 | Module   | Responsibility                                  | Uses (kernel + services)          |
 | -------- | ----------------------------------------------- | --------------------------------- |
 | renderer | Executes gfx batches, presents; provides `draw-target` | bus; `window-surface` service |
-| ui       | egui integration: widget specs → draw data, events back | bus; `draw-target` service   |
-| web      | wry panels, bus ↔ page JSON bridge             | bus; `window-surface` service     |
+| *ui*     | *egui integration: widget specs → draw data, events back* | *bus; `draw-target` service* |
+| *web*    | *wry panels, bus ↔ page JSON bridge*            | *bus; `window-surface` service*   |
 
 ## Distributions
 
@@ -91,10 +94,14 @@ bones/
 │   ├── lifecycle/ #
 │   ├── logging/   #
 │   ├── renderer/  #
-│   ├── ui/        #  first-party native modules
-│   ├── web/       #
+│   ├── ui/        #  first-party native modules (planned)
+│   ├── web/       #  (planned)
 │   └── app/       #  the engine executable (default composition)
 ├── wit/           # contract: the WIT package
+├── shared/        # crates depended on by both host and WASM guest code
+│   └── bones-messages/ # typed core messages + payload codecs (tick, gfx, ...)
+├── vendor/        # tracked upstream dependencies (submodules)
+│   └── pubsub-bus/   # the bus's underlying pub/sub primitive
 └── extensions/    # first-party & example extensions, one directory each
 ```
 

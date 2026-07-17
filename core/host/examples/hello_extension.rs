@@ -4,6 +4,8 @@
 //! Build the extension first: pwsh extensions/hello/build.ps1
 //! Then: cargo run -p host --example hello_extension
 
+use bones_messages::tick::Tick;
+use bones_messages::{EncodeMessage, Message};
 use bus::{Bus, Envelope, Registry};
 use host::Host;
 use logging::Logger;
@@ -12,14 +14,14 @@ const HELLO_WASM: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../extensions/hello/target/wasm32-wasip2/release/hello.wasm"
 );
-const TICK_TOPIC: &str = "core/tick";
 
-fn tick(bus: &Bus, dt: f32) {
+fn tick_once(bus: &Bus, dt: f32) {
+    let tick = Tick { dt };
     bus.publish(Envelope {
-        topic: TICK_TOPIC.to_string(),
+        topic: Tick::TOPIC.to_string(),
         sender: "demo".to_string(),
         correlation: None,
-        payload: dt.to_le_bytes().to_vec(),
+        payload: tick.encode(),
     });
     bus.dispatch();
 }
@@ -28,7 +30,14 @@ fn main() -> wasmtime::Result<()> {
     let engine = host::new_engine()?;
     let bus = Bus::new();
 
-    let mut hello = Host::load(&engine, HELLO_WASM, "hello", bus.clone(), Registry::new(), Logger::default())?;
+    let mut hello = Host::load(
+        &engine,
+        HELLO_WASM,
+        "hello",
+        bus.clone(),
+        Registry::new(),
+        Logger::default(),
+    )?;
     let topics = hello.requested_topics();
     let ep = bus.register("hello", hello);
     for topic in &topics {
@@ -37,7 +46,7 @@ fn main() -> wasmtime::Result<()> {
 
     println!("-- running 3 ticks --");
     for _ in 0..3 {
-        tick(&bus, 1.0 / 60.0);
+        tick_once(&bus, 1.0 / 60.0);
     }
 
     Ok(())

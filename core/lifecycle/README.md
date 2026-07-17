@@ -8,5 +8,7 @@ faults, and reloads.
 - `Event` — one of the five transitions.
 - `publish(bus, sender, name, event)` — publishes `name`'s transition,
   `sender` stamped as the publishing component (e.g. `"engine"`).
-- `parse(payload)` — recovers `(event, name)` from a received envelope's
-  payload.
+
+The shared `bones-messages::lifecycle::LifecycleEvent` type owns the topic
+and wire contract. Consumers decode it through the common `DecodeMessage`
+interface.

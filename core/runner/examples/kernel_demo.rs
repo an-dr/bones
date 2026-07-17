@@ -2,9 +2,11 @@
 //! delivery order (ADR-009).
 //! Run with: cargo run -p runner --example kernel_demo
 
+use bones_messages::tick::Tick;
+use bones_messages::Message;
 use bus::{Bus, Envelope, Handler};
 use logging::Logger;
-use runner::{Runner, TICK_TOPIC};
+use runner::Runner;
 
 struct Printer {
     name: &'static str,
@@ -12,7 +14,7 @@ struct Printer {
 
 impl Handler for Printer {
     fn handle(&mut self, envelope: &Envelope) {
-        match runner::tick_dt(envelope) {
+        match runner::read_tick_dt(envelope) {
             Some(dt) => println!("[{}] core/tick dt={dt}", self.name),
             None => println!(
                 "[{}] {} <- {:?}",
@@ -37,7 +39,7 @@ fn main() {
     let bus = Bus::new();
 
     let level = bus.register("level", Printer { name: "level" });
-    level.subscribe(TICK_TOPIC);
+    level.subscribe(Tick::TOPIC);
     level.subscribe("game/*");
 
     let ui = bus.register("ui", Printer { name: "ui" });

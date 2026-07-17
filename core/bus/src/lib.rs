@@ -15,12 +15,14 @@ pub struct Envelope {
 }
 
 /// Delivered-envelope callback; test doubles and real dispatch targets
-/// (host, a module) both just implement this.
-pub trait Handler: Send + Sync {
+/// (host, a module) both just implement this. Only `Send` is required:
+/// every `Handler` is reached through `Arc<Mutex<Adapter>>`, and
+/// `Mutex<T>` is itself `Send + Sync` whenever `T: Send`.
+pub trait Handler: Send {
     fn handle(&mut self, envelope: &Envelope);
 }
 
-impl<F: FnMut(&Envelope) + Send + Sync> Handler for F {
+impl<F: FnMut(&Envelope) + Send> Handler for F {
     fn handle(&mut self, envelope: &Envelope) {
         self(envelope);
     }
@@ -181,19 +183,18 @@ impl Endpoint {
 }
 
 /// Cheap to clone: an extension's `publish` import needs to hold a handle
-/// to the same bus it's registered on. `pubsub-bus`'s `EventBus` is already
-/// `Arc`-backed internally but doesn't derive `Clone` itself (vendored —
-/// ADR-013 wraps it rather than modifying it), so the `Arc` here is bones'
-/// own.
+/// to the same bus it's registered on. `pubsub_bus::EventBus` is `Clone`
+/// (3.2.0) and already `Arc`-backed internally, so no wrapping `Arc` of
+/// bones' own is needed here.
 #[derive(Clone)]
 pub struct Bus {
-    inner: Arc<pubsub_bus::EventBus<Envelope, ()>>,
+    inner: pubsub_bus::EventBus<Envelope, ()>,
 }
 
 impl Bus {
     pub fn new() -> Self {
         Self {
-            inner: Arc::new(pubsub_bus::EventBus::new()),
+            inner: pubsub_bus::EventBus::new(),
         }
     }
 

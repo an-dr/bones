@@ -4,44 +4,48 @@ wit_bindgen::generate!({
 });
 
 use bones::core::host_api::{log, publish, subscribe, Level};
-use buffer_rw::Writer;
+use bones_messages::gfx::{Clear, DrawSprite, LoadSprite};
+use bones_messages::{EncodeMessage, Message};
 
 const SPRITE_PNG: &[u8] = include_bytes!("assets/robot_william.png");
 const SPRITE_ID: u32 = 1;
 // robot_william.png is a 256x64 strip of four 64x64 frames; this rung only
 // ever draws the first one.
-const FRAME_SIZE: i32 = 64;
+const FRAME_SIZE: u32 = 64;
 const DST_X: i32 = 368;
 const DST_Y: i32 = 268;
-
-fn load_sprite_payload() -> Vec<u8> {
-    Writer::new().u32(SPRITE_ID).bytes(SPRITE_PNG).finish()
-}
-
-fn draw_sprite_payload() -> Vec<u8> {
-    Writer::new()
-        .u32(SPRITE_ID)
-        .i32(DST_X)
-        .i32(DST_Y)
-        .i32(0) // src_x
-        .i32(0) // src_y
-        .u32(FRAME_SIZE as u32) // src_w
-        .u32(FRAME_SIZE as u32) // src_h
-        .finish()
-}
 
 struct Component;
 
 impl Guest for Component {
     fn init() {
         subscribe("core/tick");
-        publish("gfx/load-sprite", &load_sprite_payload());
-        log(Level::Info, "sprite_demo extension: init, sprite loaded");
+        let load = LoadSprite {
+            id: SPRITE_ID,
+            png_bytes: SPRITE_PNG,
+        };
+        publish(LoadSprite::TOPIC, &load.encode());
+        log(Level::Info, "init, sprite loaded");
     }
 
     fn on_tick(_dt: f32) {
-        publish("gfx/clear", &[20, 20, 30, 255]);
-        publish("gfx/draw-sprite", &draw_sprite_payload());
+        let clear = Clear {
+            r: 20,
+            g: 20,
+            b: 30,
+            a: 255,
+        };
+        publish(Clear::TOPIC, &clear.encode());
+        let draw = DrawSprite {
+            id: SPRITE_ID,
+            dst_x: DST_X,
+            dst_y: DST_Y,
+            src_x: 0,
+            src_y: 0,
+            src_w: FRAME_SIZE,
+            src_h: FRAME_SIZE,
+        };
+        publish(DrawSprite::TOPIC, &draw.encode());
     }
 
     fn on_message(_topic: String, _sender: String, _payload: Vec<u8>) -> Option<Vec<u8>> {

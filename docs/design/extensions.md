@@ -4,16 +4,17 @@ Detailed design of the extension model. Decisions: [ADR-001](../adr/ADR-001-wasm
 
 ## What an extension is
 
-A WASM **component** implementing the engine's WIT world, packaged with a
-small manifest giving its **name** (its bus endpoint id) and **version**. The
-name must be unique per engine instance; the host rejects duplicates at load.
+A WASM **component** implementing the engine's WIT world. Its **name** (bus
+endpoint id) is derived from its filename today — no manifest or version yet;
+one may arrive via a future ADR if the need appears. The name must be unique
+per engine instance; the host rejects a duplicate at load.
 
 The contract, at concept level:
 
-- **Extension exports:** `init(config)`, `shutdown()`, `on-message(msg)`,
-  `on-tick(dt)`.
+- **Extension exports:** `init()`, `on-message(msg)`, `on-tick(dt)`.
+  TODO: no `shutdown()` export yet — see roadmap.md.
 - **Host imports:** `subscribe(topic)`, `publish(topic, payload)`,
-  `send(endpoint, payload, deadline) → reply`, `log(level, text)`.
+  `send(endpoint, payload) → reply`, `log(level, text)`.
 
 Exact signatures live in the WIT package (`wit/`) once implementation starts;
 this document intentionally stays above them.

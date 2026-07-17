@@ -17,7 +17,7 @@ fn main() {
 fn run() -> Result<(), String> {
     let config = Config::load("bones.toml")?;
 
-    let mut engine = runner::Engine::builder()
+    let mut engine = runner::Engine::new()
         .extensions_dir(config.extensions_dir)
         .window(config.window_title, config.window_width, config.window_height);
     if config.renderer {

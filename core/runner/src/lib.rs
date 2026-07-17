@@ -1,19 +1,21 @@
+use bones_messages::tick::Tick;
+use bones_messages::{DecodeMessage, EncodeMessage, Message};
 use bus::{Bus, Envelope};
 use logging::Logger;
 
 mod engine;
-pub use engine::Engine;
-
-pub const TICK_TOPIC: &str = "core/tick";
+mod loading;
+mod supervisor;
+pub use engine::{BuiltEngine, Engine};
+pub use supervisor::Supervisor;
 
 /// Reads `dt` back out of a `core/tick` envelope, `None` if the topic
 /// doesn't match or the payload isn't 4 LE bytes.
-pub fn tick_dt(envelope: &Envelope) -> Option<f32> {
-    if envelope.topic != TICK_TOPIC {
+pub fn read_tick_dt(envelope: &Envelope) -> Option<f32> {
+    if envelope.topic != Tick::TOPIC {
         return None;
     }
-    let bytes: [u8; 4] = envelope.payload.as_slice().try_into().ok()?;
-    Some(f32::from_le_bytes(bytes))
+    Tick::decode(&envelope.payload).ok().map(|tick| tick.dt)
 }
 
 /// Headless frame-phase loop skeleton (ADR-014). Bounded and step-driven;
@@ -36,11 +38,12 @@ impl Runner {
     /// virtual) dt, then dispatch everything queued.
     pub fn step(&self, dt: f32) {
         self.logger.debug("runner", &format!("tick dt={dt}"));
+        let tick = Tick { dt };
         self.bus.publish(Envelope {
-            topic: TICK_TOPIC.to_string(),
+            topic: Tick::TOPIC.to_string(),
             sender: "runner".to_string(),
             correlation: None,
-            payload: dt.to_le_bytes().to_vec(),
+            payload: tick.encode(),
         });
         self.bus.dispatch();
     }
@@ -64,7 +67,7 @@ mod tests {
 
     impl bus::Handler for CountingEndpoint {
         fn handle(&mut self, envelope: &Envelope) {
-            if let Some(dt) = tick_dt(envelope) {
+            if let Some(dt) = read_tick_dt(envelope) {
                 self.ticks.lock().unwrap().push(dt);
             }
         }
@@ -74,8 +77,13 @@ mod tests {
     fn step_delivers_tick_to_a_subscribed_endpoint() {
         let bus = Bus::new();
         let ticks = Arc::new(Mutex::new(Vec::new()));
-        let ep = bus.register("level", CountingEndpoint { ticks: ticks.clone() });
-        ep.subscribe(TICK_TOPIC);
+        let ep = bus.register(
+            "level",
+            CountingEndpoint {
+                ticks: ticks.clone(),
+            },
+        );
+        ep.subscribe(Tick::TOPIC);
 
         let runner = Runner::new(bus, Logger::default());
         runner.step(0.016);
@@ -87,8 +95,13 @@ mod tests {
     fn run_for_delivers_ticks_in_order() {
         let bus = Bus::new();
         let ticks = Arc::new(Mutex::new(Vec::new()));
-        let ep = bus.register("level", CountingEndpoint { ticks: ticks.clone() });
-        ep.subscribe(TICK_TOPIC);
+        let ep = bus.register(
+            "level",
+            CountingEndpoint {
+                ticks: ticks.clone(),
+            },
+        );
+        ep.subscribe(Tick::TOPIC);
 
         let runner = Runner::new(bus, Logger::default());
         runner.run_for(3, 0.016);
@@ -100,7 +113,12 @@ mod tests {
     fn an_endpoint_not_subscribed_to_tick_receives_nothing() {
         let bus = Bus::new();
         let ticks = Arc::new(Mutex::new(Vec::new()));
-        let ep = bus.register("ui", CountingEndpoint { ticks: ticks.clone() });
+        let ep = bus.register(
+            "ui",
+            CountingEndpoint {
+                ticks: ticks.clone(),
+            },
+        );
         ep.subscribe("ui/*");
 
         let runner = Runner::new(bus, Logger::default());

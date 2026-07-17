@@ -4,5 +4,5 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+bones-messages = { path = "../../shared/bones-messages" }
 bus = { path = "../bus" }
-buffer_rw = { path = "../../buffer_rw" }

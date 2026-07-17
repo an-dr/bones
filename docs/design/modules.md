@@ -98,7 +98,7 @@ the API stays honest and the two distributions cannot drift.
 Sketch of an embedder's composition root:
 
 ```rust
-bones::Engine::builder()
+bones::Engine::new()
     .module(gpu_renderer::GpuRenderer::new())   // replaces the SDL renderer
     .module(bones_ui::EguiUi::default())        // reused from bones
     .module(game_core::GameCore::new())         // native-speed game logic

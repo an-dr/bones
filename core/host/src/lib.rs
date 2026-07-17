@@ -9,6 +9,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 
+use bones_messages::tick::Tick;
+use bones_messages::{DecodeMessage, Message};
 use bus::{Bus, Envelope, Handler, Registry};
 use contract::bones::core::host_api::{Host as HostApiImports, Level, SendError};
 use contract::Extension;
@@ -16,7 +18,6 @@ use logging::Logger;
 use wasmtime::component::{Component, HasSelf, Linker};
 use wasmtime::{Config, Engine, Store};
 
-const TICK_TOPIC: &str = "core/tick";
 /// How often the background thread `new_engine` spawns advances the shared
 /// epoch counter every loaded extension's calls are budgeted against.
 const EPOCH_TICK_INTERVAL: Duration = Duration::from_millis(5);
@@ -31,7 +32,6 @@ const LOAD_TIMEOUT_TICKS: u64 = 200;
 fn map_send_error(err: bus::SendError) -> SendError {
     match err {
         bus::SendError::UnknownEndpoint => SendError::UnknownEndpoint,
-        bus::SendError::Timeout => SendError::Timeout,
         bus::SendError::Cycle => SendError::Cycle,
     }
 }
@@ -52,12 +52,11 @@ pub fn new_engine() -> wasmtime::Result<Engine> {
     Ok(engine)
 }
 
-fn tick_dt(envelope: &Envelope) -> Option<f32> {
-    if envelope.topic != TICK_TOPIC {
+fn read_tick_dt(envelope: &Envelope) -> Option<f32> {
+    if envelope.topic != Tick::TOPIC {
         return None;
     }
-    let bytes: [u8; 4] = envelope.payload.as_slice().try_into().ok()?;
-    Some(f32::from_le_bytes(bytes))
+    Tick::decode(&envelope.payload).ok().map(|tick| tick.dt)
 }
 
 struct State {
@@ -72,7 +71,7 @@ struct State {
 
 impl HostApiImports for State {
     fn log(&mut self, level: Level, message: String) {
-        let category = "extension";
+        let category = self.name.as_str();
         match level {
             Level::Debug => self.logger.debug(category, &message),
             Level::Info => self.logger.info(category, &message),
@@ -94,10 +93,7 @@ impl HostApiImports for State {
         });
     }
 
-    /// TODO: `deadline_ms` is accepted but not enforced — dispatch is
-    /// single-threaded, so a target is never actually busy long enough to
-    /// wait out; only cycle detection can fail a send today (ADR-010).
-    fn send(&mut self, endpoint: String, payload: Vec<u8>, _deadline_ms: u32) -> Result<Vec<u8>, SendError> {
+    fn send(&mut self, endpoint: String, payload: Vec<u8>) -> Result<Vec<u8>, SendError> {
         self.registry.call(&self.name, &endpoint, &payload).map_err(map_send_error)
     }
 }
@@ -228,7 +224,7 @@ impl Handler for Host {
         }
         let store = self.store.get_mut().unwrap();
         store.set_epoch_deadline(CALL_TIMEOUT_TICKS);
-        let result = match tick_dt(envelope) {
+        let result = match read_tick_dt(envelope) {
             Some(dt) => self.bindings.call_on_tick(&mut *store, dt).map(|()| None),
             None => self.bindings.call_on_message(
                 &mut *store,
@@ -292,7 +288,7 @@ mod tests {
         registry.insert("echo", Arc::new(EchoRespond));
         let mut state = test_state("caller", registry);
 
-        let reply = state.send("echo".to_string(), b"hi".to_vec(), 1000).unwrap();
+        let reply = state.send("echo".to_string(), b"hi".to_vec()).unwrap();
 
         assert_eq!(reply, b"callerhi");
     }
@@ -302,7 +298,7 @@ mod tests {
         let mut state = test_state("caller", Registry::new());
 
         assert_eq!(
-            state.send("nobody".to_string(), Vec::new(), 1000),
+            state.send("nobody".to_string(), Vec::new()),
             Err(SendError::UnknownEndpoint)
         );
     }
@@ -314,7 +310,7 @@ mod tests {
         let mut state = test_state("caller", registry);
 
         assert_eq!(
-            state.send("caller".to_string(), Vec::new(), 1000),
+            state.send("caller".to_string(), Vec::new()),
             Err(SendError::Cycle)
         );
     }
@@ -348,7 +344,7 @@ mod tests {
     #[test]
     fn requested_topics_reflects_what_init_subscribed_to() {
         let mut host = load_hello(Bus::new(), Logger::default());
-        assert_eq!(host.requested_topics(), vec![TICK_TOPIC.to_string()]);
+        assert_eq!(host.requested_topics(), vec![Tick::TOPIC.to_string()]);
         assert!(host.requested_topics().is_empty(), "must drain, not repeat");
     }
 
@@ -385,10 +381,10 @@ mod tests {
         let host = load_hello(bus.clone(), Logger::new(Arc::new(sink.clone())));
 
         let ep = bus.register("hello", host);
-        ep.subscribe(TICK_TOPIC);
+        ep.subscribe(Tick::TOPIC);
 
         bus.publish(Envelope {
-            topic: TICK_TOPIC.to_string(),
+            topic: Tick::TOPIC.to_string(),
             sender: "test".to_string(),
             correlation: None,
             payload: (1.0f32 / 60.0).to_le_bytes().to_vec(),
@@ -432,7 +428,7 @@ mod tests {
 
     fn tick_envelope() -> Envelope {
         Envelope {
-            topic: TICK_TOPIC.to_string(),
+            topic: Tick::TOPIC.to_string(),
             sender: "test".to_string(),
             correlation: None,
             payload: (1.0f32 / 60.0).to_le_bytes().to_vec(),

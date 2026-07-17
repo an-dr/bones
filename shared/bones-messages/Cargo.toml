@@ -1,5 +1,7 @@
+[workspace]
+
 [package]
-name = "hello_world"
+name = "bones-messages"
 version = "0.1.0"
 edition = "2021"
 

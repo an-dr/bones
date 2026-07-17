@@ -4,6 +4,8 @@
 //! directly). TODO: tray, mouse, controller, and timing sources aren't
 //! implemented yet.
 
+use bones_messages::input::{KeyDown, KeyUp};
+use bones_messages::{EncodeMessage, Message};
 use bus::{Bus, Envelope};
 
 pub struct Platform {
@@ -12,6 +14,7 @@ pub struct Platform {
     // — event polling only needs the `Sdl` context, not this value itself.
     window: Option<sdl3::video::Window>,
     events: sdl3::EventPump,
+    quit_requested: bool,
 }
 
 impl Platform {
@@ -29,6 +32,7 @@ impl Platform {
             sdl,
             window: Some(window),
             events,
+            quit_requested: false,
         })
     }
 
@@ -39,14 +43,29 @@ impl Platform {
         self.window.take()
     }
 
-    /// Publishes an `input/*` envelope for every pending keyboard event.
+    /// Publishes an `input/*` envelope for every pending keyboard event, and
+    /// records a window-close request for `quit_requested` to report.
     /// Only enqueues (`Bus::publish`) — the caller decides when to dispatch.
     pub fn poll_events(&mut self, bus: &Bus, sender: &str) {
         for event in self.events.poll_iter() {
+            if matches!(event, sdl3::event::Event::Quit { .. }) {
+                self.quit_requested = true;
+                continue;
+            }
             if let Some(envelope) = translate_event(&event, sender) {
                 bus.publish(envelope);
             }
         }
+    }
+
+    /// Whether the OS asked to close the window (e.g. the close button)
+    /// since this `Platform` was created. Sticky — once true, stays true;
+    /// the caller is expected to exit rather than keep polling.
+    /// TODO: no `window/*` close-request event or `shutdown()` call yet
+    /// (design/platform.md's full shutdown sequence) — this only reports
+    /// the signal, exiting cleanly is the caller's job.
+    pub fn quit_requested(&self) -> bool {
+        self.quit_requested
     }
 
     /// Injects a synthetic event into SDL's own queue, as if the OS had
@@ -64,20 +83,26 @@ impl Platform {
 }
 
 fn translate_event(event: &sdl3::event::Event, sender: &str) -> Option<Envelope> {
-    let (topic, key) = match event {
+    let (topic, payload) = match event {
         sdl3::event::Event::KeyDown {
             keycode: Some(key), ..
-        } => ("input/key-down", key),
+        } => {
+            let key = key.to_string();
+            (KeyDown::TOPIC, KeyDown { key: &key }.encode())
+        }
         sdl3::event::Event::KeyUp {
             keycode: Some(key), ..
-        } => ("input/key-up", key),
+        } => {
+            let key = key.to_string();
+            (KeyUp::TOPIC, KeyUp { key: &key }.encode())
+        }
         _ => return None,
     };
     Some(Envelope {
         topic: topic.to_string(),
         sender: sender.to_string(),
         correlation: None,
-        payload: key.to_string().into_bytes(),
+        payload,
     })
 }
 
@@ -86,6 +111,17 @@ mod tests {
     use super::*;
     use sdl3::event::Event;
     use sdl3::keyboard::Keycode;
+    use std::sync::{Mutex, OnceLock};
+
+    // SDL can't handle two concurrent `Platform::new` calls opening real
+    // windows (observed as an assertion failure deep in SDL's pen-input
+    // init, then a hang) — cargo runs #[test]s in parallel by default, so
+    // every test that opens a real window takes this lock to never run
+    // concurrently with another.
+    fn sdl_test_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
 
     #[test]
     fn key_down_becomes_an_input_key_down_envelope() {
@@ -131,7 +167,27 @@ mod tests {
     }
 
     #[test]
+    fn an_injected_quit_event_sets_quit_requested_instead_of_publishing() {
+        let _guard = sdl_test_lock().lock().unwrap();
+        let mut platform = Platform::new("test", 64, 64).expect("needs a real display");
+        platform
+            .inject_event(Event::Quit { timestamp: 0 })
+            .expect("inject should succeed");
+
+        let bus = Bus::new();
+        assert!(!platform.quit_requested(), "must not be set before polling");
+
+        platform.poll_events(&bus, "platform");
+
+        assert!(
+            platform.quit_requested(),
+            "expected quit_requested after polling a Quit event"
+        );
+    }
+
+    #[test]
     fn an_injected_key_event_round_trips_through_a_real_window_onto_the_bus() {
+        let _guard = sdl_test_lock().lock().unwrap();
         let mut platform = Platform::new("test", 64, 64).expect("needs a real display");
         platform
             .inject_event(Event::KeyDown {
@@ -149,15 +205,18 @@ mod tests {
         let bus = Bus::new();
         let received = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
         let sink = received.clone();
-        let ep = bus.register("test", move |e: &Envelope| sink.lock().unwrap().push(e.clone()));
-        ep.subscribe("input/key-down");
+        let ep = bus.register("test", move |e: &Envelope| {
+            sink.lock().unwrap().push(e.clone())
+        });
+        ep.subscribe(KeyDown::TOPIC);
 
         platform.poll_events(&bus, "platform");
         bus.dispatch();
 
         let got = received.lock().unwrap();
         assert!(
-            got.iter().any(|e| e.topic == "input/key-down" && e.payload == b"A"),
+            got.iter()
+                .any(|e| e.topic == "input/key-down" && e.payload == b"A"),
             "expected an injected key-down to reach the bus, got {got:?}"
         );
     }
