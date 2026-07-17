@@ -1,8 +1,8 @@
 //! Platform layer (design/platform.md): the only component touching the OS.
-//! Opens one SDL window, publishes keyboard events onto `input/*` (ADR-008's
-//! web/egui layers don't exist yet, so every event reaches `input/*`
-//! directly). TODO: tray, mouse, controller, and timing sources aren't
-//! implemented yet.
+//! Opens one SDL window, publishes keyboard events onto `input/*`. TODO:
+//! tray, mouse, controller, and timing sources aren't published onto
+//! `input/*` yet — mouse/text-input events are captured (`poll_events_with`)
+//! but only ever reach the ui module's consumption hook, never the bus.
 
 use bones_messages::input::{KeyDown, KeyUp};
 use bones_messages::{EncodeMessage, Message};
@@ -26,6 +26,12 @@ impl Platform {
             .position_centered()
             .build()
             .map_err(|e| e.to_string())?;
+        // Started unconditionally, before the window can be handed away via
+        // `take_window` — text input has no per-window "focused a text
+        // field" signal yet, so this just keeps `Event::TextInput` flowing
+        // for whichever layer (ui) wants to consume it. TODO: gate on focus
+        // once one exists, for IME/mobile-keyboard hygiene.
+        video.text_input().start(&window);
         let events = sdl.event_pump().map_err(|e| e.to_string())?;
 
         Ok(Self {
@@ -47,9 +53,27 @@ impl Platform {
     /// records a window-close request for `quit_requested` to report.
     /// Only enqueues (`Bus::publish`) — the caller decides when to dispatch.
     pub fn poll_events(&mut self, bus: &Bus, sender: &str) {
+        self.poll_events_with(bus, sender, |_| false);
+    }
+
+    /// Same as `poll_events`, but offers every non-`Quit` raw event to
+    /// `consumed` first (ADR-008: top layer consumes) — a higher layer
+    /// (e.g. the ui module's egui context) that claims an event by
+    /// returning `true` stops it from ever reaching `input/*`. `Quit` is a
+    /// session-lifecycle signal, not layered input, so it always bypasses
+    /// `consumed`.
+    pub fn poll_events_with(
+        &mut self,
+        bus: &Bus,
+        sender: &str,
+        mut consumed: impl FnMut(&sdl3::event::Event) -> bool,
+    ) {
         for event in self.events.poll_iter() {
             if matches!(event, sdl3::event::Event::Quit { .. }) {
                 self.quit_requested = true;
+                continue;
+            }
+            if consumed(&event) {
                 continue;
             }
             if let Some(envelope) = translate_event(&event, sender) {
@@ -218,6 +242,57 @@ mod tests {
             got.iter()
                 .any(|e| e.topic == "input/key-down" && e.payload == b"A"),
             "expected an injected key-down to reach the bus, got {got:?}"
+        );
+    }
+
+    #[test]
+    fn a_key_event_consumed_by_a_higher_layer_never_reaches_input() {
+        let _guard = sdl_test_lock().lock().unwrap();
+        let mut platform = Platform::new("test", 64, 64).expect("needs a real display");
+        platform
+            .inject_event(Event::KeyDown {
+                timestamp: 0,
+                window_id: 0,
+                keycode: Some(Keycode::A),
+                scancode: Some(sdl3::keyboard::Scancode::A),
+                keymod: sdl3::keyboard::Mod::empty(),
+                repeat: false,
+                which: 0,
+                raw: 0,
+            })
+            .expect("inject should succeed");
+
+        let bus = Bus::new();
+        let received = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let sink = received.clone();
+        let ep = bus.register("test", move |e: &Envelope| {
+            sink.lock().unwrap().push(e.clone())
+        });
+        ep.subscribe(KeyDown::TOPIC);
+
+        platform.poll_events_with(&bus, "platform", |_event| true);
+        bus.dispatch();
+
+        assert!(
+            received.lock().unwrap().is_empty(),
+            "a consumed event must not be translated onto input/*"
+        );
+    }
+
+    #[test]
+    fn an_injected_quit_event_bypasses_the_consumer_hook() {
+        let _guard = sdl_test_lock().lock().unwrap();
+        let mut platform = Platform::new("test", 64, 64).expect("needs a real display");
+        platform
+            .inject_event(Event::Quit { timestamp: 0 })
+            .expect("inject should succeed");
+
+        let bus = Bus::new();
+        platform.poll_events_with(&bus, "platform", |_event| true);
+
+        assert!(
+            platform.quit_requested(),
+            "Quit must set quit_requested even when the consumer hook claims everything"
         );
     }
 }

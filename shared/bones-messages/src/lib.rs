@@ -7,6 +7,7 @@ pub mod gfx;
 pub mod input;
 pub mod lifecycle;
 pub mod tick;
+pub mod ui;
 
 pub use codec::{DecodeError, Reader, Writer};
 

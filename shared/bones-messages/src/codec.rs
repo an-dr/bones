@@ -35,10 +35,24 @@ impl Writer {
         self
     }
 
+    /// Appends a little-endian `u16`.
+    pub fn u16(mut self, v: u16) -> Self {
+        self.0.extend_from_slice(&v.to_le_bytes());
+        self
+    }
+
     /// Appends bytes without a length prefix.
     pub fn bytes(mut self, v: &[u8]) -> Self {
         self.0.extend_from_slice(v);
         self
+    }
+
+    /// Appends a `u16`-length-prefixed UTF-8 string — for messages with more
+    /// than one variable-length field, where `read_rest` can't tell them
+    /// apart. Panics if `v` is longer than `u16::MAX` bytes.
+    pub fn str(self, v: &str) -> Self {
+        let len: u16 = v.len().try_into().expect("string exceeds u16::MAX bytes");
+        self.u16(len).bytes(v.as_bytes())
     }
 
     /// Returns the completed payload.
@@ -104,6 +118,22 @@ impl<'a> Reader<'a> {
     /// Reads a little-endian `f32`.
     pub fn read_f32(&mut self) -> Result<f32, DecodeError> {
         self.read_array::<4>().map(f32::from_le_bytes)
+    }
+
+    /// Reads a little-endian `u16`.
+    pub fn read_u16(&mut self) -> Result<u16, DecodeError> {
+        self.read_array::<2>().map(u16::from_le_bytes)
+    }
+
+    /// Reads a `u16`-length-prefixed UTF-8 string written by `Writer::str`.
+    pub fn read_str(&mut self) -> Result<&'a str, DecodeError> {
+        let len = self.read_u16()? as usize;
+        if self.bytes.len() - self.pos < len {
+            return Err(DecodeError::Truncated);
+        }
+        let slice = &self.bytes[self.pos..self.pos + len];
+        self.pos += len;
+        std::str::from_utf8(slice).map_err(|_| DecodeError::InvalidUtf8)
     }
 
     /// Every remaining byte, regardless of length.
