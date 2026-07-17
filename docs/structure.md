@@ -30,7 +30,7 @@ All feature-flagged and individually optional; embedders may add their own.
 | Module   | Responsibility                                  | Uses (kernel + services)          |
 | -------- | ----------------------------------------------- | --------------------------------- |
 | renderer | Executes gfx batches, presents; provides `draw-target` | bus; `window-surface` service |
-| *ui*     | *egui integration: widget specs → draw data, events back* | *bus; `draw-target` service* |
+| ui       | egui integration: widget specs → draw data, events back | bus; renderer (direct-wired, not yet the `draw-target` service — see design/modules.md) |
 | *web*    | *wry panels, bus ↔ page JSON bridge*            | *bus; `window-surface` service*   |
 
 ## Distributions
@@ -61,17 +61,20 @@ graph TD
     end
     Renderer --> Bus
     UI --> Bus
+    UI --> Renderer
     Web --> Bus
     Renderer -. "window-surface" .-> Platform
     Web -. "window-surface" .-> Platform
-    UI -. "draw-target" .-> Renderer
 ```
 
 - Solid arrows are crate dependencies; dashed arrows are **service traits**
   (defined by the kernel, listed in design/modules.md) — the consumer depends
   on the trait, not on the provider's crate.
 - Anything not drawn is a design violation (e.g. bus depending on host,
-  platform depending on renderer, module depending on another module's crate).
+  platform depending on renderer, module depending on another module's crate)
+  — except `UI --> Renderer`, direct-wired the same way renderer itself is
+  direct-wired into `Engine` rather than through a module trait; both are
+  provisional until that trait exists (design/modules.md).
 - **bus and contract know nothing about presentation** — messaging must stay
   usable in a headless build.
 - **logging is a universal leaf**: anyone may depend on it (edges omitted

@@ -12,6 +12,7 @@ pub struct Config {
     pub window_width: u32,
     pub window_height: u32,
     pub renderer: bool,
+    pub ui: bool,
 }
 
 impl Default for Config {
@@ -22,6 +23,7 @@ impl Default for Config {
             window_width: 800,
             window_height: 600,
             renderer: true,
+            ui: true,
         }
     }
 }
@@ -52,6 +54,7 @@ mod tests {
         assert_eq!(config.window_title, "bones");
         assert_eq!((config.window_width, config.window_height), (800, 600));
         assert!(config.renderer);
+        assert!(config.ui);
     }
 
     #[test]

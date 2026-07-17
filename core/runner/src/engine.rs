@@ -8,10 +8,12 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use bones_messages::Message;
 use bus::{Envelope, Handler, Registry};
 use lifecycle::Event;
 use logging::Logger;
 use renderer::Renderer;
+use ui::Ui;
 
 use crate::loading::{attach_extension, derive_extension_name, find_wasm_files, is_first_occurrence, read_file_mtime, ENGINE_SENDER};
 use crate::supervisor::TrackedExtension;
@@ -31,14 +33,25 @@ impl Handler for SharedRenderer {
     }
 }
 
+/// Same forwarding as `SharedRenderer`, for the ui module's own `update()`
+/// call each frame (outside normal message delivery).
+struct SharedUi(Arc<Mutex<Ui>>);
+
+impl Handler for SharedUi {
+    fn handle(&mut self, envelope: &Envelope) {
+        self.0.lock().unwrap().handle(envelope);
+    }
+}
+
 /// Everything `Engine::build` wires up: the step-driven `Runner`, the
 /// platform window (if `.window(...)` was set), the renderer (if
-/// `.renderer()` was set), and the `Supervisor` sweeping loaded extensions
-/// for faults and file changes.
+/// `.renderer()` was set), the ui module (if `.ui()` was set), and the
+/// `Supervisor` sweeping loaded extensions for faults and file changes.
 pub struct BuiltEngine {
     pub runner: Runner,
     pub platform: Option<platform::Platform>,
     pub renderer: Option<Arc<Mutex<Renderer>>>,
+    pub ui: Option<Arc<Mutex<Ui>>>,
     pub supervisor: Supervisor,
 }
 
@@ -48,6 +61,7 @@ pub struct Engine {
     tick_hz: f64,
     window: Option<(String, u32, u32)>,
     renderer_enabled: bool,
+    ui_enabled: bool,
 }
 
 impl Engine {
@@ -58,6 +72,7 @@ impl Engine {
             tick_hz: DEFAULT_TICK_HZ,
             window: None,
             renderer_enabled: false,
+            ui_enabled: false,
         }
     }
 
@@ -95,6 +110,16 @@ impl Engine {
         self
     }
 
+    /// Attaches the egui ui module (ADR-005, design/presentation.md):
+    /// decodes `ui/spec` messages and draws them each `run` iteration.
+    /// Requires `.renderer()` too (ui draws through it, direct-wired for
+    /// now — see docs/structure.md) — `build`/`run` error if this is set
+    /// without one.
+    pub fn ui(mut self) -> Self {
+        self.ui_enabled = true;
+        self
+    }
+
     /// Wires the bus, every `.wasm` file in `extensions_dir`, the window
     /// (if `.window(...)` was set), and the renderer (if `.renderer()` was
     /// set). A file that fails to load, or whose name is already taken, is
@@ -104,6 +129,7 @@ impl Engine {
     pub fn build(mut self) -> wasmtime::Result<BuiltEngine> {
         let window = self.window.take();
         let renderer_enabled = self.renderer_enabled;
+        let ui_enabled = self.ui_enabled;
         let bus = bus::Bus::new();
         let registry = Registry::new();
         let wasm_engine = host::new_engine()?;
@@ -169,10 +195,23 @@ impl Engine {
             None
         };
 
+        let ui = if ui_enabled {
+            renderer
+                .as_ref()
+                .ok_or_else(|| wasmtime::Error::msg(".ui() needs .renderer() too"))?;
+            let shared = Arc::new(Mutex::new(Ui::new(bus.clone(), self.logger.clone())));
+            let ep = bus.register("ui", SharedUi(shared.clone()));
+            ep.subscribe(bones_messages::ui::Spec::TOPIC);
+            Some(shared)
+        } else {
+            None
+        };
+
         Ok(BuiltEngine {
             runner: Runner::new(bus, self.logger),
             platform,
             renderer,
+            ui,
             supervisor,
         })
     }
@@ -190,13 +229,21 @@ impl Engine {
             runner,
             mut platform,
             renderer,
+            ui,
             mut supervisor,
         } = self.build()?;
 
         let mut last = std::time::Instant::now() - period;
         loop {
             if let Some(platform) = &mut platform {
-                platform.poll_events(runner.bus(), "platform");
+                // ADR-008: offer every raw event to the ui layer first; what
+                // it claims (wants_pointer_input/wants_keyboard_input, as of
+                // the end of the last `update`) never reaches `input/*`.
+                // Locked once for the whole poll, not per event.
+                let mut ui_guard = ui.as_ref().map(|ui| ui.lock().unwrap());
+                platform.poll_events_with(runner.bus(), "platform", |event| {
+                    ui_guard.as_mut().is_some_and(|ui| ui.feed_event(event))
+                });
                 // Minimal shutdown slice: exit cleanly on a window close
                 // request. TODO: no close-request-as-event or shutdown()
                 // call to extensions yet (design/platform.md's full
@@ -214,6 +261,15 @@ impl Engine {
 
             runner.step(dt);
             supervisor.check();
+
+            // ui draws above every gfx layer (design/presentation.md), so
+            // its `update` runs after `step`'s gfx dispatch and before
+            // `present`.
+            if let (Some(ui), Some(renderer)) = (&ui, &renderer) {
+                let mut renderer = renderer.lock().unwrap();
+                let (width, height) = renderer.size();
+                ui.lock().unwrap().update(&mut renderer, width, height);
+            }
 
             if let Some(renderer) = &renderer {
                 renderer.lock().unwrap().present();

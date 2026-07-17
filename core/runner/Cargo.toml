@@ -11,6 +11,7 @@ lifecycle = { path = "../lifecycle" }
 logging = { path = "../logging" }
 platform = { path = "../platform" }
 renderer = { path = "../renderer" }
+ui = { path = "../ui" }
 wasmtime = { version = "46.0.1", features = ["component-model"] }
 
 [dev-dependencies]

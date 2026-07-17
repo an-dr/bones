@@ -23,6 +23,9 @@ fn run() -> Result<(), String> {
     if config.renderer {
         engine = engine.renderer();
     }
+    if config.ui {
+        engine = engine.ui();
+    }
 
     engine.run().map_err(|err| err.to_string())
 }

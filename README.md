@@ -6,8 +6,8 @@ any language. See [docs/architecture.md](docs/architecture.md) for the full
 design.
 
 **Status:** kernel (bus, extension host, platform, logging), the renderer
-module, and hot reload all work today. UI and web presentation modules are
-next — see [docs/roadmap.md](docs/roadmap.md).
+and egui ui modules, and hot reload all work today. The web presentation
+module is next — see [docs/roadmap.md](docs/roadmap.md).
 
 Use cases:
 

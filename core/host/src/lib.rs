@@ -33,6 +33,12 @@ fn map_send_error(err: bus::SendError) -> SendError {
     match err {
         bus::SendError::UnknownEndpoint => SendError::UnknownEndpoint,
         bus::SendError::Cycle => SendError::Cycle,
+        // TODO: the WIT contract has no timeout case yet; `bus::SendError`
+        // grew one ahead of it. `unreachable!` rather than silently mapping
+        // to a wrong variant — bus.rs's own doc comment says dispatch is
+        // single-threaded, so nothing constructs this today; the panic is
+        // the signal to add a real WIT case the day something does.
+        bus::SendError::Timeout => unreachable!("bus::SendError::Timeout is not constructed yet"),
     }
 }
 
