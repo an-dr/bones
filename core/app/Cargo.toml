@@ -10,5 +10,6 @@ path = "src/main.rs"
 [dependencies]
 runner = { path = "../runner" }
 audio = { path = "../audio" }
+persistence = { path = "../persistence" }
 serde = { version = "1.0.228", features = ["derive"] }
 toml = "1.1.2"

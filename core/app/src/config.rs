@@ -14,6 +14,8 @@ pub struct Config {
     pub renderer: bool,
     pub ui: bool,
     pub audio: bool,
+    pub persistence: bool,
+    pub saves_dir: String,
 }
 
 impl Default for Config {
@@ -31,6 +33,11 @@ impl Default for Config {
             // default on environments this scaffold hasn't been proven
             // against yet.
             audio: false,
+            // Creating a local directory essentially always succeeds
+            // (unlike opening an audio device), so this defaults on like
+            // renderer/ui rather than off like audio.
+            persistence: true,
+            saves_dir: "saves".to_string(),
         }
     }
 }
@@ -63,6 +70,8 @@ mod tests {
         assert!(config.renderer);
         assert!(config.ui);
         assert!(!config.audio, "not every deployment target has a working audio device");
+        assert!(config.persistence);
+        assert_eq!(config.saves_dir, "saves");
     }
 
     #[test]

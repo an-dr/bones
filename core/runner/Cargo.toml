@@ -19,3 +19,4 @@ wasmtime = { version = "46.0.1", features = ["component-model"] }
 # main thread; SDL refuses to init anywhere else unless this is set.
 sdl3 = { version = "0.18.4", features = ["build-from-source-static", "test-mode"] }
 audio = { path = "../audio" }
+persistence = { path = "../persistence" }

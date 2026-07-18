@@ -31,6 +31,9 @@ const SPRITE_DEMO_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../extens
 const RUNAWAY_DEMO_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../extensions/runaway_demo/target/wasm32-wasip2/release");
 // Built by extensions/audio_demo/build.ps1 (see its README).
 const AUDIO_DEMO_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../extensions/audio_demo/target/wasm32-wasip2/release");
+// Built by extensions/persistence_demo/build.ps1 (see its README).
+const PERSISTENCE_DEMO_DIR: &str =
+    concat!(env!("CARGO_MANIFEST_DIR"), "/../../extensions/persistence_demo/target/wasm32-wasip2/release");
 
 #[test]
 fn build_discovers_loads_and_registers_a_real_extension() {
@@ -187,6 +190,62 @@ fn audio_demo_loads_plays_music_and_reacts_to_a_key_press_through_a_real_audio_m
         payload: bones_messages::input::KeyDown { key: "Space" }.encode(),
     });
     runner.step(1.0 / 60.0);
+}
+
+#[test]
+fn persistence_demo_state_survives_a_full_engine_rebuild() {
+    // A full rebuild against the same save directory (not in-place hot
+    // reload, which core/runner's own supervisor already covers
+    // elsewhere) — the closer analogue to what a player experiences when
+    // they close and reopen the game.
+    let dir = std::env::temp_dir().join("bones-persistence-demo-test-reload");
+    std::fs::remove_dir_all(&dir).ok();
+
+    let sink_a = RecordingSink::new();
+    let BuiltEngine { runner: runner_a, .. } = Engine::new()
+        .extensions_dir(PERSISTENCE_DEMO_DIR)
+        .logger(Logger::new(Arc::new(sink_a.clone())))
+        .module(persistence::Persistence::new(&dir))
+        .build()
+        .expect("build extensions/persistence_demo first: pwsh extensions/persistence_demo/build.ps1");
+
+    // dt=1.5 clears the demo's 1-second save throttle in a single tick;
+    // the `persistence/save` it reactively publishes from inside that
+    // tick is deferred-dispatch (ADR-015) though, so an extra cheap step
+    // is what actually delivers it to Persistence's handler and writes
+    // the file — same two-step pattern the sprite/renderer test already
+    // documents for reactively-published messages.
+    runner_a.step(1.5);
+    runner_a.step(1.0 / 60.0);
+
+    let records_a = sink_a.records();
+    assert!(
+        records_a.iter().any(|(_, _, msg)| msg.contains("loaded counter = 0")),
+        "a fresh save directory should load as counter 0, got {records_a:?}"
+    );
+    assert!(
+        records_a.iter().any(|(_, _, msg)| msg.contains("saved counter = 1")),
+        "expected the first elapsed second to save counter 1, got {records_a:?}"
+    );
+    drop(runner_a);
+
+    let sink_b = RecordingSink::new();
+    let BuiltEngine { runner: runner_b, .. } = Engine::new()
+        .extensions_dir(PERSISTENCE_DEMO_DIR)
+        .logger(Logger::new(Arc::new(sink_b.clone())))
+        .module(persistence::Persistence::new(&dir))
+        .build()
+        .unwrap();
+
+    runner_b.step(1.5);
+
+    let records_b = sink_b.records();
+    assert!(
+        records_b.iter().any(|(_, _, msg)| msg.contains("loaded counter = 1")),
+        "expected the second engine to load the first one's saved counter (1), not start over at 0, got {records_b:?}"
+    );
+
+    std::fs::remove_dir_all(&dir).ok();
 }
 
 #[test]
@@ -383,6 +442,11 @@ impl Module for RecordingModule {
     fn present(&mut self) {
         self.0.lock().unwrap().push("present".to_string());
     }
+
+    fn respond(&mut self, sender: &str, payload: &[u8]) -> Option<Vec<u8>> {
+        self.0.lock().unwrap().push(format!("respond:{sender}"));
+        Some(payload.iter().rev().copied().collect())
+    }
 }
 
 #[test]
@@ -409,6 +473,17 @@ fn a_custom_module_is_initialized_subscribed_and_hooked() {
         vec!["init", "handle:test/topic", "render", "present"],
         "expected the subscription requested in init to be applied, and render/present to reach the same instance"
     );
+}
+
+#[test]
+fn a_custom_module_answers_a_direct_send_through_the_call_registry() {
+    let module = RecordingModule::default();
+    let BuiltEngine { supervisor, .. } = Engine::new().module(module.clone()).build().unwrap();
+
+    let reply = supervisor.registry.call("caller", "recording", b"abc").expect("recording is registered");
+
+    assert_eq!(reply, b"cba", "expected the module's own respond() reply, not a default/empty one");
+    assert_eq!(module.calls(), vec!["init", "respond:caller"]);
 }
 
 #[test]

@@ -7,6 +7,7 @@ pub mod codec;
 pub mod gfx;
 pub mod input;
 pub mod lifecycle;
+pub mod persistence;
 pub mod tick;
 pub mod ui;
 

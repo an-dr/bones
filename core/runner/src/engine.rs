@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use bones_messages::Message;
-use bus::{Envelope, Handler, Module, ModuleContext, Registry, ServiceRegistry};
+use bus::{Envelope, Handler, Module, ModuleContext, Registry, Respond, ServiceRegistry};
 use lifecycle::Event;
 use logging::Logger;
 use renderer::Renderer;
@@ -52,12 +52,26 @@ impl Handler for SharedModule {
     }
 }
 
-/// Runs `module.init`, registers it on the bus under its own name, and
-/// applies the subscriptions it requested — the same
-/// init-then-subscribe sequencing `attach_extension` uses for WASM
-/// extensions (ADR-017 mirrors that contract for native modules).
+/// `Mutex<T>` is `Sync` whenever `T: Send` (locking supplies the missing
+/// synchronization itself), so this needs nothing beyond the `Send` that
+/// `Handler` (a `Module` supertrait) already requires — not `Module: Sync`
+/// itself, which `Renderer`'s deliberately-non-`Sync` `SendWrapper` (see
+/// its own doc comment) could never satisfy.
+impl Respond for SharedModule {
+    fn respond(&self, sender: &str, payload: &[u8]) -> Option<Vec<u8>> {
+        self.0.lock().unwrap().respond(sender, payload)
+    }
+}
+
+/// Runs `module.init`, registers it on the bus under its own name and in
+/// the call `Registry` under the same name (`Module::respond`, ADR-010 —
+/// most modules never override it, so this is a harmless no-reply
+/// registration for them), and applies the subscriptions it requested —
+/// the same init-then-subscribe sequencing `attach_extension` uses for
+/// WASM extensions (ADR-017 mirrors that contract for native modules).
 fn register_module(
     bus: &bus::Bus,
+    registry: &Registry,
     services: &mut ServiceRegistry,
     modules: &mut Vec<Arc<Mutex<Box<dyn Module>>>>,
     mut module: Box<dyn Module>,
@@ -69,10 +83,11 @@ fn register_module(
     };
     let name = module.name().to_string();
     let shared = Arc::new(Mutex::new(module));
-    let ep = bus.register(name, SharedModule(shared.clone()));
+    let ep = bus.register(name.clone(), SharedModule(shared.clone()));
     for topic in topics {
         ep.subscribe(topic);
     }
+    registry.insert(name, Arc::new(SharedModule(shared.clone())));
     modules.push(shared);
     Ok(())
 }
@@ -181,45 +196,6 @@ impl Engine {
         let bus = bus::Bus::new();
         let registry = Registry::new();
         let wasm_engine = host::new_engine()?;
-        let mut tracked = Vec::new();
-        let mut loaded_names = std::collections::HashSet::new();
-
-        if let Some(dir) = &self.extensions_dir {
-            for path in find_wasm_files(dir) {
-                let name = derive_extension_name(&path);
-                if !is_first_occurrence(&mut loaded_names, &name) {
-                    self.logger.error(
-                        "engine",
-                        &format!("skipping {}: an extension named '{name}' is already loaded", path.display()),
-                    );
-                    continue;
-                }
-                match attach_extension(&wasm_engine, &bus, &registry, &self.logger, &path, &name) {
-                    Ok((ep, shared, topics)) => {
-                        self.logger.info(
-                            "engine",
-                            &format!("loaded '{name}' from {} (subscribed: {topics:?})", path.display()),
-                        );
-                        lifecycle::publish(&bus, ENGINE_SENDER, &name, Event::Loaded);
-                        tracked.push(TrackedExtension {
-                            name,
-                            mtime: read_file_mtime(&path),
-                            path,
-                            endpoint: ep,
-                            shared,
-                            quarantined: false,
-                        });
-                    }
-                    Err(err) => {
-                        self.logger
-                            .error("engine", &format!("failed to load {}: {err}", path.display()));
-                        lifecycle::publish(&bus, ENGINE_SENDER, &name, Event::Faulted);
-                    }
-                }
-            }
-        }
-
-        let supervisor = Supervisor::new(wasm_engine, bus.clone(), registry, self.logger.clone(), tracked);
 
         let mut platform = match window {
             Some((title, width, height)) => {
@@ -269,10 +245,59 @@ impl Engine {
             None
         };
 
+        // Native modules register (bus + call registry) before any
+        // extension loads below, deliberately — an extension's own `init`
+        // can `send` a module synchronously (ADR-010, e.g. persistence's
+        // load-on-init), and that only reaches anything if the target is
+        // already registered by the time it's called. Discovered as a real
+        // bug (not a hypothetical) building the persistence_demo
+        // extension: it always loaded as "nothing saved" because
+        // `persistence` registered after every extension's `init` had
+        // already run and failed its `send` with `SendError::UnknownEndpoint`.
         let mut modules = Vec::new();
         for module in self.modules.drain(..) {
-            register_module(&bus, &mut services, &mut modules, module).map_err(wasmtime::Error::msg)?;
+            register_module(&bus, &registry, &mut services, &mut modules, module).map_err(wasmtime::Error::msg)?;
         }
+
+        let mut tracked = Vec::new();
+        let mut loaded_names = std::collections::HashSet::new();
+
+        if let Some(dir) = &self.extensions_dir {
+            for path in find_wasm_files(dir) {
+                let name = derive_extension_name(&path);
+                if !is_first_occurrence(&mut loaded_names, &name) {
+                    self.logger.error(
+                        "engine",
+                        &format!("skipping {}: an extension named '{name}' is already loaded", path.display()),
+                    );
+                    continue;
+                }
+                match attach_extension(&wasm_engine, &bus, &registry, &self.logger, &path, &name) {
+                    Ok((ep, shared, topics)) => {
+                        self.logger.info(
+                            "engine",
+                            &format!("loaded '{name}' from {} (subscribed: {topics:?})", path.display()),
+                        );
+                        lifecycle::publish(&bus, ENGINE_SENDER, &name, Event::Loaded);
+                        tracked.push(TrackedExtension {
+                            name,
+                            mtime: read_file_mtime(&path),
+                            path,
+                            endpoint: ep,
+                            shared,
+                            quarantined: false,
+                        });
+                    }
+                    Err(err) => {
+                        self.logger
+                            .error("engine", &format!("failed to load {}: {err}", path.display()));
+                        lifecycle::publish(&bus, ENGINE_SENDER, &name, Event::Faulted);
+                    }
+                }
+            }
+        }
+
+        let supervisor = Supervisor::new(wasm_engine, bus.clone(), registry, self.logger.clone(), tracked);
 
         if let Some(platform) = &mut platform {
             platform.reclaim_window(&mut services);

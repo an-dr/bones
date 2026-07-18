@@ -29,6 +29,9 @@ fn run() -> Result<(), String> {
     if config.audio {
         engine = engine.module(audio::Audio::new());
     }
+    if config.persistence {
+        engine = engine.module(persistence::Persistence::new(config.saves_dir));
+    }
 
     engine.run().map_err(|err| err.to_string())
 }
