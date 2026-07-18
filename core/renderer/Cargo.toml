@@ -9,6 +9,16 @@ logging = { path = "../logging" }
 sdl3 = { version = "0.18.4", features = ["build-from-source-static", "image", "unsafe_textures"] }
 send_wrapper = "0.6.0"
 bones-messages = { path = "../../shared/bones-messages" }
+# Already resolved transitively via egui (core/ui) — reused here instead of
+# adding a new dependency. Pure-Rust rasterization, not SDL3's `ttf`
+# feature: that pulls in sdl3-ttf-sys's bundled HarfBuzz, which fails to
+# link in this workspace's dev profile on MSVC ARM64 (unresolved
+# `_CrtDbgReport`, a debug/release CRT mismatch with the vendored C++
+# build) — release-only linking would break the default `cargo build`/
+# `cargo test` workflow, so this avoids the native C++ dependency entirely.
+ab_glyph = "0.2.32"
+# Hack-Regular.ttf, MIT licensed, embedded as the one gfx/* text font.
+epaint_default_fonts = "0.32.3"
 
 [dev-dependencies]
 platform = { path = "../platform" }

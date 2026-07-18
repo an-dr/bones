@@ -1419,8 +1419,10 @@ dependencies = [
 name = "renderer"
 version = "0.1.0"
 dependencies = [
+ "ab_glyph",
  "bones-messages",
  "bus",
+ "epaint_default_fonts",
  "logging",
  "platform",
  "sdl3",

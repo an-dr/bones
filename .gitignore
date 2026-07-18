@@ -1,3 +1,5 @@
 target
 dist
 docs/reviews/
+docs/progress/
+.verify-scratch/

@@ -183,8 +183,10 @@ fn a_real_extension_draws_a_sprite_through_a_real_renderer() {
     // Second: gfx/clear + gfx/draw-sprite (queued reactively from the
     // first tick's on-tick) get delivered — ADR-015's deferred dispatch.
     runner.step(1.0 / 60.0);
+    renderer.lock().unwrap().render();
     renderer.lock().unwrap().present();
     runner.step(1.0 / 60.0);
+    renderer.lock().unwrap().render();
     renderer.lock().unwrap().present();
 
     let records = sink.records();
