@@ -2,13 +2,13 @@
 //! a real bus, proving the log line flows through the engine end to end.
 //!
 //! Build the extension first: pwsh extensions/hello/build.ps1
-//! Then: cargo run -p host --example hello_extension
+//! Then: cargo run -p wasm-extensions --example hello_extension
 
 use bones_messages::tick::Tick;
 use bones_messages::{EncodeMessage, Message};
 use bus::{Bus, Envelope, Registry};
-use host::Host;
 use logging::Logger;
+use wasm_extensions::host::Host;
 
 const HELLO_WASM: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -27,7 +27,7 @@ fn tick_once(bus: &Bus, dt: f32) {
 }
 
 fn main() -> wasmtime::Result<()> {
-    let engine = host::new_engine()?;
+    let engine = wasm_extensions::host::new_engine()?;
     let bus = Bus::new();
 
     let mut hello = Host::load(

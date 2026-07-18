@@ -1,4 +1,4 @@
 [workspace]
 resolver = "2"
-members = ["core/logging", "core/bus", "core/runner", "core/contract", "core/host", "core/app", "core/platform", "core/renderer", "core/lifecycle", "core/ui", "core/audio", "core/persistence"]
+members = ["core/logging", "core/bus", "core/runner", "core/contract", "core/app", "core/platform", "core/renderer", "core/ui", "core/audio", "core/wasm-extensions"]
 exclude = ["shared/bones-messages"]

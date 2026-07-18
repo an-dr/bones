@@ -38,14 +38,14 @@ pub trait Module: Handler {
     /// a separate roadmap rung.
     fn shutdown(&mut self) {}
 
-    /// Answers a direct `send` (ADR-010) addressed to this module by name
-    /// — the same capability WASM extensions already have via the WIT
-    /// `send` import, extended here so modules and extensions stay
-    /// indistinguishable on the bus for direct calls too, not just pub/sub
-    /// (design/modules.md). Default: no reply (an unanswered call gets an
-    /// empty reply, same as an extension whose `on-message` returns
-    /// `None`) — most modules (renderer, ui, audio) have nothing to
-    /// answer; `persistence` is the first to override this.
+    /// Answers a direct `send` (ADR-010) addressed to this module by name.
+    ///
+    /// - Same capability WASM extensions already have via the WIT `send`
+    ///   import — modules and extensions stay indistinguishable on the bus
+    ///   for direct calls too, not just pub/sub (design/modules.md).
+    /// - Default: no reply, same as an extension whose `on-message`
+    ///   returns `None`. Most modules (renderer, ui, audio) never override
+    ///   this; `persistence` is the first that needs to.
     fn respond(&mut self, _sender: &str, _payload: &[u8]) -> Option<Vec<u8>> {
         None
     }

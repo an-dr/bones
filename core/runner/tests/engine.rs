@@ -205,7 +205,7 @@ fn persistence_demo_state_survives_a_full_engine_rebuild() {
     let BuiltEngine { runner: runner_a, .. } = Engine::new()
         .extensions_dir(PERSISTENCE_DEMO_DIR)
         .logger(Logger::new(Arc::new(sink_a.clone())))
-        .module(persistence::Persistence::new(&dir))
+        .saves_dir(&dir)
         .build()
         .expect("build extensions/persistence_demo first: pwsh extensions/persistence_demo/build.ps1");
 
@@ -233,7 +233,7 @@ fn persistence_demo_state_survives_a_full_engine_rebuild() {
     let BuiltEngine { runner: runner_b, .. } = Engine::new()
         .extensions_dir(PERSISTENCE_DEMO_DIR)
         .logger(Logger::new(Arc::new(sink_b.clone())))
-        .module(persistence::Persistence::new(&dir))
+        .saves_dir(&dir)
         .build()
         .unwrap();
 
@@ -452,9 +452,15 @@ impl Module for RecordingModule {
 #[test]
 fn a_custom_module_is_initialized_subscribed_and_hooked() {
     let module = RecordingModule::default();
-    let BuiltEngine { runner, modules, .. } = Engine::new().module(module.clone()).build().unwrap();
+    let dir = std::env::temp_dir().join("bones-runner-test-custom-module-hooks");
+    let BuiltEngine { runner, modules, .. } =
+        Engine::new().module(module.clone()).saves_dir(&dir).build().unwrap();
 
-    assert_eq!(modules.len(), 1, "expected the custom module to be registered");
+    assert_eq!(
+        modules.len(),
+        2,
+        "expected the custom module plus the unconditional persistence module"
+    );
     assert_eq!(module.calls(), vec!["init"], "init should run at build time, before any message or hook");
 
     runner.bus().publish(Envelope {

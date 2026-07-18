@@ -22,6 +22,9 @@ settings dialog on `ui/*`).
   extension's own stream deterministic).
 - A batch fully replaces that extension's previous batch on the same layer —
   retained until replaced, so a paused extension keeps its last frame visible.
+- A single world-to-screen camera transform (position + zoom) applies to
+  every draw — one viewport for the whole scene, not per-extension or
+  per-layer.
 - The command vocabulary (clear, sprite, shapes, text, …) is a versioned core
   API; its exact set is an implementation-increment concern.
 

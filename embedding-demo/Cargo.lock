@@ -828,18 +828,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
-name = "host"
-version = "0.1.0"
-dependencies = [
- "bones-messages",
- "bus",
- "contract",
- "logging",
- "wasmtime",
- "wasmtime-wasi",
-]
-
-[[package]]
 name = "iana-time-zone"
 version = "0.1.65"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1093,14 +1081,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c943259e342f1e06ff2da7a83eabdfe7f92ce10262688dbf1895ff0b3e6e4652"
 dependencies = [
  "libc",
-]
-
-[[package]]
-name = "lifecycle"
-version = "0.1.0"
-dependencies = [
- "bones-messages",
- "bus",
 ]
 
 [[package]]
@@ -1419,8 +1399,10 @@ dependencies = [
 name = "renderer"
 version = "0.1.0"
 dependencies = [
+ "ab_glyph",
  "bones-messages",
  "bus",
+ "epaint_default_fonts",
  "logging",
  "sdl3",
  "send_wrapper",
@@ -1438,12 +1420,11 @@ version = "0.1.0"
 dependencies = [
  "bones-messages",
  "bus",
- "host",
- "lifecycle",
  "logging",
  "platform",
  "renderer",
  "ui",
+ "wasm-extensions",
  "wasmtime",
 ]
 
@@ -2062,6 +2043,18 @@ checksum = "59972d6cd272259de647b7c1f1912e45e289c75ffd4be04e10695507cd7e1b59"
 dependencies = [
  "leb128fmt",
  "wasmparser 0.253.0",
+]
+
+[[package]]
+name = "wasm-extensions"
+version = "0.1.0"
+dependencies = [
+ "bones-messages",
+ "bus",
+ "contract",
+ "logging",
+ "wasmtime",
+ "wasmtime-wasi",
 ]
 
 [[package]]

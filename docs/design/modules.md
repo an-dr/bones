@@ -3,8 +3,12 @@
 Detailed design of the module system. Decisions:
 [ADR-011](../adr/ADR-011-native-core-modules.md) (kernel + consumer-composed
 modules), [ADR-017](../adr/ADR-017-native-module-trait-and-typed-service-registry.md)
-(the concrete `Module` trait and service registry). `renderer` implements
-this contract for real; `ui` and `web` don't yet (see structure.md).
+(the concrete `Module` trait and service registry). `renderer` and `audio`
+implement this contract for real; `ui` and `web` don't yet (see
+structure.md). `wasm-extensions::persistence` also implements it (reusing
+`init`/`handle`/`respond` rather than duplicating that machinery) but,
+unlike the others, isn't part of the optional consumer-composed set —
+`Engine::build` always registers it (ADR-020).
 
 ## What a module is
 
@@ -42,6 +46,11 @@ subscription, the same as any extension.
   as extensions (per-module serialization included).
 - `render()`, `present()` — frame-phase hooks, both default no-op; a module
   overrides only the phases it needs.
+- `respond(sender, payload)` — answers a direct `send` (ADR-010) addressed
+  to this module by name, the same capability WASM extensions already have.
+  Default: no reply. `persistence` is the first module to use this (an
+  extension's own `init` loading its prior save synchronously); most
+  modules have nothing to answer.
 - `shutdown()` — declared, not yet called by `Engine::run` (the full
   shutdown sequence is a separate roadmap rung, design/platform.md).
 

@@ -14,8 +14,8 @@ pub struct Config {
     pub renderer: bool,
     pub ui: bool,
     pub audio: bool,
-    pub persistence: bool,
     pub saves_dir: String,
+    pub persistence_read_only: bool,
 }
 
 impl Default for Config {
@@ -33,11 +33,14 @@ impl Default for Config {
             // default on environments this scaffold hasn't been proven
             // against yet.
             audio: false,
-            // Creating a local directory essentially always succeeds
-            // (unlike opening an audio device), so this defaults on like
-            // renderer/ui rather than off like audio.
-            persistence: true,
+            // persistence itself is unconditional (core/wasm-extensions —
+            // creating a local directory always succeeds, unlike opening
+            // an audio device, so there's no equivalent resource-scarcity
+            // reason to make it opt-in). Only read-only mode — a policy
+            // choice, not a resource one — is configurable, and defaults
+            // off (extensions can save).
             saves_dir: "saves".to_string(),
+            persistence_read_only: false,
         }
     }
 }
@@ -70,8 +73,8 @@ mod tests {
         assert!(config.renderer);
         assert!(config.ui);
         assert!(!config.audio, "not every deployment target has a working audio device");
-        assert!(config.persistence);
         assert_eq!(config.saves_dir, "saves");
+        assert!(!config.persistence_read_only, "extensions can save by default");
     }
 
     #[test]

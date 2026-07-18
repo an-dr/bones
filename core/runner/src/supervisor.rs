@@ -6,8 +6,9 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant, SystemTime};
 
 use bus::{Bus, Endpoint, Registry};
-use lifecycle::Event;
 use logging::Logger;
+use wasm_extensions::lifecycle;
+use wasm_extensions::lifecycle::Event;
 
 use crate::loading::{attach_extension, read_file_mtime, SharedHost, ENGINE_SENDER};
 

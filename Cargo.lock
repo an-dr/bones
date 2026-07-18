@@ -102,7 +102,6 @@ name = "app"
 version = "0.1.0"
 dependencies = [
  "audio",
- "persistence",
  "runner",
  "serde",
  "toml 1.1.2+spec-1.1.0",
@@ -1025,18 +1024,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
-name = "host"
-version = "0.1.0"
-dependencies = [
- "bones-messages",
- "bus",
- "contract",
- "logging",
- "wasmtime",
- "wasmtime-wasi",
-]
-
-[[package]]
 name = "iana-time-zone"
 version = "0.1.65"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1379,14 +1366,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "lifecycle"
-version = "0.1.0"
-dependencies = [
- "bones-messages",
- "bus",
-]
-
-[[package]]
 name = "linux-raw-sys"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1649,14 +1628,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
-name = "persistence"
-version = "0.1.0"
-dependencies = [
- "bones-messages",
- "bus",
-]
-
-[[package]]
 name = "petgraph"
 version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1908,14 +1879,12 @@ dependencies = [
  "audio",
  "bones-messages",
  "bus",
- "host",
- "lifecycle",
  "logging",
- "persistence",
  "platform",
  "renderer",
  "sdl3",
  "ui",
+ "wasm-extensions",
  "wasmtime",
 ]
 
@@ -2736,6 +2705,18 @@ checksum = "59972d6cd272259de647b7c1f1912e45e289c75ffd4be04e10695507cd7e1b59"
 dependencies = [
  "leb128fmt",
  "wasmparser 0.253.0",
+]
+
+[[package]]
+name = "wasm-extensions"
+version = "0.1.0"
+dependencies = [
+ "bones-messages",
+ "bus",
+ "contract",
+ "logging",
+ "wasmtime",
+ "wasmtime-wasi",
 ]
 
 [[package]]

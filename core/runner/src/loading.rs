@@ -8,8 +8,8 @@ use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
 use bus::{Bus, Endpoint, Envelope, Handler, Registry, Respond};
-use host::Host;
 use logging::Logger;
+use wasm_extensions::host::Host;
 
 /// Publishes lifecycle events as this component (design/extensions.md).
 pub(crate) const ENGINE_SENDER: &str = "engine";

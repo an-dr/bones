@@ -10,10 +10,12 @@ use std::time::Duration;
 
 use bones_messages::Message;
 use bus::{Envelope, Handler, Module, ModuleContext, Registry, Respond, ServiceRegistry};
-use lifecycle::Event;
 use logging::Logger;
 use renderer::Renderer;
 use ui::Ui;
+use wasm_extensions::lifecycle;
+use wasm_extensions::lifecycle::Event;
+use wasm_extensions::persistence::Persistence;
 
 use crate::loading::{attach_extension, derive_extension_name, find_wasm_files, is_first_occurrence, read_file_mtime, ENGINE_SENDER};
 use crate::supervisor::TrackedExtension;
@@ -114,6 +116,8 @@ pub struct Engine {
     renderer_enabled: bool,
     ui_enabled: bool,
     modules: Vec<Box<dyn Module>>,
+    saves_dir: PathBuf,
+    persistence_read_only: bool,
 }
 
 impl Engine {
@@ -126,6 +130,8 @@ impl Engine {
             renderer_enabled: false,
             ui_enabled: false,
             modules: Vec::new(),
+            saves_dir: PathBuf::from("saves"),
+            persistence_read_only: false,
         }
     }
 
@@ -178,8 +184,33 @@ impl Engine {
     /// `render`/`present` each `run` iteration. The app is built solely on
     /// this same method (via `.renderer()`/`.ui()`'s sugar) — no access an
     /// embedder lacks.
+    // TODO: a module registered this way has no way to receive `Engine`'s
+    // configured `Logger` at construction time (only `.renderer()`/`.ui()`'s
+    // hardcoded sugar does) — `core/audio` accepts this as "no logger for
+    // now" rather than inventing a mismatched one of their own; a real fix
+    // needs this method's own signature to change (e.g. a factory closure
+    // receiving the logger).
     pub fn module(mut self, module: impl Module + 'static) -> Self {
         self.modules.push(Box::new(module));
+        self
+    }
+
+    /// Where `persistence` (unconditional, see its own doc comment) keeps
+    /// `<sender>.bin` save files. Defaults to `"saves"`, relative to the
+    /// process's cwd if not absolute — the same convention
+    /// `extensions_dir` already uses.
+    pub fn saves_dir(mut self, path: impl Into<PathBuf>) -> Self {
+        self.saves_dir = path.into();
+        self
+    }
+
+    /// Extensions can still load previously-saved state, but any new
+    /// `persistence/save` is silently dropped — a policy choice (an
+    /// audited or locked-down extension sandbox), not a resource one; see
+    /// `persistence`'s own doc comment for why disabling it outright
+    /// wouldn't save anything.
+    pub fn read_only_persistence(mut self) -> Self {
+        self.persistence_read_only = true;
         self
     }
 
@@ -195,7 +226,7 @@ impl Engine {
         let ui_enabled = self.ui_enabled;
         let bus = bus::Bus::new();
         let registry = Registry::new();
-        let wasm_engine = host::new_engine()?;
+        let wasm_engine = wasm_extensions::host::new_engine()?;
 
         let mut platform = match window {
             Some((title, width, height)) => {
@@ -258,6 +289,13 @@ impl Engine {
         for module in self.modules.drain(..) {
             register_module(&bus, &registry, &mut services, &mut modules, module).map_err(wasmtime::Error::msg)?;
         }
+
+        // Unconditional (persistence's own doc comment explains why) —
+        // registered here, not through `self.modules`, so there's no
+        // `.persistence()`-style opt-in to forget.
+        let persistence = Persistence::new(self.saves_dir.clone(), self.persistence_read_only);
+        register_module(&bus, &registry, &mut services, &mut modules, Box::new(persistence))
+            .map_err(wasmtime::Error::msg)?;
 
         let mut tracked = Vec::new();
         let mut loaded_names = std::collections::HashSet::new();
