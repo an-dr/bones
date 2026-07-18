@@ -1,10 +1,15 @@
 //! Platform layer (design/platform.md): the only component touching the OS.
-//! Opens one SDL window, publishes keyboard events onto `input/*`. TODO:
-//! tray, mouse, controller, and timing sources aren't published onto
-//! `input/*` yet — mouse/text-input events are captured (`poll_events_with`)
-//! but only ever reach the ui module's consumption hook, never the bus.
+//! Opens one SDL window, publishes keyboard, mouse, and gamepad events onto
+//! `input/*`. TODO: tray and timing sources aren't published onto `input/*`
+//! yet — text-input events are captured (`poll_events_with`) but only ever
+//! reach the ui module's consumption hook, never the bus.
 
-use bones_messages::input::{KeyDown, KeyUp};
+use std::collections::HashMap;
+
+use bones_messages::input::{
+    GamepadAxis, GamepadButtonDown, GamepadButtonUp, GamepadConnected, GamepadDisconnected,
+    KeyDown, KeyUp, MouseDown, MouseMove, MouseUp, MouseWheel,
+};
 use bones_messages::{EncodeMessage, Message};
 use bus::{Bus, Envelope};
 
@@ -15,6 +20,11 @@ pub struct Platform {
     window: Option<sdl3::video::Window>,
     events: sdl3::EventPump,
     quit_requested: bool,
+    gamepad_subsystem: sdl3::GamepadSubsystem,
+    // A gamepad only generates axis/button events while its `Gamepad`
+    // handle stays open (`SDL_OpenGamepad`) — closed automatically (`Drop`)
+    // when removed here on `ControllerDeviceRemoved`.
+    gamepads: HashMap<u32, sdl3::gamepad::Gamepad>,
 }
 
 impl Platform {
@@ -33,12 +43,15 @@ impl Platform {
         // once one exists, for IME/mobile-keyboard hygiene.
         video.text_input().start(&window);
         let events = sdl.event_pump().map_err(|e| e.to_string())?;
+        let gamepad_subsystem = sdl.gamepad().map_err(|e| e.to_string())?;
 
         Ok(Self {
             sdl,
             window: Some(window),
             events,
             quit_requested: false,
+            gamepad_subsystem,
+            gamepads: HashMap::new(),
         })
     }
 
@@ -94,6 +107,45 @@ impl Platform {
                 self.quit_requested = true;
                 continue;
             }
+            // Connection lifecycle, not layered input (ADR-008) — a UI
+            // layer consuming a keypress shouldn't be able to hide a
+            // gamepad connecting/disconnecting from a game, so this
+            // bypasses `consumed` the same way `Quit` does. Also owns
+            // opening/closing the `Gamepad` handle that axis/button events
+            // depend on, so it can't be handled by the stateless
+            // `translate_event` below.
+            match &event {
+                sdl3::event::Event::ControllerDeviceAdded { which, .. } => {
+                    // The public `sdl3::joystick::JoystickId` is a type
+                    // alias, not a constructible newtype, and the crate
+                    // exposes no `From<u32>` for it — this reaches through
+                    // the crate's own `pub extern crate ... as sys`
+                    // re-export to build one, rather than patching sdl3.
+                    // Silently drops a device this fails to open (no
+                    // logger available in Platform to report it to).
+                    if let Ok(gamepad) = self.gamepad_subsystem.open(sdl3::sys::joystick::SDL_JoystickID(*which)) {
+                        self.gamepads.insert(*which, gamepad);
+                        bus.publish(Envelope {
+                            topic: GamepadConnected::TOPIC.to_string(),
+                            sender: sender.to_string(),
+                            correlation: None,
+                            payload: GamepadConnected { id: *which }.encode(),
+                        });
+                    }
+                    continue;
+                }
+                sdl3::event::Event::ControllerDeviceRemoved { which, .. } => {
+                    self.gamepads.remove(which);
+                    bus.publish(Envelope {
+                        topic: GamepadDisconnected::TOPIC.to_string(),
+                        sender: sender.to_string(),
+                        correlation: None,
+                        payload: GamepadDisconnected { id: *which }.encode(),
+                    });
+                    continue;
+                }
+                _ => {}
+            }
             if consumed(&event) {
                 continue;
             }
@@ -140,6 +192,42 @@ fn translate_event(event: &sdl3::event::Event, sender: &str) -> Option<Envelope>
         } => {
             let key = key.to_string();
             (KeyUp::TOPIC, KeyUp { key: &key }.encode())
+        }
+        sdl3::event::Event::MouseMotion { x, y, xrel, yrel, .. } => (
+            MouseMove::TOPIC,
+            MouseMove { x: *x, y: *y, dx: *xrel, dy: *yrel }.encode(),
+        ),
+        sdl3::event::Event::MouseButtonDown { mouse_btn, x, y, .. } => (
+            MouseDown::TOPIC,
+            MouseDown { button: *mouse_btn as u8, x: *x, y: *y }.encode(),
+        ),
+        sdl3::event::Event::MouseButtonUp { mouse_btn, x, y, .. } => (
+            MouseUp::TOPIC,
+            MouseUp { button: *mouse_btn as u8, x: *x, y: *y }.encode(),
+        ),
+        sdl3::event::Event::MouseWheel { x, y, direction, .. } => {
+            // Normalize "flipped" (natural scrolling) so `input/mouse-wheel`
+            // always has the same sign convention regardless of the OS
+            // setting that produced it.
+            let flip = matches!(direction, sdl3::mouse::MouseWheelDirection::Flipped);
+            let (x, y) = if flip { (-x, -y) } else { (*x, *y) };
+            (MouseWheel::TOPIC, MouseWheel { x, y }.encode())
+        }
+        sdl3::event::Event::ControllerAxisMotion { which, axis, value, .. } => {
+            let axis = format!("{axis:?}");
+            // SDL's raw range is roughly i16::MIN..=i16::MAX (sticks) or
+            // 0..=i16::MAX (triggers); normalize against MAX and clamp so
+            // the negative extreme (MIN < -MAX) never exceeds -1.0.
+            let value = (*value as f32 / i16::MAX as f32).clamp(-1.0, 1.0);
+            (GamepadAxis::TOPIC, GamepadAxis { id: *which, axis: &axis, value }.encode())
+        }
+        sdl3::event::Event::ControllerButtonDown { which, button, .. } => {
+            let button = format!("{button:?}");
+            (GamepadButtonDown::TOPIC, GamepadButtonDown { id: *which, button: &button }.encode())
+        }
+        sdl3::event::Event::ControllerButtonUp { which, button, .. } => {
+            let button = format!("{button:?}");
+            (GamepadButtonUp::TOPIC, GamepadButtonUp { id: *which, button: &button }.encode())
         }
         _ => return None,
     };
@@ -209,6 +297,117 @@ mod tests {
     fn unrelated_events_translate_to_nothing() {
         let event = Event::Quit { timestamp: 0 };
         assert!(translate_event(&event, "platform").is_none());
+    }
+
+    #[test]
+    fn mouse_button_down_becomes_an_input_mouse_down_envelope() {
+        let event = Event::MouseButtonDown {
+            timestamp: 0,
+            window_id: 0,
+            which: 0,
+            mouse_btn: sdl3::mouse::MouseButton::Right,
+            clicks: 1,
+            x: 12.0,
+            y: 34.0,
+        };
+        let envelope = translate_event(&event, "platform").expect("should translate");
+        assert_eq!(envelope.topic, "input/mouse-down");
+        assert_eq!(
+            envelope.payload,
+            bones_messages::input::MouseDown { button: 3, x: 12.0, y: 34.0 }.encode()
+        );
+    }
+
+    #[test]
+    fn mouse_wheel_normalizes_flipped_direction() {
+        let normal = Event::MouseWheel {
+            timestamp: 0,
+            window_id: 0,
+            which: 0,
+            x: 1.0,
+            y: 2.0,
+            direction: sdl3::mouse::MouseWheelDirection::Normal,
+            mouse_x: 0.0,
+            mouse_y: 0.0,
+            integer_x: 1,
+            integer_y: 2,
+        };
+        let envelope = translate_event(&normal, "platform").expect("should translate");
+        assert_eq!(
+            envelope.payload,
+            bones_messages::input::MouseWheel { x: 1.0, y: 2.0 }.encode()
+        );
+
+        let flipped = Event::MouseWheel {
+            timestamp: 0,
+            window_id: 0,
+            which: 0,
+            x: 1.0,
+            y: 2.0,
+            direction: sdl3::mouse::MouseWheelDirection::Flipped,
+            mouse_x: 0.0,
+            mouse_y: 0.0,
+            integer_x: 1,
+            integer_y: 2,
+        };
+        let envelope = translate_event(&flipped, "platform").expect("should translate");
+        assert_eq!(
+            envelope.payload,
+            bones_messages::input::MouseWheel { x: -1.0, y: -2.0 }.encode(),
+            "flipped direction should negate x/y so consumers see one consistent sign convention"
+        );
+    }
+
+    #[test]
+    fn gamepad_axis_motion_becomes_a_normalized_input_gamepad_axis_envelope() {
+        let event = Event::ControllerAxisMotion {
+            timestamp: 0,
+            which: 3,
+            axis: sdl3::gamepad::Axis::LeftX,
+            value: i16::MAX,
+        };
+        let envelope = translate_event(&event, "platform").expect("should translate");
+        assert_eq!(envelope.topic, "input/gamepad-axis");
+        assert_eq!(
+            envelope.payload,
+            bones_messages::input::GamepadAxis { id: 3, axis: "LeftX", value: 1.0 }.encode()
+        );
+
+        let negative = Event::ControllerAxisMotion {
+            timestamp: 0,
+            which: 3,
+            axis: sdl3::gamepad::Axis::LeftX,
+            value: i16::MIN,
+        };
+        let envelope = translate_event(&negative, "platform").expect("should translate");
+        assert_eq!(
+            envelope.payload,
+            bones_messages::input::GamepadAxis { id: 3, axis: "LeftX", value: -1.0 }.encode(),
+            "i16::MIN is more negative than -i16::MAX; must clamp to -1.0, not overshoot"
+        );
+    }
+
+    #[test]
+    fn gamepad_button_events_become_input_gamepad_button_envelopes() {
+        let down = Event::ControllerButtonDown {
+            timestamp: 0,
+            which: 3,
+            button: sdl3::gamepad::Button::South,
+        };
+        let envelope = translate_event(&down, "platform").expect("should translate");
+        assert_eq!(envelope.topic, "input/gamepad-button-down");
+        assert_eq!(
+            envelope.payload,
+            bones_messages::input::GamepadButtonDown { id: 3, button: "South" }.encode()
+        );
+
+        let up = Event::ControllerButtonUp {
+            timestamp: 0,
+            which: 3,
+            button: sdl3::gamepad::Button::South,
+        };
+        let envelope = translate_event(&up, "platform").expect("should translate");
+        assert_eq!(envelope.topic, "input/gamepad-button-up");
     }
 
     #[test]

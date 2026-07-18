@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use bones_messages::lifecycle::{Event, LifecycleEvent};
-use bones_messages::{DecodeMessage, Message};
+use bones_messages::{DecodeMessage, EncodeMessage, Message};
 use bus::{Envelope, Handler, Module, ModuleContext};
 use logging::{Logger, RecordingSink};
 use runner::{BuiltEngine, Engine};
@@ -113,6 +113,38 @@ fn a_key_down_envelope_reaches_an_extension_through_a_real_window() {
     assert!(
         records.iter().any(|(_, _, msg)| msg.contains("key pressed: A")),
         "expected keyecho to log the injected keypress, got {records:?}"
+    );
+}
+
+#[test]
+fn a_mouse_down_envelope_reaches_an_extension_through_a_real_window() {
+    // Same reasoning as the key-down test above: publish directly rather
+    // than pumping a real SDL mouse event — that mechanism is proven in
+    // isolation by core/platform's own tests.
+    let _guard = sdl_test_lock().lock().unwrap();
+    let sink = RecordingSink::new();
+    let logger = Logger::new(Arc::new(sink.clone()));
+
+    let BuiltEngine { runner, platform, .. } = Engine::new()
+        .extensions_dir(KEYECHO_DIR)
+        .logger(logger)
+        .window("test", 64, 64)
+        .build()
+        .expect("build extensions/keyecho first: pwsh extensions/keyecho/build.ps1");
+    assert!(platform.is_some(), ".window() was set");
+
+    runner.bus().publish(Envelope {
+        topic: "input/mouse-down".to_string(),
+        sender: "platform".to_string(),
+        correlation: None,
+        payload: bones_messages::input::MouseDown { button: 1, x: 10.0, y: 20.0 }.encode(),
+    });
+    runner.step(1.0 / 60.0);
+
+    let records = sink.records();
+    assert!(
+        records.iter().any(|(_, _, msg)| msg.contains("mouse button 1 pressed at (10, 20)")),
+        "expected keyecho to log the injected mouse-down, got {records:?}"
     );
 }
 

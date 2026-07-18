@@ -1,7 +1,11 @@
 # keyecho
 
-Subscribes to `input/key-down` and logs every keypress — proves platform's
-SDL input reaches an extension end to end.
+Subscribes to `input/key-down`, `input/mouse-down`, `input/mouse-up`,
+`input/mouse-wheel`, `input/gamepad-connected`, `input/gamepad-disconnected`,
+`input/gamepad-button-down`, and `input/gamepad-button-up`, logging each —
+proves platform's SDL input reaches an extension end to end. Not
+`input/mouse-move` or `input/gamepad-axis` — both fire continuously (every
+pixel of cursor travel / every tilt of a stick) and would flood the log.
 
 ## Build
 
