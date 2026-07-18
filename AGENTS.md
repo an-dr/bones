@@ -10,3 +10,9 @@ Notes for AI agents working on this repo that cannot be deduced from the code al
   1. `REPO/agents/AGENTS.md` — base
   2. `REPO/AGENTS.md` — this file
   3. `REPO/**/AGENTS.md` — any subdirectory AGENTS.md, chained by depth
+
+## Conventions
+
+- `docs/reviews/` (the `code-review` skill's output) is local-only —
+  gitignored, never committed. It's working material for the current
+  session, not project history.
