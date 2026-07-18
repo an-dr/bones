@@ -13,6 +13,7 @@ pub struct Config {
     pub window_height: u32,
     pub renderer: bool,
     pub ui: bool,
+    pub audio: bool,
 }
 
 impl Default for Config {
@@ -24,6 +25,12 @@ impl Default for Config {
             window_height: 600,
             renderer: true,
             ui: true,
+            // Unlike renderer/ui, not every deployment target has a working
+            // audio device (headless CI, some containers) — opt-in via
+            // bones.toml rather than risking `Engine::build()` failing by
+            // default on environments this scaffold hasn't been proven
+            // against yet.
+            audio: false,
         }
     }
 }
@@ -55,6 +62,7 @@ mod tests {
         assert_eq!((config.window_width, config.window_height), (800, 600));
         assert!(config.renderer);
         assert!(config.ui);
+        assert!(!config.audio, "not every deployment target has a working audio device");
     }
 
     #[test]

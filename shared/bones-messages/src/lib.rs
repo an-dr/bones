@@ -2,6 +2,7 @@
 //! The raw bus remains open and byte-oriented; this crate defines the topic
 //! and wire contract only for messages owned by bones (ADR-016).
 
+pub mod audio;
 pub mod codec;
 pub mod gfx;
 pub mod input;

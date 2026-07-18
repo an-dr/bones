@@ -26,6 +26,9 @@ fn run() -> Result<(), String> {
     if config.ui {
         engine = engine.ui();
     }
+    if config.audio {
+        engine = engine.module(audio::Audio::new());
+    }
 
     engine.run().map_err(|err| err.to_string())
 }

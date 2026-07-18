@@ -29,6 +29,8 @@ const KEYECHO_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../extensions
 const SPRITE_DEMO_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../extensions/sprite_demo/target/wasm32-wasip2/release");
 // Built by extensions/runaway_demo/build.ps1 (see its README).
 const RUNAWAY_DEMO_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../extensions/runaway_demo/target/wasm32-wasip2/release");
+// Built by extensions/audio_demo/build.ps1 (see its README).
+const AUDIO_DEMO_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../extensions/audio_demo/target/wasm32-wasip2/release");
 
 #[test]
 fn build_discovers_loads_and_registers_a_real_extension() {
@@ -146,6 +148,45 @@ fn a_mouse_down_envelope_reaches_an_extension_through_a_real_window() {
         records.iter().any(|(_, _, msg)| msg.contains("mouse button 1 pressed at (10, 20)")),
         "expected keyecho to log the injected mouse-down, got {records:?}"
     );
+}
+
+#[test]
+fn audio_demo_loads_plays_music_and_reacts_to_a_key_press_through_a_real_audio_module() {
+    // No window needed — audio doesn't touch the window-surface service.
+    let sink = RecordingSink::new();
+    let logger = Logger::new(Arc::new(sink.clone()));
+
+    let BuiltEngine { runner, .. } = Engine::new()
+        .extensions_dir(AUDIO_DEMO_DIR)
+        .logger(logger)
+        .module(audio::Audio::new())
+        .build()
+        .expect("build extensions/audio_demo first: pwsh extensions/audio_demo/build.ps1");
+
+    runner.step(1.0 / 60.0);
+
+    let records = sink.records();
+    assert!(
+        records.iter().any(|(_, _, msg)| msg.contains("init: loaded sfx + music")),
+        "expected audio_demo's init log (sfx/music loaded, music started), got {records:?}"
+    );
+    assert!(
+        records.iter().all(|(_, _, msg)| !msg.contains("faulted")),
+        "audio_demo must not fault against a real audio module, got {records:?}"
+    );
+
+    // The demo's on_message plays the SFX on any KeyDown — proves the
+    // audio/play-sound path runs end to end without crashing the engine.
+    // core/audio has no logger (see its own doc comment), so this can only
+    // assert the engine keeps running, not that kira actually played
+    // anything — that's covered by core/audio's own unit tests instead.
+    runner.bus().publish(Envelope {
+        topic: "input/key-down".to_string(),
+        sender: "platform".to_string(),
+        correlation: None,
+        payload: bones_messages::input::KeyDown { key: "Space" }.encode(),
+    });
+    runner.step(1.0 / 60.0);
 }
 
 #[test]
