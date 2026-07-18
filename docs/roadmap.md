@@ -16,6 +16,11 @@ registry are all done.
 | 1 | Full shutdown sequence: WIT `shutdown` export, close-request published as an event extensions can react to, `Stopped` lifecycle event (design/platform.md) | Closing the window runs every extension's `shutdown()` before the process exits |
 | 2 | ADR-007's queue budget: bounded inbound queue, per-frame publish allowance, drop counters (only the time budget is enforced today) | A flooding extension is faulted instead of starving its peers |
 | 3 | web module (wry) + `web/*` vocabulary | The "dashboard" example ([examples/web-app.md](examples/web-app.md)) runs |
+| 4 | `gfx/*` camera/viewport, layer compositing, sprite rotate/scale/flip/tint, shapes and text (ADR-018) | A layered, camera-scrolled scene with rotated/tinted sprites and on-screen text renders |
+| 5 | `input/*` mouse and controller events (ADR-018) | An extension reacts to mouse clicks and a connected gamepad |
+| 6 | audio module + `audio/*` vocabulary (ADR-018) | An extension plays a sound effect and background music |
+| 7 | persistence module + save/load vocabulary (ADR-018) | An extension saves state, reloads, and recovers it unchanged |
+| 8 | `game-core` native module: ECS, collision, tilemap loading, sprite-animation timing (ADR-019) | A minimal 2D scene simulates entities with collision on a loaded tilemap, rendered through `gfx/*` |
 
 Guardrails while climbing:
 
