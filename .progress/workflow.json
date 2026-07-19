@@ -11,8 +11,8 @@
     "done": "A minimal 2D scene simulates entities with collision on a loaded tilemap, rendered through gfx/*, demonstrated via a runnable example extension.",
     "outOfScope": "gfx/* rendering authority, sprite-animation asset pipeline beyond timing state machine, physics beyond 2D collision, any change to renderer ownership of the window surface."
   },
-  "currentIncrementId": "8911195cae8f4154b97624a864b6efd6",
-  "commitBaseline": "22b220e76f7f229fb78d582c9a8508b647e1176e",
+  "currentIncrementId": "ff2b1145b2f1464fb1c7c39956acf556",
+  "commitBaseline": "47ef3b19287249a3edba816606930e2b122c6e64",
   "increments": [
     {
       "id": "6bb8259e81814fe4bff2d05f094ea2da",
@@ -101,14 +101,14 @@
     {
       "id": "8911195cae8f4154b97624a864b6efd6",
       "number": 13,
-      "status": "verified",
+      "status": "completed",
       "scope": "game-core SetColor entity op",
       "description": "EntityOp gains SetColor { entity_id, color }: overwrites an existing SquareColor components color in place (no-op for an unknown entity_id or one with no SquareColor, e.g. a sprite entity). Lets a caller implement a temporary color flash (set, wait, set back) without needing game-core to know about hit-flash timing itself. Unit tests cover a successful color change and both no-op cases."
     },
     {
       "id": "ff2b1145b2f1464fb1c7c39956acf556",
       "number": 14,
-      "status": "planned",
+      "status": "verified",
       "scope": "demo: blue kinematic squares, footstep audio, hit-flash + sound",
       "description": "game_core_demo spawns two blue Kinematic obstacle squares alongside the existing red Dynamic ones. The extension enables core/audio, synthesizes two short WAV tones (footstep click, hit blip) in code, and: plays the footstep tone on a fixed interval while its own held-input velocity is nonzero; subscribes to game-core/collision and, on an event naming two red obstacle entity_ids, publishes a brief SquareColor override (a new EntityOp op or SetVelocity-adjacent mechanism) for 0.1-0.5s plus the hit tone. Demo: moving the robot produces footstep sound only while moving and only while the sprite is animating; a red square driven into another red square flashes color and plays a sound."
     }
@@ -474,8 +474,23 @@
       "at": "2026-07-19T18:46:57.4359576Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-07-19T18:47:14.0900529Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to BUILD."
+    },
+    {
+      "at": "2026-07-19T19:01:55.4303844Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-07-19T19:02:03.7665517Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-07-19T13:14:27.3797032Z",
-  "updatedAt": "2026-07-19T18:46:57.4460378Z"
+  "updatedAt": "2026-07-19T19:02:03.7744392Z"
 }
