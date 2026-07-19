@@ -373,7 +373,36 @@ fn tick_publishes_a_clear_a_camera_and_one_draw_sprite_per_sprite_entity() {
     );
     assert_eq!(cameras, 1);
     assert_eq!(sprites.len(), 1);
-    assert_eq!((sprites[0].dst_x, sprites[0].dst_y), (3, 4));
+    // Spawned at (3, 4); the sprite fixture is 16x16, so its top-left
+    // corner (Transform is the entity's center) is offset by half that.
+    assert_eq!((sprites[0].dst_x, sprites[0].dst_y), (-5, -4));
+}
+
+#[test]
+fn a_sprite_entitys_drawn_position_is_centered_on_its_collider() {
+    // Regression test: DrawSprite previously used the collider's center
+    // (Transform) directly as its top-left corner, so the visible sprite
+    // sat offset from where its collider actually was — contact with
+    // other entities looked wrong even though physics was correct.
+    let (mut game_core, bus, spy) = ready_game_core();
+    game_core.handle(&entity_op_envelope(spawn_with_collider_and_id(
+        1, 100.0, 100.0, 32.0, 32.0,
+    )));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    bus.dispatch();
+
+    let published = spy.0.lock().unwrap();
+    let sprite = published
+        .iter()
+        .find(|e| e.topic == gfx::DrawSprite::TOPIC)
+        .map(|e| gfx::DrawSprite::decode(&e.payload).unwrap())
+        .expect("a sprite should have been published");
+
+    // sprite() fixture is 16x16 (half-extent 8), independent of the
+    // collider's own (larger) half-extent of 32 — the sprite's own size
+    // determines its draw offset, not the collider's.
+    assert_eq!((sprite.dst_x, sprite.dst_y), (100 - 8, 100 - 8));
 }
 
 #[test]

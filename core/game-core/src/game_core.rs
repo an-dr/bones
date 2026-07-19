@@ -231,10 +231,15 @@ impl GameCore {
         for (_, (transform, animation)) in
             self.world.query::<(&Transform, &SpriteAnimation)>().iter()
         {
+            // `Transform` is the entity's center (matching rapier2d's own
+            // convention); `DrawSprite::dst_x`/`dst_y` is a top-left corner
+            // — without this conversion the visible sprite sits offset from
+            // its actual collider, so contact with other colliders looks
+            // wrong even though the physics underneath is already correct.
             self.publish(DrawSprite {
                 id: animation.sprite_id,
-                dst_x: transform.x as i32,
-                dst_y: transform.y as i32,
+                dst_x: (transform.x - animation.frame_w as f32 / 2.0) as i32,
+                dst_y: (transform.y - animation.frame_h as f32 / 2.0) as i32,
                 dst_w: animation.frame_w,
                 dst_h: animation.frame_h,
                 src_x: animation.current_src_x(),

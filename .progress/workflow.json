@@ -11,8 +11,8 @@
     "done": "A minimal 2D scene simulates entities with collision on a loaded tilemap, rendered through gfx/*, demonstrated via a runnable example extension.",
     "outOfScope": "gfx/* rendering authority, sprite-animation asset pipeline beyond timing state machine, physics beyond 2D collision, any change to renderer ownership of the window surface."
   },
-  "currentIncrementId": "a68d7d4ccf2748c298c5504603d3ac66",
-  "commitBaseline": "20ff38ab3ff6d63ac81d813f4d7700c4186a9fb5",
+  "currentIncrementId": "385e1917d09d4da38a8a02c05f5c2b8a",
+  "commitBaseline": "a3df86119f80092c53cf1054923ca82e36f7c2fc",
   "increments": [
     {
       "id": "6bb8259e81814fe4bff2d05f094ea2da",
@@ -59,14 +59,14 @@
     {
       "id": "a68d7d4ccf2748c298c5504603d3ac66",
       "number": 7,
-      "status": "verified",
+      "status": "completed",
       "scope": "gfx Clear + open-closed entity-op wire API",
       "description": "game-core publishes gfx::Clear every tick before drawing sprites, fixing the retained-batch smearing and invisible-obstacle bug. game-core/spawn-entity and game-core/set-velocity collapse into one game-core/entity-op topic carrying a tagged EntityOp enum (Spawn, SetVelocity, Despawn), following ui::Spec/Widget precedent so future entity operations extend the enum without a new topic. load-tilemap stays its own topic (one-shot asset load, not a per-entity op). Demo updated to the new API; visually verified clean (no smear) with obstacles visible."
     },
     {
       "id": "385e1917d09d4da38a8a02c05f5c2b8a",
       "number": 8,
-      "status": "planned",
+      "status": "verified",
       "scope": "fix sprite draw-position offset from collider center",
       "description": "DrawSprite currently uses transform.x/y (the rapier2d collider center) directly as dst_x/dst_y (DrawSprite top-left), while DrawRect already correctly converts center to top-left for squares. Fix publish_gfx so DrawSprite subtracts half frame_w/frame_h the same way, so a sprite entitys visible art lines up with its actual collider extent and contact with obstacles looks correct. Demo: the robot visibly touches and stops against the red squares at the same point its hitbox does, verified live."
     }
@@ -264,11 +264,26 @@
       "detail": "Advanced from VERIFY to COMMIT."
     },
     {
-      "at": "2026-07-19T16:16:46.9810090Z",
+      "at": "2026-07-19T16:16:46.981009Z",
       "action": "add-increment",
       "detail": "Inserted increment 8: fix sprite draw-position offset from collider center"
+    },
+    {
+      "at": "2026-07-19T16:17:18.7790093Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to BUILD."
+    },
+    {
+      "at": "2026-07-19T16:22:39.6028483Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-07-19T16:22:56.3662387Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-07-19T13:14:27.3797032Z",
-  "updatedAt": "2026-07-19T16:16:46.9899423Z"
+  "updatedAt": "2026-07-19T16:22:56.3744209Z"
 }
