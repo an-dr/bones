@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "flow": "DetailedAuto",
-  "phase": "COMMIT",
+  "phase": "MERGE",
   "baseBranch": "main",
   "baseCommit": "65569af6ba4848ed41b52f5097604580a7f849e6",
   "featureBranch": "feature/game-core-module",
@@ -11,8 +11,8 @@
     "done": "A minimal 2D scene simulates entities with collision on a loaded tilemap, rendered through gfx/*, demonstrated via a runnable example extension.",
     "outOfScope": "gfx/* rendering authority, sprite-animation asset pipeline beyond timing state machine, physics beyond 2D collision, any change to renderer ownership of the window surface."
   },
-  "currentIncrementId": "6323db9c26894889b195b5862a36a53c",
-  "commitBaseline": "02884b6f0be4c3f3a021607c0a13572e697c1afd",
+  "currentIncrementId": null,
+  "commitBaseline": null,
   "increments": [
     {
       "id": "6bb8259e81814fe4bff2d05f094ea2da",
@@ -122,12 +122,20 @@
     {
       "id": "6323db9c26894889b195b5862a36a53c",
       "number": 16,
-      "status": "verified",
+      "status": "completed",
       "scope": "game-core",
       "description": "Debug hitbox outlines - EntityOp gains SetDebugHitboxes { enabled: bool }, a global toggle (default off) stored on GameCore. While enabled, publish_gfx additionally draws a yellow (255,255,0,255) unfilled gfx::DrawRect matching every collider-bearing entity's actual rapier2d extent (half_w/half_h around its Transform center) each tick - sprite entities, plain-square obstacles, and tilemap colliders alike, on top of their normal draw. game_core_demo binds a key (e.g. H) to publish SetDebugHitboxes toggling a held bool. Demo: pressing the key overlays yellow outlines on every object matching its actual collision extent, toggling off removes them."
     }
   ],
-  "approvals": [],
+  "approvals": [
+    {
+      "gate": "final",
+      "phase": "FINAL_REVIEW",
+      "incrementId": null,
+      "note": "User explicitly approved merging feature/game-core-module into main after reviewing the FINAL_REVIEW merge summary for all 16 increments.",
+      "approvedAt": "2026-07-19T20:15:00.9097579Z"
+    }
+  ],
   "history": [
     {
       "at": "2026-07-19T13:14:27.4322087Z",
@@ -573,8 +581,28 @@
       "at": "2026-07-19T19:58:32.8855989Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-07-19T20:07:22.236564Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to MR."
+    },
+    {
+      "at": "2026-07-19T20:07:32.3432843Z",
+      "action": "advance",
+      "detail": "Advanced from MR to FINAL_REVIEW."
+    },
+    {
+      "at": "2026-07-19T20:15:00.9184515Z",
+      "action": "approve",
+      "detail": "Approved final during FINAL_REVIEW."
+    },
+    {
+      "at": "2026-07-19T20:15:10.4535523Z",
+      "action": "advance",
+      "detail": "Advanced from FINAL_REVIEW to MERGE."
     }
   ],
   "createdAt": "2026-07-19T13:14:27.3797032Z",
-  "updatedAt": "2026-07-19T19:58:32.8954493Z"
+  "updatedAt": "2026-07-19T20:15:10.4649864Z"
 }
