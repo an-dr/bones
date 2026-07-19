@@ -11,8 +11,8 @@
     "done": "A minimal 2D scene simulates entities with collision on a loaded tilemap, rendered through gfx/*, demonstrated via a runnable example extension.",
     "outOfScope": "gfx/* rendering authority, sprite-animation asset pipeline beyond timing state machine, physics beyond 2D collision, any change to renderer ownership of the window surface."
   },
-  "currentIncrementId": "61977fc3bcd144ec899e8452f43e7995",
-  "commitBaseline": "38040231fc4024e2ef3299fa81039b2baf2dd1da",
+  "currentIncrementId": "739169c5eec1434683e92db64b3cf280",
+  "commitBaseline": "9b164c7e3e383f66149e0976968dd3d49fca8da5",
   "increments": [
     {
       "id": "6bb8259e81814fe4bff2d05f094ea2da",
@@ -80,9 +80,37 @@
     {
       "id": "61977fc3bcd144ec899e8452f43e7995",
       "number": 10,
-      "status": "verified",
+      "status": "completed",
       "scope": "remove demo maze, open arena",
       "description": "level.tmx keeps only its outer boundary walls (object ids 1-4); the interior plus-shaped maze walls (object ids 5-7) are removed so the controlled entity can freely reach all obstacle squares from its spawn point without needing to navigate around walls. Demo: the robot can path directly to every red obstacle square."
+    },
+    {
+      "id": "739169c5eec1434683e92db64b3cf280",
+      "number": 11,
+      "status": "verified",
+      "scope": "kinematic bodies + velocity-gated animation",
+      "description": "EntityOp::Spawn gains a body_kind (Dynamic/Kinematic) alongside collider_half_w/h; Kinematic uses RigidBodyBuilder::kinematic_velocity_based (moves via set-velocity, pushes dynamics on contact, never pushed itself). SpriteAnimation only advances when its entitys collider has nonzero rapier2d linear velocity (near-zero freezes on the current frame) -- derived internally, no new wire message. Unit tests cover a kinematic body pushing a dynamic one without itself being displaced, and animation freezing/resuming based on velocity."
+    },
+    {
+      "id": "db8765903e044c48b892affb19f5c915",
+      "number": 12,
+      "status": "planned",
+      "scope": "game-core collision events",
+      "description": "GameCore installs a rapier2d EventHandler to collect CollisionEvent::Started for collider pairs where both colliders belong to hecs entities tracked in self.entities (ignoring tilemap colliders). Each such contact publishes a new game-core/collision message carrying both entity_ids. Unit test spawns two overlapping dynamic entities and asserts a collision event with both ids is published exactly once per new contact (not every tick while overlapping)."
+    },
+    {
+      "id": "8911195cae8f4154b97624a864b6efd6",
+      "number": 13,
+      "status": "planned",
+      "scope": "game-core SetColor entity op",
+      "description": "EntityOp gains SetColor { entity_id, color }: overwrites an existing SquareColor components color in place (no-op for an unknown entity_id or one with no SquareColor, e.g. a sprite entity). Lets a caller implement a temporary color flash (set, wait, set back) without needing game-core to know about hit-flash timing itself. Unit tests cover a successful color change and both no-op cases."
+    },
+    {
+      "id": "ff2b1145b2f1464fb1c7c39956acf556",
+      "number": 14,
+      "status": "planned",
+      "scope": "demo: blue kinematic squares, footstep audio, hit-flash + sound",
+      "description": "game_core_demo spawns two blue Kinematic obstacle squares alongside the existing red Dynamic ones. The extension enables core/audio, synthesizes two short WAV tones (footstep click, hit blip) in code, and: plays the footstep tone on a fixed interval while its own held-input velocity is nonzero; subscribes to game-core/collision and, on an event naming two red obstacle entity_ids, publishes a brief SquareColor override (a new EntityOp op or SetVelocity-adjacent mechanism) for 0.1-0.5s plus the hit tone. Demo: moving the robot produces footstep sound only while moving and only while the sprite is animating; a red square driven into another red square flashes color and plays a sound."
     }
   ],
   "approvals": [],
@@ -366,8 +394,58 @@
       "at": "2026-07-19T18:16:40.9378115Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-07-19T18:17:03.1764585Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to MR."
+    },
+    {
+      "at": "2026-07-19T18:17:16.4632479Z",
+      "action": "advance",
+      "detail": "Advanced from MR to FINAL_REVIEW."
+    },
+    {
+      "at": "2026-07-19T18:22:30.6064693Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 11: kinematic bodies + velocity-gated animation"
+    },
+    {
+      "at": "2026-07-19T18:22:42.167192Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 12: game-core collision events"
+    },
+    {
+      "at": "2026-07-19T18:22:55.581896Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 13: demo: blue kinematic squares, footstep audio, hit-flash + sound"
+    },
+    {
+      "at": "2026-07-19T18:23:10.2993256Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 13: game-core SetColor entity op"
+    },
+    {
+      "at": "2026-07-19T18:23:45.8224104Z",
+      "action": "advance",
+      "detail": "Advanced from SPLIT to BRANCH."
+    },
+    {
+      "at": "2026-07-19T18:23:54.2025673Z",
+      "action": "advance",
+      "detail": "Advanced from BRANCH to BUILD."
+    },
+    {
+      "at": "2026-07-19T18:31:45.3293534Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-07-19T18:31:54.6070568Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-07-19T13:14:27.3797032Z",
-  "updatedAt": "2026-07-19T18:16:40.9468873Z"
+  "updatedAt": "2026-07-19T18:31:54.6149544Z"
 }

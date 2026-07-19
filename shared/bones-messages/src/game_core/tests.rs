@@ -16,6 +16,7 @@ fn spawn_with_sprite() -> EntityOp {
         square_color: (0, 0, 0, 0),
         collider_half_w: 8.0,
         collider_half_h: 8.0,
+        body_kind: BodyKind::Dynamic,
     }
 }
 
@@ -28,6 +29,7 @@ fn spawn_square() -> EntityOp {
         square_color: (200, 40, 40, 255),
         collider_half_w: 8.0,
         collider_half_h: 8.0,
+        body_kind: BodyKind::Kinematic,
     }
 }
 

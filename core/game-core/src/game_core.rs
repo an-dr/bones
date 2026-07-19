@@ -7,7 +7,7 @@
 
 use std::collections::HashMap;
 
-use bones_messages::game_core::{EntityOp, EntityOpMessage, LoadTilemap};
+use bones_messages::game_core::{BodyKind, EntityOp, EntityOpMessage, LoadTilemap};
 use bones_messages::gfx::{Clear, DrawRect, DrawSprite, SetCamera};
 use bones_messages::tick::Tick;
 use bones_messages::{DecodeMessage, EncodeMessage, Message};
@@ -27,6 +27,12 @@ const ENTITY_LAYER: u8 = 0;
 /// real need, not speculative: an invisible tilemap collider reads as a
 /// bug ("invisible wall") rather than an intentional obstacle.
 const TILEMAP_COLLIDER_COLOR: (u8, u8, u8, u8) = (90, 90, 100, 255);
+
+/// Below this squared linear speed, an entity counts as "at rest" for
+/// sprite-animation gating — guards against floating-point residue (a
+/// stopped body's velocity settles near, not exactly, zero) rather than
+/// requiring an exact `0.0`.
+const MOVING_SPEED_THRESHOLD_SQUARED: f32 = 0.01;
 
 pub struct GameCore {
     world: hecs::World,
@@ -70,6 +76,7 @@ impl GameCore {
                 square_color,
                 collider_half_w,
                 collider_half_h,
+                body_kind,
             } => self.spawn_entity(
                 entity_id,
                 x,
@@ -78,6 +85,7 @@ impl GameCore {
                 square_color,
                 collider_half_w,
                 collider_half_h,
+                body_kind,
             ),
             EntityOp::SetVelocity { entity_id, vx, vy } => self.set_velocity(entity_id, vx, vy),
             EntityOp::Despawn { entity_id } => self.despawn(entity_id),
@@ -94,6 +102,7 @@ impl GameCore {
         square_color: (u8, u8, u8, u8),
         collider_half_w: f32,
         collider_half_h: f32,
+        body_kind: BodyKind,
     ) {
         // Replaces any entity already spawned under this id — the same
         // replace-on-republish semantics `gfx::DrawSprite` batches use.
@@ -122,10 +131,14 @@ impl GameCore {
         }
 
         if collider_half_w > 0.0 && collider_half_h > 0.0 {
+            let rigid_body = match body_kind {
+                BodyKind::Dynamic => RigidBodyBuilder::dynamic(),
+                BodyKind::Kinematic => RigidBodyBuilder::kinematic_velocity_based(),
+            };
             let body = self
                 .physics
                 .bodies
-                .insert(RigidBodyBuilder::dynamic().translation(vector![x, y]));
+                .insert(rigid_body.translation(vector![x, y]));
             let collider = self.physics.colliders.insert_with_parent(
                 ColliderBuilder::cuboid(collider_half_w, collider_half_h),
                 body,
@@ -207,11 +220,24 @@ impl GameCore {
     }
 
     fn tick(&mut self, dt: f32) {
-        for (_, animation) in self.world.query_mut::<&mut SpriteAnimation>() {
-            animation.advance(dt);
-        }
-
         self.physics.step(dt);
+
+        // Animation only advances while actually moving — an entity with
+        // no collider (nothing driving it) or one at rest freezes on its
+        // current frame instead of animating in place.
+        for (_, (animation, collider)) in self
+            .world
+            .query_mut::<(&mut SpriteAnimation, Option<&Collider>)>()
+        {
+            let moving = collider
+                .and_then(|collider| self.physics.bodies.get(collider.body))
+                .is_some_and(|body| {
+                    body.linvel().magnitude_squared() > MOVING_SPEED_THRESHOLD_SQUARED
+                });
+            if moving {
+                animation.advance(dt);
+            }
+        }
 
         for (_, (transform, collider)) in self.world.query_mut::<(&mut Transform, &Collider)>() {
             if let Some(translation) = self.physics.body_translation(collider.body) {

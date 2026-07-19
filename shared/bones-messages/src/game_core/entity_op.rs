@@ -1,5 +1,21 @@
 use crate::{DecodeError, Reader, Writer};
 
+/// The rapier2d rigid-body type a spawned entity's collider gets, when it
+/// has one at all (`collider_half_w`/`collider_half_h` both `> 0.0`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum BodyKind {
+    /// Pushed by other bodies and gravity, participates fully in rapier2d's
+    /// collision response — the default, and every existing caller's
+    /// behavior before `BodyKind` existed.
+    #[default]
+    Dynamic,
+    /// Moves exactly as `SetVelocity` commands it and pushes `Dynamic`
+    /// bodies out of its way on contact, but is never itself pushed —
+    /// rapier2d's standard "platform/mover" body type (`kinematic` in
+    /// Unity, Godot, and Box2D alike).
+    Kinematic,
+}
+
 /// The drawable appearance of a spawned entity: either an animated sprite
 /// or a plain filled square at the collider's extent (obstacles, walls —
 /// anything that doesn't need art). Exactly one of these two shapes per
@@ -47,6 +63,7 @@ pub enum EntityOp {
         square_color: (u8, u8, u8, u8),
         collider_half_w: f32,
         collider_half_h: f32,
+        body_kind: BodyKind,
     },
     /// Sets a spawned entity's rapier2d linear velocity directly — the
     /// mechanism a caller (an extension reading `input/*`) drives movement
@@ -72,6 +89,7 @@ impl EntityOp {
                 square_color,
                 collider_half_w,
                 collider_half_h,
+                body_kind,
             } => {
                 let (r, g, b, a) = *square_color;
                 let writer = writer.u8(TAG_SPAWN).u32(*entity_id).f32(*x).f32(*y);
@@ -92,6 +110,10 @@ impl EntityOp {
                     .u8(a)
                     .f32(*collider_half_w)
                     .f32(*collider_half_h)
+                    .u8(match body_kind {
+                        BodyKind::Dynamic => 0,
+                        BodyKind::Kinematic => 1,
+                    })
             }
             EntityOp::SetVelocity { entity_id, vx, vy } => writer
                 .u8(TAG_SET_VELOCITY)
@@ -128,14 +150,21 @@ impl EntityOp {
                     reader.read_u8()?,
                     reader.read_u8()?,
                 );
+                let collider_half_w = reader.read_f32()?;
+                let collider_half_h = reader.read_f32()?;
+                let body_kind = match reader.read_u8()? {
+                    1 => BodyKind::Kinematic,
+                    _ => BodyKind::Dynamic,
+                };
                 Ok(EntityOp::Spawn {
                     entity_id,
                     x,
                     y,
                     sprite,
                     square_color,
-                    collider_half_w: reader.read_f32()?,
-                    collider_half_h: reader.read_f32()?,
+                    collider_half_w,
+                    collider_half_h,
+                    body_kind,
                 })
             }
             TAG_SET_VELOCITY => Ok(EntityOp::SetVelocity {

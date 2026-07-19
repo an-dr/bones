@@ -9,7 +9,7 @@ mod entity_op;
 mod entity_op_message;
 mod load_tilemap;
 
-pub use entity_op::{EntityOp, Sprite};
+pub use entity_op::{BodyKind, EntityOp, Sprite};
 pub use entity_op_message::EntityOpMessage;
 pub use load_tilemap::LoadTilemap;
 

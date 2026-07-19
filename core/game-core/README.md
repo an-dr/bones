@@ -25,8 +25,12 @@ rendering authority of its own.
     one entity, addressable afterward by that caller-assigned `entity_id`.
     Carries either an animated `sprite` or a plain filled `square_color`
     square (obstacles/walls that don't need art). A nonzero
-    `collider_half_w`/`collider_half_h` also gives it a dynamic `rapier2d`
-    box collider (`0.0` spawns a purely visual entity, no physics body).
+    `collider_half_w`/`collider_half_h` also gives it a `rapier2d` box
+    collider (`0.0` spawns a purely visual entity, no physics body) of
+    the given `body_kind`: `Dynamic` (pushed by other bodies, the
+    default) or `Kinematic` (moves exactly as `SetVelocity` commands it
+    and pushes `Dynamic` bodies out of its way, but is never itself
+    pushed — the standard "platform/mover" body type).
   - `SetVelocity` — sets a spawned entity's rapier2d linear velocity
     directly, addressed by `entity_id`. The mechanism a caller (e.g. an
     extension reading `input/*` for WASD/gamepad movement) drives an
@@ -34,13 +38,16 @@ rendering authority of its own.
     collider.
   - `Despawn` — removes an entity and its collider, if any. A no-op for
     an unknown `entity_id`.
-- Every `core/tick`: sprite-animation timers advance, `rapier2d` steps
-  once, every collider-bearing entity's `Transform` is overwritten from
-  its rigid body's post-step position (physics owns position for those
-  entities, not the other way around), then `gfx::Clear` +
-  `gfx::SetCamera` + one `gfx::DrawSprite`/`gfx::DrawRect` per entity are
-  published. The `Clear` matters: without it, the renderer's retained
-  batches never erase the previous frame, and the scene visibly smears.
+- Every `core/tick`: `rapier2d` steps once, every collider-bearing
+  entity's `Transform` is overwritten from its rigid body's post-step
+  position (physics owns position for those entities, not the other way
+  around); a sprite entity's animation only advances while its collider's
+  linear speed is above a small threshold — an entity with no collider, or
+  one at rest, freezes on its current frame instead of animating in
+  place. Then `gfx::Clear` + `gfx::SetCamera` + one
+  `gfx::DrawSprite`/`gfx::DrawRect` per entity are published. The `Clear`
+  matters: without it, the renderer's retained batches never erase the
+  previous frame, and the scene visibly smears.
 - `game-core/load-tilemap` — parses Tiled `.tmx` XML bytes; every rectangle
   object on an object layer named `"Collision"` becomes a static (fixed)
   collider, drawn as a plain square in a fixed color distinct from

@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use super::*;
-use bones_messages::game_core::{EntityOp, EntityOpMessage, LoadTilemap, Sprite};
+use bones_messages::game_core::{BodyKind, EntityOp, EntityOpMessage, LoadTilemap, Sprite};
 use bones_messages::gfx;
 use bones_messages::EncodeMessage;
 use bus::ServiceRegistry;
@@ -72,6 +72,7 @@ fn spawn_with_id(entity_id: u32, x: f32, y: f32) -> EntityOp {
         square_color: (0, 0, 0, 0),
         collider_half_w: 0.0,
         collider_half_h: 0.0,
+        body_kind: BodyKind::Dynamic,
     }
 }
 
@@ -94,6 +95,26 @@ fn spawn_with_collider_and_id(
         square_color: (0, 0, 0, 0),
         collider_half_w: half_w,
         collider_half_h: half_h,
+        body_kind: BodyKind::Dynamic,
+    }
+}
+
+fn spawn_kinematic_with_collider(
+    entity_id: u32,
+    x: f32,
+    y: f32,
+    half_w: f32,
+    half_h: f32,
+) -> EntityOp {
+    EntityOp::Spawn {
+        entity_id,
+        x,
+        y,
+        sprite: Some(sprite()),
+        square_color: (0, 0, 0, 0),
+        collider_half_w: half_w,
+        collider_half_h: half_h,
+        body_kind: BodyKind::Kinematic,
     }
 }
 
@@ -112,6 +133,7 @@ fn spawn_square_with_collider(
         square_color: (200, 40, 40, 255),
         collider_half_w: half_w,
         collider_half_h: half_h,
+        body_kind: BodyKind::Dynamic,
     }
 }
 
@@ -276,9 +298,52 @@ fn tick_steps_physics_and_syncs_transforms_for_colliding_entities() {
 }
 
 #[test]
-fn tick_advances_every_entitys_animation() {
+fn an_entity_with_no_collider_never_animates() {
+    // No collider means nothing to check velocity on, so it never counts
+    // as "moving" — a purely visual entity's animation stays frozen.
     let mut game_core = GameCore::new();
     game_core.handle(&entity_op_envelope(spawn_at(0.0, 0.0)));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 0.15 }.encode()));
+
+    let (_, animation) = game_core
+        .world
+        .query_mut::<&SpriteAnimation>()
+        .into_iter()
+        .next()
+        .expect("the spawned entity should still exist");
+    assert_eq!(animation.current_frame(), 0);
+}
+
+#[test]
+fn a_stationary_collider_bearing_entity_does_not_animate() {
+    let mut game_core = GameCore::new();
+    game_core.handle(&entity_op_envelope(spawn_with_collider_and_id(
+        1, 0.0, 0.0, 1.0, 1.0,
+    )));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 0.15 }.encode()));
+
+    let (_, animation) = game_core
+        .world
+        .query_mut::<&SpriteAnimation>()
+        .into_iter()
+        .next()
+        .expect("the spawned entity should still exist");
+    assert_eq!(animation.current_frame(), 0);
+}
+
+#[test]
+fn a_moving_collider_bearing_entity_animates() {
+    let mut game_core = GameCore::new();
+    game_core.handle(&entity_op_envelope(spawn_with_collider_and_id(
+        1, 0.0, 0.0, 1.0, 1.0,
+    )));
+    game_core.handle(&entity_op_envelope(EntityOp::SetVelocity {
+        entity_id: 1,
+        vx: 10.0,
+        vy: 0.0,
+    }));
 
     game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 0.15 }.encode()));
 
@@ -527,4 +592,46 @@ fn malformed_and_unknown_payloads_are_silently_ignored() {
     game_core.handle(&envelope(EntityOpMessage::TOPIC, vec![1, 2, 3]));
     game_core.handle(&envelope("game-core/does-not-exist", vec![]));
     // Reaching here without panicking is the assertion.
+}
+
+#[test]
+fn a_kinematic_body_pushes_a_dynamic_one_without_being_displaced() {
+    let mut game_core = GameCore::new();
+    game_core.handle(&entity_op_envelope(spawn_kinematic_with_collider(
+        1, 0.0, 0.0, 1.0, 1.0,
+    )));
+    game_core.handle(&entity_op_envelope(spawn_with_collider_and_id(
+        2, 0.5, 0.0, 1.0, 1.0,
+    )));
+    game_core.handle(&entity_op_envelope(EntityOp::SetVelocity {
+        entity_id: 1,
+        vx: 5.0,
+        vy: 0.0,
+    }));
+
+    for _ in 0..60 {
+        game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    }
+
+    let kinematic_entity = *game_core.entities.get(&1).unwrap();
+    let kinematic_transform = *game_core.world.get::<&Transform>(kinematic_entity).unwrap();
+    let dynamic_entity = *game_core.entities.get(&2).unwrap();
+    let dynamic_transform = *game_core.world.get::<&Transform>(dynamic_entity).unwrap();
+
+    // The kinematic body moved exactly as commanded (5 units/sec for 1
+    // second), unaffected by pushing the dynamic body out of its way.
+    assert!(
+        (kinematic_transform.x - 5.0).abs() < 0.5,
+        "the kinematic body should move under its own set velocity, got x={}",
+        kinematic_transform.x
+    );
+    // The dynamic body was pushed further right than the kinematic one
+    // advanced to, proving it was displaced rather than merely passed
+    // through.
+    assert!(
+        dynamic_transform.x > kinematic_transform.x,
+        "the dynamic body should have been pushed ahead of the kinematic one, got kinematic={} dynamic={}",
+        kinematic_transform.x,
+        dynamic_transform.x
+    );
 }

@@ -6,7 +6,7 @@ wit_bindgen::generate!({
 use std::cell::RefCell;
 
 use bones::core::host_api::{log, publish, subscribe, Level};
-use bones_messages::game_core::{EntityOp, EntityOpMessage, LoadTilemap, Sprite};
+use bones_messages::game_core::{BodyKind, EntityOp, EntityOpMessage, LoadTilemap, Sprite};
 use bones_messages::gfx::LoadSprite;
 use bones_messages::input::{GamepadAxis, KeyDown, KeyUp};
 use bones_messages::{DecodeMessage, EncodeMessage, Message};
@@ -87,6 +87,7 @@ fn spawn_obstacle(entity_id: u32, x: f32, y: f32) {
         square_color: OBSTACLE_COLOR,
         collider_half_w: OBSTACLE_HALF_EXTENT,
         collider_half_h: OBSTACLE_HALF_EXTENT,
+        body_kind: BodyKind::Dynamic,
     });
 }
 
@@ -126,6 +127,7 @@ impl Guest for Component {
             square_color: (0, 0, 0, 0),
             collider_half_w: FRAME_SIZE as f32 / 2.0,
             collider_half_h: FRAME_SIZE as f32 / 2.0,
+            body_kind: BodyKind::Dynamic,
         });
 
         // Several stationary obstacle squares scattered around the interior
