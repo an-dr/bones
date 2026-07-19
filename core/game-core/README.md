@@ -25,7 +25,17 @@ obstacle (a player entity holding a direction key against a wall, this
 crate's typical case) visibly interpenetrates rather than fully
 separating each step. The tuned values measurably shrink steady-state
 penetration under sustained driving force (roughly 7x smaller in the
-regression test) without reintroducing bounce/jitter.
+regression test) without reintroducing bounce/jitter — but tuning alone
+doesn't fully eliminate it. The actual mechanism behind visible overlap is
+`EntityOp::SetVelocity` hard-overwriting a body's linear velocity every
+tick from held input: that re-drives the body into whatever it's touching
+faster than the solver's per-step corrective push can undo, regardless of
+stiffness. `GameCore::tick` fixes this directly after every `Physics::step`
+by zeroing the component of each non-`Kinematic` collider-bearing entity's
+velocity that points into an active contact's normal (`Physics::contact_normals`)
+— only the inward part, so sliding along a wall's free axis still works.
+`Kinematic` bodies are excluded: they move exactly as commanded by design
+and are never pushed, so there's nothing to clamp.
 
 - `game-core/entity-op` — one topic carrying a tagged `EntityOp` (`Spawn`,
   `SetVelocity`, `Despawn`), open/closed: a future operation extends this

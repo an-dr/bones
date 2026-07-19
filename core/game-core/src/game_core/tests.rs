@@ -663,6 +663,78 @@ fn set_velocity_moves_a_collider_bearing_entity_over_time() {
 }
 
 #[test]
+fn continuous_driving_into_an_obstacle_settles_at_shallow_penetration() {
+    let mut game_core = GameCore::new();
+    game_core.handle(&entity_op_envelope(spawn_square_with_collider(
+        1, 3.0, 0.0, 1.0, 1.0,
+    )));
+    game_core.handle(&entity_op_envelope(spawn_with_collider_and_id(
+        2, 0.0, 0.0, 1.0, 1.0,
+    )));
+
+    // Same pattern game_core_demo actually uses: re-publish SetVelocity
+    // every tick from "held input," continuing to command the pusher
+    // straight into the obstacle for two full seconds — long enough that
+    // the pre-increment-3 bug (velocity re-driven every tick, fighting the
+    // solver) would have produced clearly visible overlap.
+    for _ in 0..120 {
+        game_core.handle(&entity_op_envelope(EntityOp::SetVelocity {
+            entity_id: 2,
+            vx: 5.0,
+            vy: 0.0,
+        }));
+        game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    }
+
+    let obstacle_entity = *game_core.entities.get(&1).unwrap();
+    let obstacle_collider = *game_core.world.get::<&Collider>(obstacle_entity).unwrap();
+    let pusher_entity = *game_core.entities.get(&2).unwrap();
+    let pusher_collider = *game_core.world.get::<&Collider>(pusher_entity).unwrap();
+
+    let depth = game_core
+        .physics
+        .penetration_depth(obstacle_collider.collider, pusher_collider.collider);
+    assert!(
+        depth < 0.01,
+        "continuous held-input-style driving into an obstacle should settle at shallow \
+         penetration instead of visibly overlapping, got {depth}"
+    );
+}
+
+#[test]
+fn continuous_diagonal_driving_against_a_wall_still_slides_along_it() {
+    let mut game_core = GameCore::new();
+    // A vertical wall to the right of the pusher's path.
+    game_core.handle(&entity_op_envelope(spawn_square_with_collider(
+        1, 3.0, 0.0, 1.0, 10.0,
+    )));
+    game_core.handle(&entity_op_envelope(spawn_with_collider_and_id(
+        2, 0.0, 0.0, 1.0, 1.0,
+    )));
+
+    // Driven diagonally (right and down) into the wall every tick — the
+    // rightward component should get blocked once touching, but the
+    // downward component (along the wall's free axis) should keep moving
+    // the entity, the same "push and slide" a player expects.
+    for _ in 0..60 {
+        game_core.handle(&entity_op_envelope(EntityOp::SetVelocity {
+            entity_id: 2,
+            vx: 5.0,
+            vy: 5.0,
+        }));
+        game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    }
+
+    let pusher_entity = *game_core.entities.get(&2).unwrap();
+    let transform = *game_core.world.get::<&Transform>(pusher_entity).unwrap();
+    assert!(
+        transform.y > 2.0,
+        "driving diagonally against a wall should still slide along its free axis, got y={}",
+        transform.y
+    );
+}
+
+#[test]
 fn set_velocity_for_an_entity_with_no_collider_is_a_no_op() {
     let mut game_core = GameCore::new();
     game_core.handle(&entity_op_envelope(spawn_with_id(1, 0.0, 0.0)));

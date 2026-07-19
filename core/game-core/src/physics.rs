@@ -154,6 +154,38 @@ impl Physics {
             .fold(0.0, f32::max)
     }
 
+    /// Every real (see `has_real_contact`) contact normal touching
+    /// `collider` right now, each pointing *away from* `collider` (out of
+    /// the obstacle, into free space) — the direction a commanded velocity
+    /// must not have a component along, or it re-drives the body into
+    /// whatever it's already touching. A collider with no contacts, or
+    /// only speculative-margin ones, yields nothing.
+    pub fn contact_normals(&self, collider: ColliderHandle) -> Vec<Vector<Real>> {
+        self.narrow_phase
+            .contact_pairs_with(collider)
+            .filter(|pair| {
+                pair.manifolds
+                    .iter()
+                    .any(|manifold| manifold.points.iter().any(|point| point.dist <= 0.0))
+            })
+            .flat_map(|pair| {
+                // `ContactPair::collider1`/`collider2` name which side is
+                // which; the manifold normal is defined pointing from
+                // collider1 toward collider2 (confirmed against this
+                // exact 0.22.0 build), so it must be flipped when the
+                // queried collider is on the collider2 side.
+                let flip = if pair.collider1 == collider {
+                    1.0
+                } else {
+                    -1.0
+                };
+                pair.manifolds
+                    .iter()
+                    .map(move |manifold| manifold.data.normal * flip)
+            })
+            .collect()
+    }
+
     pub fn body_translation(&self, handle: RigidBodyHandle) -> Option<Vector<Real>> {
         self.bodies.get(handle).map(|body| *body.translation())
     }

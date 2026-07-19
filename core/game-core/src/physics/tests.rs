@@ -82,6 +82,74 @@ fn sustained_driving_velocity_settles_to_shallow_penetration() {
 }
 
 #[test]
+fn contact_normals_points_away_from_the_queried_collider() {
+    let mut physics = Physics::new();
+    // A fixed obstacle to the right of a dynamic pusher — the pusher's
+    // contact normal should point further right (away from the obstacle,
+    // the direction the pusher must not keep driving into).
+    let obstacle_body = physics
+        .bodies
+        .insert(RigidBodyBuilder::fixed().translation(vector![2.5, 0.0]));
+    let obstacle_collider = physics.colliders.insert_with_parent(
+        ColliderBuilder::cuboid(1.0, 1.0),
+        obstacle_body,
+        &mut physics.bodies,
+    );
+    let pusher_body = physics
+        .bodies
+        .insert(RigidBodyBuilder::dynamic().translation(vector![0.6, 0.0]));
+    let pusher_collider = physics.colliders.insert_with_parent(
+        ColliderBuilder::cuboid(1.0, 1.0),
+        pusher_body,
+        &mut physics.bodies,
+    );
+
+    physics.step(1.0 / 60.0);
+
+    let pusher_normals = physics.contact_normals(pusher_collider);
+    assert_eq!(pusher_normals.len(), 1, "got {pusher_normals:?}");
+    assert!(
+        pusher_normals[0].x > 0.9,
+        "the pusher's contact normal should point toward the obstacle (away from the pusher), got {:?}",
+        pusher_normals[0]
+    );
+
+    // The same contact from the obstacle's side should point the other way.
+    let obstacle_normals = physics.contact_normals(obstacle_collider);
+    assert_eq!(obstacle_normals.len(), 1, "got {obstacle_normals:?}");
+    assert!(
+        obstacle_normals[0].x < -0.9,
+        "the obstacle's contact normal should point away from the pusher, got {:?}",
+        obstacle_normals[0]
+    );
+}
+
+#[test]
+fn contact_normals_ignores_speculative_only_contacts() {
+    let mut physics = Physics::new();
+    let body_a = physics
+        .bodies
+        .insert(RigidBodyBuilder::fixed().translation(vector![0.0, 0.0]));
+    let collider_a = physics.colliders.insert_with_parent(
+        ColliderBuilder::cuboid(1.0, 1.0),
+        body_a,
+        &mut physics.bodies,
+    );
+    let body_b = physics
+        .bodies
+        .insert(RigidBodyBuilder::dynamic().translation(vector![2.001, 0.0]));
+    physics.colliders.insert_with_parent(
+        ColliderBuilder::cuboid(1.0, 1.0),
+        body_b,
+        &mut physics.bodies,
+    );
+
+    physics.step(1.0 / 60.0);
+
+    assert!(physics.contact_normals(collider_a).is_empty());
+}
+
+#[test]
 fn a_fixed_body_never_moves() {
     let mut physics = Physics::new();
     let body = physics

@@ -13,7 +13,8 @@ use bones_messages::tick::Tick;
 use bones_messages::{DecodeMessage, EncodeMessage, Message};
 use bus::{Bus, Envelope, Handler, Module, ModuleContext};
 use rapier2d::prelude::{
-    nalgebra, vector, ActiveEvents, ColliderBuilder, ColliderHandle, RigidBodyBuilder,
+    nalgebra, vector, ActiveEvents, ColliderBuilder, ColliderHandle, Real, RigidBodyBuilder,
+    RigidBodyHandle, Vector,
 };
 
 use crate::{load_collision_rects, Collider, Physics, SpriteAnimation, SquareColor, Transform};
@@ -263,6 +264,7 @@ impl GameCore {
 
     fn tick(&mut self, dt: f32) {
         self.physics.step(dt);
+        self.clamp_velocities_against_contacts();
 
         // Animation only advances while actually moving — an entity with
         // no collider (nothing driving it) or one at rest freezes on its
@@ -290,6 +292,51 @@ impl GameCore {
 
         self.publish_collisions();
         self.publish_gfx();
+    }
+
+    /// Stops a body's commanded velocity from re-driving it into whatever
+    /// it's already touching — the actual mechanism behind visibly
+    /// overlapping squares under sustained held input. `EntityOp::SetVelocity`
+    /// hard-overwrites a body's linear velocity every tick from held input,
+    /// which fights rapier2d's compliant contact solver: the solver's
+    /// per-step corrective push competes against the same inward velocity
+    /// being re-applied next tick, and can lose. Zeroing the
+    /// contact-normal-aligned component of velocity after each step (but
+    /// only the inward part, so motion along the surface — sliding along a
+    /// wall — is untouched) keeps a held direction from winning that fight.
+    ///
+    /// `Kinematic` bodies are excluded: they move exactly as commanded by
+    /// design (the "platform/mover" contract) and are never pushed, so
+    /// there's nothing to clamp.
+    fn clamp_velocities_against_contacts(&mut self) {
+        let clamped: Vec<(RigidBodyHandle, Vector<Real>)> = self
+            .world
+            .query::<&Collider>()
+            .iter()
+            .filter_map(|(_, collider)| {
+                let body = self.physics.bodies.get(collider.body)?;
+                if body.is_kinematic() {
+                    return None;
+                }
+                let velocity = *body.linvel();
+                if velocity == vector![0.0, 0.0] {
+                    return None;
+                }
+                let mut clamped_velocity = velocity;
+                for normal in self.physics.contact_normals(collider.collider) {
+                    let inward = clamped_velocity.dot(&normal);
+                    if inward > 0.0 {
+                        clamped_velocity -= normal * inward;
+                    }
+                }
+                (clamped_velocity != velocity).then_some((collider.body, clamped_velocity))
+            })
+            .collect();
+        for (body, velocity) in clamped {
+            if let Some(body) = self.physics.bodies.get_mut(body) {
+                body.set_linvel(velocity, true);
+            }
+        }
     }
 
     /// Translates every rapier2d contact-start this tick's `step` produced
