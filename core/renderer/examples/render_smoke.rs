@@ -1,7 +1,7 @@
 //! Opens a real window, takes it from Platform, clears it a few times, and
 //! presents. Run with: cargo run -p renderer --example render_smoke
 
-use bus::{Bus, Envelope, Handler};
+use bus::{Bus, Envelope, Handler, Module, ModuleContext, ServiceRegistry};
 use logging::Logger;
 use platform::Platform;
 use renderer::Renderer;
@@ -9,7 +9,12 @@ use renderer::Renderer;
 fn main() -> Result<(), String> {
     let mut platform = Platform::new("renderer smoke test", 320, 240)?;
     let window = platform.take_window().expect("window should be available");
-    let mut renderer = Renderer::new(window, Logger::default());
+
+    let mut renderer = Renderer::new(Logger::default());
+    let mut services = ServiceRegistry::new();
+    services.provide(window)?;
+    let mut ctx = ModuleContext::new(&mut services);
+    renderer.init(&mut ctx)?;
 
     let bus = Bus::new();
     for _ in 0..60 {

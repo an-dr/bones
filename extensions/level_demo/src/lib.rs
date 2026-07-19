@@ -14,7 +14,7 @@ struct Component;
 impl Guest for Component {
     fn init() {
         subscribe("core/tick");
-        log(Level::Info, &format!("level_demo {VERSION}: loaded"));
+        log(Level::Info, &format!("{VERSION}: loaded"));
     }
 
     fn on_tick(_dt: f32) {}

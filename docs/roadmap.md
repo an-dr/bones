@@ -7,15 +7,16 @@ a demonstrable result, not just progress.
 is complete, delete it — git history is the record of what shipped. If the
 plan changes, rewrite the rungs; do not annotate them.
 
-The order below is a dependency ordering, not a strict sequence: ui and web
-can proceed in parallel from here — platform, renderer, watchdog, and
-synchronous send/lifecycle (their shared prerequisites) are all done.
+The order below is a dependency ordering, not a strict sequence: platform,
+renderer, watchdog, synchronous send/lifecycle, ui, and the module/service
+registry are all done.
 
 | # | Increment | Demo that proves it |
 | - | --------- | ------------------- |
-| 1 | ui module (egui) + `ui/*` vocabulary | The "notes" example ([examples/egui-app.md](examples/egui-app.md)) runs |
-| 2 | web module (wry) + `web/*` vocabulary | The "dashboard" example ([examples/web-app.md](examples/web-app.md)) runs |
-| 3 | Full builder API: custom native-module injection, embedding demo | A parent project injects a custom module and builds its own engine binary |
+| 1 | Full shutdown sequence: WIT `shutdown` export, close-request published as an event extensions can react to, `Stopped` lifecycle event (design/platform.md) | Closing the window runs every extension's `shutdown()` before the process exits |
+| 2 | ADR-007's queue budget: bounded inbound queue, per-frame publish allowance, drop counters (only the time budget is enforced today) | A flooding extension is faulted instead of starving its peers |
+| 3 | web module (wry) + `web/*` vocabulary | The "dashboard" example ([examples/web-app.md](examples/web-app.md)) runs |
+| 4 | `game-core` native module: ECS, collision, tilemap loading, sprite-animation timing (ADR-019) | A minimal 2D scene simulates entities with collision on a loaded tilemap, rendered through `gfx/*` |
 
 Guardrails while climbing:
 

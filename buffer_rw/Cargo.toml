@@ -1,6 +1,0 @@
-[workspace]
-
-[package]
-name = "buffer_rw"
-version = "0.1.0"
-edition = "2021"

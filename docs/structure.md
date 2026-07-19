@@ -8,17 +8,19 @@ Since [ADR-011](adr/ADR-011-native-core-modules.md) the core has two tiers:
 a fixed **kernel** and optional, consumer-injectable **native modules**
 (detailed in [design/modules.md](design/modules.md)).
 
+Responsibilities in *italics* are not yet built — see
+[roadmap.md](roadmap.md) for what's outstanding.
+
 ## Kernel components
 
 | Component | Responsibility                                                     | Depends on             |
 | --------- | ------------------------------------------------------------------ | ---------------------- |
-| bus       | Topics, direct request/reply, delivery semantics, budgets          | logging                |
-| host      | Loads/instantiates extensions, dispatches handler calls, watchdog  | bus, contract, logging |
+| bus       | Topics, direct request/reply, delivery semantics, the `Module` contract and typed service registry (ADR-017); *queue budgets* | logging |
+| wasm-extensions | Everything about a WASM extension's existence over time (ADR-020): loading/dispatch/watchdog (`host`), state-transition events (`lifecycle`), and save/load of its own state (`persistence`, unconditional — see the ADR for why it isn't in the optional module set below) | bus, contract, logging |
 | contract  | The WIT package — the extension-facing API definition             | —                     |
 | platform  | SDL window, tray, input sources, timing, event pump; headless mode | logging                |
-| runner    | Frame-phase loop skeleton, module & service registries, builder API | bus, host, platform, logging |
-| lifecycle | `core/lifecycle` topic: publishes/parses extension state transitions | bus                  |
-| logging   | Structured sink, per-extension tagging, drop counters              | —                     |
+| runner    | Frame-phase loop skeleton, builder API (`.module(...)` injection)  | bus, wasm-extensions, platform, logging |
+| logging   | Structured sink, per-extension tagging; *drop counters*            | —                     |
 
 ## Native modules (first-party)
 
@@ -27,8 +29,9 @@ All feature-flagged and individually optional; embedders may add their own.
 | Module   | Responsibility                                  | Uses (kernel + services)          |
 | -------- | ----------------------------------------------- | --------------------------------- |
 | renderer | Executes gfx batches, presents; provides `draw-target` | bus; `window-surface` service |
-| ui       | egui integration: widget specs → draw data, events back | bus; `draw-target` service   |
-| web      | wry panels, bus ↔ page JSON bridge             | bus; `window-surface` service     |
+| ui       | egui integration: widget specs → draw data, events back | bus; renderer (direct-wired, not yet the `draw-target` service — see design/modules.md) |
+| audio    | Plays sound effects and music via `audio/*`, backed by `kira` | bus |
+| *web*    | *wry panels, bus ↔ page JSON bridge*            | *bus; `window-surface` service*   |
 
 ## Distributions
 
@@ -45,36 +48,41 @@ Both are first-class products; the app is the common case.
 graph TD
     App["app (engine executable)"] --> Runner["runner (builder)"]
     Runner --> Bus["bus"]
-    Runner --> Host["host"]
+    Runner --> WasmExtensions["wasm-extensions"]
     Runner --> Platform["platform"]
-    Runner --> Lifecycle["lifecycle"]
-    Host --> Bus
-    Host --> Contract["contract (WIT)"]
-    Lifecycle --> Bus
+    WasmExtensions --> Bus
+    WasmExtensions --> Contract["contract (WIT)"]
     subgraph Modules["native modules (optional, consumer-injectable)"]
         Renderer["renderer"]
         UI["ui"]
+        Audio["audio"]
         Web["web"]
     end
     Renderer --> Bus
     UI --> Bus
+    UI --> Renderer
+    Audio --> Bus
     Web --> Bus
     Renderer -. "window-surface" .-> Platform
     Web -. "window-surface" .-> Platform
-    UI -. "draw-target" .-> Renderer
 ```
 
-- Solid arrows are crate dependencies; dashed arrows are **service traits**
-  (defined by the kernel, listed in design/modules.md) — the consumer depends
-  on the trait, not on the provider's crate.
+- Solid arrows are crate dependencies; dashed arrows are **services**
+  (typed values in the registry `bus::Module` defines, listed in design/
+  modules.md) — the consumer depends on `bus`, not on the provider's crate.
 - Anything not drawn is a design violation (e.g. bus depending on host,
-  platform depending on renderer, module depending on another module's crate).
+  platform depending on renderer, module depending on another module's crate)
+  — except `UI --> Renderer`, direct-wired the same way renderer itself is
+  direct-wired into `Engine` rather than through a module trait; both are
+  provisional until that trait exists (design/modules.md).
 - **bus and contract know nothing about presentation** — messaging must stay
   usable in a headless build.
 - **logging is a universal leaf**: anyone may depend on it (edges omitted
   above for readability); it depends on nothing.
-- **Every module is optional**; the kernel must build and run with zero
-  modules registered (headless configuration).
+- **Every module in the optional, consumer-composed set is optional**; the
+  kernel must build and run with zero of them registered (headless
+  configuration). `wasm-extensions::persistence` is `Module`-shaped but
+  kernel-tier, not a member of that set — see ADR-020.
 - **Nothing depends on app**, and app has no access embedders lack — it uses
   only the public builder API.
 - Extensions depend only on **contract** — never on core internals.
@@ -85,17 +93,22 @@ graph TD
 bones/
 ├── core/          # one directory per component above
 │   ├── bus/       #
-│   ├── host/      #
+│   ├── wasm-extensions/ #  kernel: host + lifecycle + persistence (ADR-020)
 │   ├── platform/  #  kernel
 │   ├── runner/    #
-│   ├── lifecycle/ #
 │   ├── logging/   #
 │   ├── renderer/  #
 │   ├── ui/        #  first-party native modules
-│   ├── web/       #
+│   ├── audio/     #
+│   ├── web/       #  (planned)
 │   └── app/       #  the engine executable (default composition)
 ├── wit/           # contract: the WIT package
-└── extensions/    # first-party & example extensions, one directory each
+├── shared/        # crates depended on by both host and WASM guest code
+│   └── bones-messages/ # typed core messages + payload codecs (tick, gfx, ...)
+├── vendor/        # tracked upstream dependencies (submodules)
+│   └── pubsub-bus/   # the bus's underlying pub/sub primitive
+├── extensions/    # first-party & example extensions, one directory each
+└── embedding-demo/ # separate workspace proving .module(...) needs no privileged access
 ```
 
 How directories map to build units (workspace members, features) is an

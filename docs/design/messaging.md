@@ -10,7 +10,6 @@ Every message carries:
 | ----------- | ------------------------------------------------------------------ |
 | topic       | Hierarchical name (`input/key-down`); absent on direct messages    |
 | sender      | Endpoint id of the publisher (extension name or core component)    |
-| correlation | Request id linking a reply to its request; direct messages only    |
 | payload     | Typed value for core-defined messages; opaque bytes for app-defined |
 
 Core-defined payloads (input, tick, lifecycle, draw commands, widgets, web
@@ -43,28 +42,26 @@ the core never inspects them.
 
 - Addressed to an **endpoint** (an extension's registered name, or a core
   service).
-- Every request carries a deadline. The outcome is always one of: a reply, an
-  error reply (target faulted, reloading, unknown), or a deadline error. No
-  request ends in silence.
+- The outcome is always one of: a reply, or an error reply (target faulted,
+  unknown, or a call cycle). No request ends in silence.
 - **Synchronous** (ADR-010): the caller blocks and the reply is the return
   value of `send`. The target's handler runs as soon as its per-extension
-  serialization allows and under its own time budget; the caller's budget
-  clock pauses while it waits. Call cycles (A→B→A) fail immediately with an
-  error reply.
+  serialization allows and under its own time budget. Call cycles (A→B→A)
+  fail immediately with an error reply.
 
 ```mermaid
 sequenceDiagram
     participant A as Extension A
-    participant Bus as Bus
+    participant Registry as Registry
     participant B as Extension B
 
-    A->>Bus: send(B, request, deadline)
-    Bus->>B: on-message (request)
-    alt B replies in time
-        B-->>Bus: reply
-        Bus-->>A: reply (same correlation)
-    else deadline exceeded / B unavailable
-        Bus-->>A: error reply (same correlation)
+    A->>Registry: send(B, request)
+    Registry->>B: on-message (request)
+    alt B replies
+        B-->>Registry: reply
+        Registry-->>A: reply (send's return value)
+    else B faulted / unknown / cycle
+        Registry-->>A: error reply
     end
 ```
 
@@ -82,7 +79,8 @@ per-frame queries *possible*; this pattern is why they should stay rare.
 - **Ordering:** per-sender FIFO per topic; nothing promised across senders or
   topics (ADR-009).
 - **Delivery:** at-most-once; drops happen only toward non-Running extensions
-  or over-budget queues, and are counted and logged (ADR-009, ADR-007).
-- **Flow control:** bounded inbound queue and per-frame publish allowance per
-  extension (ADR-007). Budget violations fault the extension; the bus itself
-  never blocks.
+  (ADR-009).
+- **Flow control:** the time budget (ADR-007) is enforced today — a handler
+  call that overruns it faults the extension. TODO: the queue budget
+  (bounded inbound queue, per-frame publish allowance, drop counters) isn't
+  implemented yet; see roadmap.md.

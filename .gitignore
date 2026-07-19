@@ -1,2 +1,10 @@
 target
 dist
+docs/reviews/
+docs/progress/
+.verify-scratch/
+# persistence's default save directory. Real for the app (bones.toml's
+# saves_dir); also created harmlessly by any test that builds an Engine
+# without pointing .saves_dir(...) elsewhere, since persistence is
+# unconditional (core/wasm-extensions/src/persistence.rs).
+saves/

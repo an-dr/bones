@@ -1,9 +1,16 @@
 //! Platform layer (design/platform.md): the only component touching the OS.
-//! Opens one SDL window, publishes keyboard events onto `input/*` (ADR-008's
-//! web/egui layers don't exist yet, so every event reaches `input/*`
-//! directly). TODO: tray, mouse, controller, and timing sources aren't
-//! implemented yet.
+//! Opens one SDL window, publishes keyboard, mouse, and gamepad events onto
+//! `input/*`. TODO: tray and timing sources aren't published onto `input/*`
+//! yet — text-input events are captured (`poll_events_with`) but only ever
+//! reach the ui module's consumption hook, never the bus.
 
+use std::collections::HashMap;
+
+use bones_messages::input::{
+    GamepadAxis, GamepadButtonDown, GamepadButtonUp, GamepadConnected, GamepadDisconnected,
+    KeyDown, KeyUp, MouseDown, MouseMove, MouseUp, MouseWheel,
+};
+use bones_messages::{EncodeMessage, Message};
 use bus::{Bus, Envelope};
 
 pub struct Platform {
@@ -12,6 +19,12 @@ pub struct Platform {
     // — event polling only needs the `Sdl` context, not this value itself.
     window: Option<sdl3::video::Window>,
     events: sdl3::EventPump,
+    quit_requested: bool,
+    gamepad_subsystem: sdl3::GamepadSubsystem,
+    // A gamepad only generates axis/button events while its `Gamepad`
+    // handle stays open (`SDL_OpenGamepad`) — closed automatically (`Drop`)
+    // when removed here on `ControllerDeviceRemoved`.
+    gamepads: HashMap<u32, sdl3::gamepad::Gamepad>,
 }
 
 impl Platform {
@@ -23,12 +36,22 @@ impl Platform {
             .position_centered()
             .build()
             .map_err(|e| e.to_string())?;
+        // Started unconditionally, before the window can be handed away via
+        // `take_window` — text input has no per-window "focused a text
+        // field" signal yet, so this just keeps `Event::TextInput` flowing
+        // for whichever layer (ui) wants to consume it. TODO: gate on focus
+        // once one exists, for IME/mobile-keyboard hygiene.
+        video.text_input().start(&window);
         let events = sdl.event_pump().map_err(|e| e.to_string())?;
+        let gamepad_subsystem = sdl.gamepad().map_err(|e| e.to_string())?;
 
         Ok(Self {
             sdl,
             window: Some(window),
             events,
+            quit_requested: false,
+            gamepad_subsystem,
+            gamepads: HashMap::new(),
         })
     }
 
@@ -39,14 +62,107 @@ impl Platform {
         self.window.take()
     }
 
-    /// Publishes an `input/*` envelope for every pending keyboard event.
+    /// Provides the window as the `window-surface` service (design/
+    /// modules.md, ADR-017), for whichever module's `init` ends up
+    /// consuming it — a no-op if already taken. The only place that ever
+    /// provides a `Window`, so a duplicate-provide error here would mean a
+    /// logic bug in `Engine::build`, not a normal runtime condition.
+    pub fn provide_window(&mut self, services: &mut bus::ServiceRegistry) {
+        if let Some(window) = self.take_window() {
+            services.provide(window).expect("window-surface provided twice");
+        }
+    }
+
+    /// Takes back an unclaimed `window-surface` service (nothing consumed
+    /// it — e.g. `.window(...)` with no `.renderer()` and no custom module
+    /// wanting it) so it stays open for the rest of the run, instead of
+    /// being dropped — and closed — with the registry it briefly lived in.
+    pub fn reclaim_window(&mut self, services: &mut bus::ServiceRegistry) {
+        if let Some(window) = services.consume::<sdl3::video::Window>() {
+            self.window = Some(window);
+        }
+    }
+
+    /// Publishes an `input/*` envelope for every pending keyboard event, and
+    /// records a window-close request for `quit_requested` to report.
     /// Only enqueues (`Bus::publish`) — the caller decides when to dispatch.
     pub fn poll_events(&mut self, bus: &Bus, sender: &str) {
+        self.poll_events_with(bus, sender, |_| false);
+    }
+
+    /// Same as `poll_events`, but offers every non-`Quit` raw event to
+    /// `consumed` first (ADR-008: top layer consumes) — a higher layer
+    /// (e.g. the ui module's egui context) that claims an event by
+    /// returning `true` stops it from ever reaching `input/*`. `Quit` is a
+    /// session-lifecycle signal, not layered input, so it always bypasses
+    /// `consumed`.
+    pub fn poll_events_with(
+        &mut self,
+        bus: &Bus,
+        sender: &str,
+        mut consumed: impl FnMut(&sdl3::event::Event) -> bool,
+    ) {
         for event in self.events.poll_iter() {
+            if matches!(event, sdl3::event::Event::Quit { .. }) {
+                self.quit_requested = true;
+                continue;
+            }
+            // Connection lifecycle, not layered input (ADR-008) — a UI
+            // layer consuming a keypress shouldn't be able to hide a
+            // gamepad connecting/disconnecting from a game, so this
+            // bypasses `consumed` the same way `Quit` does. Also owns
+            // opening/closing the `Gamepad` handle that axis/button events
+            // depend on, so it can't be handled by the stateless
+            // `translate_event` below.
+            match &event {
+                sdl3::event::Event::ControllerDeviceAdded { which, .. } => {
+                    // The public `sdl3::joystick::JoystickId` is a type
+                    // alias, not a constructible newtype, and the crate
+                    // exposes no `From<u32>` for it — this reaches through
+                    // the crate's own `pub extern crate ... as sys`
+                    // re-export to build one, rather than patching sdl3.
+                    // Silently drops a device this fails to open (no
+                    // logger available in Platform to report it to).
+                    if let Ok(gamepad) = self.gamepad_subsystem.open(sdl3::sys::joystick::SDL_JoystickID(*which)) {
+                        self.gamepads.insert(*which, gamepad);
+                        bus.publish(Envelope {
+                            topic: GamepadConnected::TOPIC.to_string(),
+                            sender: sender.to_string(),
+                            correlation: None,
+                            payload: GamepadConnected { id: *which }.encode(),
+                        });
+                    }
+                    continue;
+                }
+                sdl3::event::Event::ControllerDeviceRemoved { which, .. } => {
+                    self.gamepads.remove(which);
+                    bus.publish(Envelope {
+                        topic: GamepadDisconnected::TOPIC.to_string(),
+                        sender: sender.to_string(),
+                        correlation: None,
+                        payload: GamepadDisconnected { id: *which }.encode(),
+                    });
+                    continue;
+                }
+                _ => {}
+            }
+            if consumed(&event) {
+                continue;
+            }
             if let Some(envelope) = translate_event(&event, sender) {
                 bus.publish(envelope);
             }
         }
+    }
+
+    /// Whether the OS asked to close the window (e.g. the close button)
+    /// since this `Platform` was created. Sticky — once true, stays true;
+    /// the caller is expected to exit rather than keep polling.
+    /// TODO: no `window/*` close-request event or `shutdown()` call yet
+    /// (design/platform.md's full shutdown sequence) — this only reports
+    /// the signal, exiting cleanly is the caller's job.
+    pub fn quit_requested(&self) -> bool {
+        self.quit_requested
     }
 
     /// Injects a synthetic event into SDL's own queue, as if the OS had
@@ -64,101 +180,64 @@ impl Platform {
 }
 
 fn translate_event(event: &sdl3::event::Event, sender: &str) -> Option<Envelope> {
-    let (topic, key) = match event {
+    let (topic, payload) = match event {
         sdl3::event::Event::KeyDown {
             keycode: Some(key), ..
-        } => ("input/key-down", key),
+        } => {
+            let key = key.to_string();
+            (KeyDown::TOPIC, KeyDown { key: &key }.encode())
+        }
         sdl3::event::Event::KeyUp {
             keycode: Some(key), ..
-        } => ("input/key-up", key),
+        } => {
+            let key = key.to_string();
+            (KeyUp::TOPIC, KeyUp { key: &key }.encode())
+        }
+        sdl3::event::Event::MouseMotion { x, y, xrel, yrel, .. } => (
+            MouseMove::TOPIC,
+            MouseMove { x: *x, y: *y, dx: *xrel, dy: *yrel }.encode(),
+        ),
+        sdl3::event::Event::MouseButtonDown { mouse_btn, x, y, .. } => (
+            MouseDown::TOPIC,
+            MouseDown { button: *mouse_btn as u8, x: *x, y: *y }.encode(),
+        ),
+        sdl3::event::Event::MouseButtonUp { mouse_btn, x, y, .. } => (
+            MouseUp::TOPIC,
+            MouseUp { button: *mouse_btn as u8, x: *x, y: *y }.encode(),
+        ),
+        sdl3::event::Event::MouseWheel { x, y, direction, .. } => {
+            // Normalize "flipped" (natural scrolling) so `input/mouse-wheel`
+            // always has the same sign convention regardless of the OS
+            // setting that produced it.
+            let flip = matches!(direction, sdl3::mouse::MouseWheelDirection::Flipped);
+            let (x, y) = if flip { (-x, -y) } else { (*x, *y) };
+            (MouseWheel::TOPIC, MouseWheel { x, y }.encode())
+        }
+        sdl3::event::Event::ControllerAxisMotion { which, axis, value, .. } => {
+            let axis = format!("{axis:?}");
+            // SDL's raw range is roughly i16::MIN..=i16::MAX (sticks) or
+            // 0..=i16::MAX (triggers); normalize against MAX and clamp so
+            // the negative extreme (MIN < -MAX) never exceeds -1.0.
+            let value = (*value as f32 / i16::MAX as f32).clamp(-1.0, 1.0);
+            (GamepadAxis::TOPIC, GamepadAxis { id: *which, axis: &axis, value }.encode())
+        }
+        sdl3::event::Event::ControllerButtonDown { which, button, .. } => {
+            let button = format!("{button:?}");
+            (GamepadButtonDown::TOPIC, GamepadButtonDown { id: *which, button: &button }.encode())
+        }
+        sdl3::event::Event::ControllerButtonUp { which, button, .. } => {
+            let button = format!("{button:?}");
+            (GamepadButtonUp::TOPIC, GamepadButtonUp { id: *which, button: &button }.encode())
+        }
         _ => return None,
     };
     Some(Envelope {
         topic: topic.to_string(),
         sender: sender.to_string(),
         correlation: None,
-        payload: key.to_string().into_bytes(),
+        payload,
     })
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use sdl3::event::Event;
-    use sdl3::keyboard::Keycode;
-
-    #[test]
-    fn key_down_becomes_an_input_key_down_envelope() {
-        let event = Event::KeyDown {
-            timestamp: 0,
-            window_id: 0,
-            keycode: Some(Keycode::A),
-            scancode: None,
-            keymod: sdl3::keyboard::Mod::empty(),
-            repeat: false,
-            which: 0,
-            raw: 0,
-        };
-
-        let envelope = translate_event(&event, "platform").expect("should translate");
-        assert_eq!(envelope.topic, "input/key-down");
-        assert_eq!(envelope.sender, "platform");
-        assert_eq!(envelope.payload, b"A");
-    }
-
-    #[test]
-    fn key_up_becomes_an_input_key_up_envelope() {
-        let event = Event::KeyUp {
-            timestamp: 0,
-            window_id: 0,
-            keycode: Some(Keycode::Space),
-            scancode: None,
-            keymod: sdl3::keyboard::Mod::empty(),
-            repeat: false,
-            which: 0,
-            raw: 0,
-        };
-
-        let envelope = translate_event(&event, "platform").expect("should translate");
-        assert_eq!(envelope.topic, "input/key-up");
-        assert_eq!(envelope.payload, b"Space");
-    }
-
-    #[test]
-    fn unrelated_events_translate_to_nothing() {
-        let event = Event::Quit { timestamp: 0 };
-        assert!(translate_event(&event, "platform").is_none());
-    }
-
-    #[test]
-    fn an_injected_key_event_round_trips_through_a_real_window_onto_the_bus() {
-        let mut platform = Platform::new("test", 64, 64).expect("needs a real display");
-        platform
-            .inject_event(Event::KeyDown {
-                timestamp: 0,
-                window_id: 0,
-                keycode: Some(Keycode::A),
-                scancode: Some(sdl3::keyboard::Scancode::A),
-                keymod: sdl3::keyboard::Mod::empty(),
-                repeat: false,
-                which: 0,
-                raw: 0,
-            })
-            .expect("inject should succeed");
-
-        let bus = Bus::new();
-        let received = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-        let sink = received.clone();
-        let ep = bus.register("test", move |e: &Envelope| sink.lock().unwrap().push(e.clone()));
-        ep.subscribe("input/key-down");
-
-        platform.poll_events(&bus, "platform");
-        bus.dispatch();
-
-        let got = received.lock().unwrap();
-        assert!(
-            got.iter().any(|e| e.topic == "input/key-down" && e.payload == b"A"),
-            "expected an injected key-down to reach the bus, got {got:?}"
-        );
-    }
-}
+mod tests;

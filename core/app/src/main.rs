@@ -17,11 +17,21 @@ fn main() {
 fn run() -> Result<(), String> {
     let config = Config::load("bones.toml")?;
 
-    let mut engine = runner::Engine::builder()
+    let mut engine = runner::Engine::new()
         .extensions_dir(config.extensions_dir)
-        .window(config.window_title, config.window_width, config.window_height);
+        .window(config.window_title, config.window_width, config.window_height)
+        .saves_dir(config.saves_dir);
     if config.renderer {
         engine = engine.renderer();
+    }
+    if config.ui {
+        engine = engine.ui();
+    }
+    if config.audio {
+        engine = engine.module(audio::Audio::new());
+    }
+    if config.persistence_read_only {
+        engine = engine.read_only_persistence();
     }
 
     engine.run().map_err(|err| err.to_string())

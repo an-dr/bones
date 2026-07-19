@@ -4,5 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+bones-messages = { path = "../../shared/bones-messages" }
 bus = { path = "../bus" }
 sdl3 = { version = "0.18.4", features = ["build-from-source-static"] }

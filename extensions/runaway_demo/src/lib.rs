@@ -10,7 +10,7 @@ struct Component;
 impl Guest for Component {
     fn init() {
         subscribe("core/tick");
-        log(Level::Info, "runaway_demo: init, about to hang on its first tick");
+        log(Level::Info, "init, about to hang on its first tick");
     }
 
     fn on_tick(_dt: f32) {

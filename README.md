@@ -1,15 +1,39 @@
 # bones
 
-Universal extendable engine
+A small native engine core — windows, tray icon, input (SDL), logging, and a
+message bus — with all product behavior implemented as WASM extensions in
+any language. See [docs/architecture.md](docs/architecture.md) for the full
+design.
 
-- Core support:
-    - windows, tray icons + input (SDL)
-    - logging
-    - messaging systems
-- Based on this the user can add any WASM extention in any language
-- Extensions can exchange the messages
+**Status:** kernel (bus, extension host, platform, logging), the renderer
+and egui ui modules, hot reload, and custom native-module injection
+(`.module(...)`, see `embedding-demo/`) all work today. The web
+presentation module is next — see [docs/roadmap.md](docs/roadmap.md).
 
 Use cases:
 
-- Implement a game module and make a game engine with quick prototypiong. Implement an easily reloadable level.
-- Implement a GUI module and write an applicaiton
+- A game engine with quick prototyping: implement a game module, ship
+  levels as easily reloadable WASM extensions.
+- A GUI application: implement a UI module, write the app's logic as
+  extensions.
+
+## Quickstart
+
+```sh
+pwsh dist.ps1
+```
+
+Builds the engine and every extension into `dist/` — run `dist/bones(.exe)`
+directly. Or, without a self-contained build:
+
+```sh
+cargo run -p app
+```
+
+Drop a built `.wasm` extension into `extensions/` next to wherever you run
+it (see `extensions/hello/README.md` to build the reference extension).
+
+## Documentation
+
+Start at [docs/index.md](docs/index.md) — map of the architecture,
+detailed designs, decisions (ADRs), and worked examples.

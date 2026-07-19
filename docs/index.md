@@ -23,10 +23,16 @@ boundary changes — not when code moves, splits, or gets renamed. If a doc
 keeps needing updates during refactorings, it is written too low; raise its
 altitude instead of maintaining it.
 
+**Stated exception**: [code-style.md](code-style.md) documents file-layout
+conventions themselves — code-level by definition, not a violation of the
+rule above since it changes only when the conventions change, never as a
+side effect of applying them.
+
 ## Architecture
 
 - [architecture.md](architecture.md) — engine design overview: core components, messaging, extension model, diagrams.
 - [structure.md](structure.md) — static structure: components, dependency rules, source layout.
+- [code-style.md](code-style.md) — file-layout conventions for Rust source: one-type-per-file, the submodule/tests.rs pattern, README expectations.
 - [roadmap.md](roadmap.md) — remaining implementation increments with demo milestones.
 
 ## Detailed design
@@ -61,3 +67,8 @@ Immutable ADRs in [adr/](adr/):
 - [ADR-013](adr/ADR-013-bus-on-pubsub-bus.md) — bus built on pubsub-bus, with a persistent adapter and deferred dispatch
 - [ADR-014](adr/ADR-014-headless-runner-skeleton.md) — headless runner skeleton: step-driven, injected bus, virtual clock
 - [ADR-015](adr/ADR-015-deferred-dispatch-remains-mandatory.md) — deferred dispatch remains mandatory regardless of the pubsub-bus fix
+- [ADR-016](adr/ADR-016-typed-core-messages.md) — typed core messages over the byte-oriented bus
+- [ADR-017](adr/ADR-017-native-module-trait-and-typed-service-registry.md) — native module trait and typed service registry
+- [ADR-018](adr/ADR-018-core-2d-presentation-input-and-persistence-gaps.md) — core 2D presentation, input, and persistence gaps
+- [ADR-019](adr/ADR-019-2d-game-core-module-native-bought-dependencies.md) — 2D game-core module: native, bought dependencies
+- [ADR-020](adr/ADR-020-persistence-is-kernel-tier-host-lifecycle-and-persistence-merge-into-wasm-extensions.md) — persistence is kernel-tier; host, lifecycle, and persistence merge into wasm-extensions

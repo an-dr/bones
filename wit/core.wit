@@ -10,14 +10,13 @@ interface host-api {
 
     enum send-error {
         unknown-endpoint,
-        timeout,
         cycle,
     }
 
     log: func(level: level, message: string);
     subscribe: func(topic: string);
     publish: func(topic: string, payload: list<u8>);
-    send: func(endpoint: string, payload: list<u8>, deadline-ms: u32) -> result<list<u8>, send-error>;
+    send: func(endpoint: string, payload: list<u8>) -> result<list<u8>, send-error>;
 }
 
 world extension {
