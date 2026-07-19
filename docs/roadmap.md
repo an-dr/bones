@@ -17,7 +17,6 @@ registry are all done.
 | 2 | ADR-007's queue budget: bounded inbound queue, per-frame publish allowance, drop counters (only the time budget is enforced today) | A flooding extension is faulted instead of starving its peers |
 | 3 | web module (wry) + `web/*` vocabulary | The "dashboard" example ([examples/web-app.md](examples/web-app.md)) runs |
 | 4 | `game-core` native module: ECS, collision, tilemap loading, sprite-animation timing (ADR-019) | A minimal 2D scene simulates entities with collision on a loaded tilemap, rendered through `gfx/*` |
-| 5 | Propagate the one-type-per-file, tests-in-their-own-file, and doc-comment-brevity conventions (root `AGENTS.md`) to the rest of the codebase — `bones-messages`, `renderer`, `runner`, `wasm-extensions`'s own `host` submodule, and the extensions, none of which have been fully swept yet | `cargo test`/`cargo clippy` unchanged, and no `src/*.rs` file left mixing more than one type, or code and its own tests, without a stated reason |
 
 Guardrails while climbing:
 

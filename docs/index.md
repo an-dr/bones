@@ -23,10 +23,16 @@ boundary changes — not when code moves, splits, or gets renamed. If a doc
 keeps needing updates during refactorings, it is written too low; raise its
 altitude instead of maintaining it.
 
+**Stated exception**: [code-style.md](code-style.md) documents file-layout
+conventions themselves — code-level by definition, not a violation of the
+rule above since it changes only when the conventions change, never as a
+side effect of applying them.
+
 ## Architecture
 
 - [architecture.md](architecture.md) — engine design overview: core components, messaging, extension model, diagrams.
 - [structure.md](structure.md) — static structure: components, dependency rules, source layout.
+- [code-style.md](code-style.md) — file-layout conventions for Rust source: one-type-per-file, the submodule/tests.rs pattern, README expectations.
 - [roadmap.md](roadmap.md) — remaining implementation increments with demo milestones.
 
 ## Detailed design
