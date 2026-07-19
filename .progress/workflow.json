@@ -11,20 +11,20 @@
     "done": "A minimal 2D scene simulates entities with collision on a loaded tilemap, rendered through gfx/*, demonstrated via a runnable example extension.",
     "outOfScope": "gfx/* rendering authority, sprite-animation asset pipeline beyond timing state machine, physics beyond 2D collision, any change to renderer ownership of the window surface."
   },
-  "currentIncrementId": "6bb8259e81814fe4bff2d05f094ea2da",
-  "commitBaseline": "65569af6ba4848ed41b52f5097604580a7f849e6",
+  "currentIncrementId": "20d6377480e845d58ea0a15f57ce59dd",
+  "commitBaseline": "a5e457500c5b425c4a6412f4bd3542b9ebb999ba",
   "increments": [
     {
       "id": "6bb8259e81814fe4bff2d05f094ea2da",
       "number": 1,
-      "status": "verified",
+      "status": "completed",
       "scope": "core/game-core crate scaffold",
       "description": "New core/game-core crate added to the workspace: Cargo.toml with hecs, rapier2d, glam deps; GameCore struct implementing bus::Module + Handler (empty subscribe/handle for now); crate README stub. Proves the new deps compile and link into the workspace."
     },
     {
       "id": "20d6377480e845d58ea0a15f57ce59dd",
       "number": 2,
-      "status": "planned",
+      "status": "verified",
       "scope": "ECS world + sprite-animation timing",
       "description": "hecs World owned by GameCore; a game-core/spawn-entity bus command creates entities with transform + sprite-animation components; on core/tick, animation frame-index-from-elapsed-time state machine advances. Unit tests cover spawn and frame advance."
     },
@@ -108,11 +108,26 @@
       "detail": "Advanced from BUILD to VERIFY."
     },
     {
-      "at": "2026-07-19T13:20:28.5756900Z",
+      "at": "2026-07-19T13:20:28.57569Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-07-19T13:21:06.3241323Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to BUILD."
+    },
+    {
+      "at": "2026-07-19T13:51:09.0712564Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-07-19T13:51:16.8384127Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-07-19T13:14:27.3797032Z",
-  "updatedAt": "2026-07-19T13:20:28.5855635Z"
+  "updatedAt": "2026-07-19T13:51:16.8516146Z"
 }

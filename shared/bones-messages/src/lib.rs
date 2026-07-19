@@ -4,6 +4,7 @@
 
 pub mod audio;
 pub mod codec;
+pub mod game_core;
 pub mod gfx;
 pub mod input;
 pub mod lifecycle;
