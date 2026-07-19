@@ -32,3 +32,14 @@ fn truncated_payload_is_rejected() {
         Err(DecodeError::Truncated)
     );
 }
+
+#[test]
+fn load_tilemap_round_trips() {
+    let load = LoadTilemap {
+        tmx_bytes: b"<map></map>",
+    };
+    assert_eq!(
+        Command::decode(LoadTilemap::TOPIC, &load.encode()),
+        Ok(Some(Command::LoadTilemap(load)))
+    );
+}

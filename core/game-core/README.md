@@ -26,6 +26,12 @@ rendering authority of its own.
   once, and every collider-bearing entity's `Transform` is overwritten
   from its rigid body's post-step position — physics owns position for
   those entities, not the other way around.
+- `game-core/load-tilemap` — parses Tiled `.tmx` XML bytes; every rectangle
+  object on an object layer named `"Collision"` becomes a static (fixed)
+  `rapier2d` collider. Any other layer (tile layers, other object layers)
+  is ignored — drawing the tilemap itself is a `gfx/*` concern, out of
+  this crate's scope. A map with no `"Collision"` layer loads fine and
+  adds no colliders.
 
 No logger, same stance as `core/audio`: registered via the generic
 `.module(...)` path, which has no access to `Engine`'s internal logger.

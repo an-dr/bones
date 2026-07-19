@@ -144,6 +144,68 @@ fn tick_advances_every_entitys_animation() {
     assert_eq!(animation.current_frame(), 1);
 }
 
+const FIXTURE_TMX: &[u8] = br#"<?xml version="1.0" encoding="UTF-8"?>
+<map version="1.10" tiledversion="1.10.2" orientation="orthogonal" renderorder="right-down" width="4" height="4" tilewidth="16" tileheight="16" infinite="0" nextlayerid="3" nextobjectid="2">
+ <layer id="1" name="Ground" width="4" height="4">
+  <data encoding="csv">
+0,0,0,0,
+0,0,0,0,
+0,0,0,0,
+0,0,0,0
+</data>
+ </layer>
+ <objectgroup id="2" name="Collision">
+  <object id="1" x="0" y="0" width="16" height="16"/>
+ </objectgroup>
+</map>
+"#;
+
+#[test]
+fn load_tilemap_inserts_a_fixed_collider_per_collision_rect() {
+    let mut game_core = GameCore::new();
+    let load = bones_messages::game_core::LoadTilemap {
+        tmx_bytes: FIXTURE_TMX,
+    };
+    game_core.handle(&envelope(
+        bones_messages::game_core::LoadTilemap::TOPIC,
+        load.encode(),
+    ));
+
+    assert_eq!(game_core.physics.bodies.len(), 1);
+}
+
+#[test]
+fn a_tilemap_collider_blocks_an_overlapping_dynamic_entity() {
+    let mut game_core = GameCore::new();
+    let load = bones_messages::game_core::LoadTilemap {
+        tmx_bytes: FIXTURE_TMX,
+    };
+    game_core.handle(&envelope(
+        bones_messages::game_core::LoadTilemap::TOPIC,
+        load.encode(),
+    ));
+    // Overlaps the fixture's collider rect centered at (8, 8), half-extent 8.
+    game_core.handle(&envelope(
+        SpawnEntity::TOPIC,
+        spawn_with_collider(8.0, 8.0, 4.0, 4.0).encode(),
+    ));
+
+    for _ in 0..60 {
+        game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    }
+
+    let (_, transform) = game_core
+        .world
+        .query_mut::<&Transform>()
+        .into_iter()
+        .next()
+        .expect("the spawned entity should still exist");
+    assert!(
+        transform.x != 8.0 || transform.y != 8.0,
+        "the dynamic entity should have been pushed out of the fixed tilemap collider"
+    );
+}
+
 #[test]
 fn malformed_and_unknown_payloads_are_silently_ignored() {
     let mut game_core = GameCore::new();

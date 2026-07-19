@@ -5,13 +5,13 @@
 //! rationale). Renders by turning simulated state into `gfx/*` draw-command
 //! batches, same as any other module — no rendering authority of its own.
 
-use bones_messages::game_core::{Command, SpawnEntity};
+use bones_messages::game_core::{Command, LoadTilemap, SpawnEntity};
 use bones_messages::tick::Tick;
 use bones_messages::{DecodeMessage, Message};
 use bus::{Envelope, Handler, Module, ModuleContext};
 use rapier2d::prelude::{nalgebra, vector, ColliderBuilder, RigidBodyBuilder};
 
-use crate::{Collider, Physics, SpriteAnimation, Transform};
+use crate::{load_collision_rects, Collider, Physics, SpriteAnimation, Transform};
 
 pub struct GameCore {
     world: hecs::World,
@@ -56,6 +56,26 @@ impl GameCore {
         }
     }
 
+    /// Ignores an unparseable map rather than failing the module — a
+    /// malformed asset from a WASM extension is that extension's mistake,
+    /// not a reason to take down the whole simulation.
+    fn load_tilemap(&mut self, load: LoadTilemap) {
+        let Ok(rects) = load_collision_rects(load.tmx_bytes) else {
+            return;
+        };
+        for rect in rects {
+            let body = self
+                .physics
+                .bodies
+                .insert(RigidBodyBuilder::fixed().translation(vector![rect.x, rect.y]));
+            self.physics.colliders.insert_with_parent(
+                ColliderBuilder::cuboid(rect.half_w, rect.half_h),
+                body,
+                &mut self.physics.bodies,
+            );
+        }
+    }
+
     fn tick(&mut self, dt: f32) {
         for (_, animation) in self.world.query_mut::<&mut SpriteAnimation>() {
             animation.advance(dt);
@@ -86,10 +106,10 @@ impl Handler for GameCore {
             }
             return;
         }
-        if let Ok(Some(Command::SpawnEntity(spawn))) =
-            Command::decode(&envelope.topic, &envelope.payload)
-        {
-            self.spawn_entity(spawn);
+        match Command::decode(&envelope.topic, &envelope.payload) {
+            Ok(Some(Command::SpawnEntity(spawn))) => self.spawn_entity(spawn),
+            Ok(Some(Command::LoadTilemap(load))) => self.load_tilemap(load),
+            _ => {}
         }
     }
 }
