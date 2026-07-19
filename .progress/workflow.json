@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "flow": "DetailedAuto",
+  "phase": "COMMIT",
+  "baseBranch": "main",
+  "baseCommit": "65569af6ba4848ed41b52f5097604580a7f849e6",
+  "featureBranch": "feature/game-core-module",
+  "requirements": {
+    "goal": "Build the native game-core module (ADR-019/roadmap #4): ECS, collision, tilemap loading, sprite-animation timing, bought crates (bevy_ecs or hecs, rapier2d, glam, tiled), rendering via gfx/* draw batches.",
+    "constraints": "Follow ADR-011/017 Module trait contract and audio module as the structural template; no rendering authority of its own (turns state into gfx/* batches); modules never depend on other modules crates; kernel/headless build unaffected; one-type-per-file + out-of-line tests + crate README per docs/code-style.md.",
+    "done": "A minimal 2D scene simulates entities with collision on a loaded tilemap, rendered through gfx/*, demonstrated via a runnable example extension.",
+    "outOfScope": "gfx/* rendering authority, sprite-animation asset pipeline beyond timing state machine, physics beyond 2D collision, any change to renderer ownership of the window surface."
+  },
+  "currentIncrementId": "6bb8259e81814fe4bff2d05f094ea2da",
+  "commitBaseline": "65569af6ba4848ed41b52f5097604580a7f849e6",
+  "increments": [
+    {
+      "id": "6bb8259e81814fe4bff2d05f094ea2da",
+      "number": 1,
+      "status": "verified",
+      "scope": "core/game-core crate scaffold",
+      "description": "New core/game-core crate added to the workspace: Cargo.toml with hecs, rapier2d, glam deps; GameCore struct implementing bus::Module + Handler (empty subscribe/handle for now); crate README stub. Proves the new deps compile and link into the workspace."
+    },
+    {
+      "id": "20d6377480e845d58ea0a15f57ce59dd",
+      "number": 2,
+      "status": "planned",
+      "scope": "ECS world + sprite-animation timing",
+      "description": "hecs World owned by GameCore; a game-core/spawn-entity bus command creates entities with transform + sprite-animation components; on core/tick, animation frame-index-from-elapsed-time state machine advances. Unit tests cover spawn and frame advance."
+    },
+    {
+      "id": "4af8283c211845a39205d949b10361f6",
+      "number": 3,
+      "status": "planned",
+      "scope": "rapier2d collision",
+      "description": "rapier2d physics pipeline steps alongside the ECS on core/tick; entities can carry a collider component; post-step positions sync back into transform components. Unit tests cover two colliding bodies resolving overlap."
+    },
+    {
+      "id": "f591115f73344391accb8191dedf1374",
+      "number": 4,
+      "status": "planned",
+      "scope": "tiled tilemap loading",
+      "description": "game-core/load-tilemap bus command carries map bytes; tiled parses it; a designated collision layer becomes static rapier2d colliders at load time. Unit test covers a small fixture map producing the expected collider count/positions."
+    },
+    {
+      "id": "9f7a9b2683f84ee98e8875037f5ccc14",
+      "number": 5,
+      "status": "planned",
+      "scope": "gfx rendering bridge + runnable demo",
+      "description": "GameCore turns ECS transforms/sprite-animation frames into gfx::SetCamera + gfx::DrawSprite batches published each tick; new extensions/game_core_demo WASM extension spawns a few colliding entities on a loaded tilemap; app config gains a game_core toggle. Demo: the scene visibly simulates entities colliding on the tilemap through gfx/*."
+    }
+  ],
+  "approvals": [],
+  "history": [
+    {
+      "at": "2026-07-19T13:14:27.4322087Z",
+      "action": "start",
+      "detail": "Started DetailedAuto workflow."
+    },
+    {
+      "at": "2026-07-19T13:14:35.6237487Z",
+      "action": "advance",
+      "detail": "Advanced from START to DESIGN."
+    },
+    {
+      "at": "2026-07-19T13:15:38.7631053Z",
+      "action": "advance",
+      "detail": "Advanced from DESIGN to SPLIT."
+    },
+    {
+      "at": "2026-07-19T13:15:52.303562Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 1: core/game-core crate scaffold"
+    },
+    {
+      "at": "2026-07-19T13:15:57.2202207Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 2: ECS world + sprite-animation timing"
+    },
+    {
+      "at": "2026-07-19T13:16:02.4392199Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 3: rapier2d collision"
+    },
+    {
+      "at": "2026-07-19T13:16:07.3688681Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 4: tiled tilemap loading"
+    },
+    {
+      "at": "2026-07-19T13:16:12.3020554Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 5: gfx rendering bridge + runnable demo"
+    },
+    {
+      "at": "2026-07-19T13:16:19.8288094Z",
+      "action": "advance",
+      "detail": "Advanced from SPLIT to BRANCH."
+    },
+    {
+      "at": "2026-07-19T13:16:40.0433046Z",
+      "action": "advance",
+      "detail": "Advanced from BRANCH to BUILD."
+    },
+    {
+      "at": "2026-07-19T13:20:11.8928303Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-07-19T13:20:28.5756900Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
+    }
+  ],
+  "createdAt": "2026-07-19T13:14:27.3797032Z",
+  "updatedAt": "2026-07-19T13:20:28.5855635Z"
+}
