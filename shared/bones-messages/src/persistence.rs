@@ -39,23 +39,11 @@ impl EncodeMessage for Save<'_> {
 impl<'a> DecodeMessage<'a> for Save<'a> {
     fn decode(payload: &'a [u8]) -> Result<Self, DecodeError> {
         let mut reader = Reader::new(payload);
-        Ok(Self { bytes: reader.read_rest() })
+        Ok(Self {
+            bytes: reader.read_rest(),
+        })
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn save_round_trips() {
-        let save = Save { bytes: b"level=3;hp=42" };
-        assert_eq!(Save::decode(&save.encode()), Ok(save));
-    }
-
-    #[test]
-    fn save_round_trips_empty_bytes() {
-        let save = Save { bytes: b"" };
-        assert_eq!(Save::decode(&save.encode()), Ok(save));
-    }
-}
+mod tests;
