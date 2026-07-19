@@ -2,15 +2,18 @@
 //! (design/extensions.md's Reloading state) and reacts, independent of the
 //! rest of the engine.
 
-use std::path::PathBuf;
-use std::time::{Duration, Instant, SystemTime};
+mod tracked_extension;
 
-use bus::{Bus, Endpoint, Registry};
+use std::time::{Duration, Instant};
+
+use bus::{Bus, Registry};
 use logging::Logger;
 use wasm_extensions::lifecycle;
 use wasm_extensions::lifecycle::Event;
 
-use crate::loading::{attach_extension, read_file_mtime, SharedHost, ENGINE_SENDER};
+use crate::loading::{attach_extension, read_file_mtime, ENGINE_SENDER};
+
+pub(crate) use tracked_extension::TrackedExtension;
 
 /// How often the mtime half of `check` actually stats tracked files. The
 /// fault half (an atomic load) stays every-call; at 60Hz with `check`
@@ -18,17 +21,6 @@ use crate::loading::{attach_extension, read_file_mtime, SharedHost, ENGINE_SENDE
 /// syscalls/sec for a change that happens once a minute during live
 /// editing.
 const MTIME_SWEEP_INTERVAL: Duration = Duration::from_millis(250);
-
-pub(crate) struct TrackedExtension {
-    pub(crate) name: String,
-    pub(crate) path: PathBuf,
-    pub(crate) mtime: SystemTime,
-    pub(crate) endpoint: Endpoint,
-    pub(crate) shared: SharedHost,
-    /// Set once quarantined, so a later sweep doesn't re-log/re-publish for
-    /// an already-handled fault every check forever.
-    pub(crate) quarantined: bool,
-}
 
 /// Quarantines a newly-faulted extension (drops its bus registration,
 /// publishes `Faulted`) or hot-swaps one whose file changed (drop old,

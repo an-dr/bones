@@ -3,42 +3,20 @@
 //! (`Supervisor::check`) — one function so the two paths can't drift out
 //! of lockstep.
 
+mod shared_host;
+
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
-use bus::{Bus, Endpoint, Envelope, Handler, Registry, Respond};
+use bus::{Bus, Endpoint, Registry};
 use logging::Logger;
 use wasm_extensions::host::Host;
 
+pub(crate) use shared_host::SharedHost;
+
 /// Publishes lifecycle events as this component (design/extensions.md).
 pub(crate) const ENGINE_SENDER: &str = "engine";
-
-/// One extension `Host`, shared between its `Bus` registration (pub/sub
-/// delivery), its `Registry` registration (direct send, ADR-010), and the
-/// `Supervisor` (which needs `Host::is_faulted` after every call to know
-/// when to quarantine it) — all three need the same instance, not
-/// independent copies, so state stays consistent across all of them.
-#[derive(Clone)]
-pub(crate) struct SharedHost(Arc<Mutex<Host>>);
-
-impl Handler for SharedHost {
-    fn handle(&mut self, envelope: &Envelope) {
-        self.0.lock().unwrap().handle(envelope);
-    }
-}
-
-impl Respond for SharedHost {
-    fn respond(&self, sender: &str, payload: &[u8]) -> Option<Vec<u8>> {
-        self.0.lock().unwrap().respond(sender, payload)
-    }
-}
-
-impl SharedHost {
-    pub(crate) fn is_faulted(&self) -> bool {
-        self.0.lock().unwrap().is_faulted()
-    }
-}
 
 /// Loads `path` as an extension named `name`, registers it on `bus`
 /// (pub/sub) and `registry` (direct send, ADR-010), and subscribes it to
@@ -100,46 +78,4 @@ pub(crate) fn is_first_occurrence(seen: &mut std::collections::HashSet<String>, 
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    // Built by extensions/hello/build.ps1 (see its README).
-    const HELLO_DIR: &str = concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../extensions/hello/target/wasm32-wasip2/release"
-    );
-
-    #[test]
-    fn find_wasm_files_finds_only_wasm_extensions_sorted() {
-        let files = find_wasm_files(Path::new(HELLO_DIR));
-        assert!(
-            files.iter().all(|f| f.extension().unwrap() == "wasm"),
-            "expected only .wasm files, got {files:?}"
-        );
-        assert!(
-            files.iter().any(|f| f.file_stem().unwrap() == "hello"),
-            "expected hello.wasm in {files:?} — run extensions/hello/build.ps1 first"
-        );
-        let mut sorted = files.clone();
-        sorted.sort();
-        assert_eq!(files, sorted);
-    }
-
-    #[test]
-    fn find_wasm_files_on_a_missing_directory_is_empty_not_an_error() {
-        assert_eq!(find_wasm_files(Path::new("no/such/directory")), Vec::<PathBuf>::new());
-    }
-
-    #[test]
-    fn derive_extension_name_is_the_file_stem() {
-        assert_eq!(derive_extension_name(Path::new("/a/b/hello.wasm")), "hello");
-    }
-
-    #[test]
-    fn is_first_occurrence_accepts_a_name_once_and_rejects_a_repeat() {
-        let mut seen = std::collections::HashSet::new();
-        assert!(is_first_occurrence(&mut seen, "hello"));
-        assert!(!is_first_occurrence(&mut seen, "hello"));
-        assert!(is_first_occurrence(&mut seen, "keyecho"));
-    }
-}
+mod tests;
