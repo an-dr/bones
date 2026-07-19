@@ -3,7 +3,7 @@ use crate::{DecodeError, DecodeMessage, EncodeMessage, Message, Reader, Writer};
 /// Spawns one entity with a world-space transform, a sprite to draw, and
 /// (if `frame_count > 1`) a looping frame-index-from-elapsed-time
 /// animation over that sprite's source rectangle.
-// No `Eq`: `x`/`y` are `f32`.
+// No `Eq`: every field but the counts is `f32`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SpawnEntity {
     /// Application-assigned sprite identifier (matches `gfx::LoadSprite`).
@@ -22,6 +22,12 @@ pub struct SpawnEntity {
     pub frame_count: u32,
     /// Seconds each frame is shown before advancing.
     pub frame_duration: f32,
+    /// Half-width of a dynamic box collider. `0.0` (with `collider_half_h`)
+    /// spawns the entity with no physics body at all — a purely visual
+    /// entity, the common case for background dressing.
+    pub collider_half_w: f32,
+    /// Half-height of a dynamic box collider.
+    pub collider_half_h: f32,
 }
 
 impl Message for SpawnEntity {
@@ -38,6 +44,8 @@ impl EncodeMessage for SpawnEntity {
             .u32(self.frame_h)
             .u32(self.frame_count)
             .f32(self.frame_duration)
+            .f32(self.collider_half_w)
+            .f32(self.collider_half_h)
             .finish()
     }
 }
@@ -53,6 +61,8 @@ impl<'a> DecodeMessage<'a> for SpawnEntity {
             frame_h: reader.read_u32()?,
             frame_count: reader.read_u32()?,
             frame_duration: reader.read_f32()?,
+            collider_half_w: reader.read_f32()?,
+            collider_half_h: reader.read_f32()?,
         };
         reader.finish()?;
         Ok(message)

@@ -9,17 +9,20 @@ use bones_messages::game_core::{Command, SpawnEntity};
 use bones_messages::tick::Tick;
 use bones_messages::{DecodeMessage, Message};
 use bus::{Envelope, Handler, Module, ModuleContext};
+use rapier2d::prelude::{nalgebra, vector, ColliderBuilder, RigidBodyBuilder};
 
-use crate::{SpriteAnimation, Transform};
+use crate::{Collider, Physics, SpriteAnimation, Transform};
 
 pub struct GameCore {
     world: hecs::World,
+    physics: Physics,
 }
 
 impl GameCore {
     pub fn new() -> Self {
         Self {
             world: hecs::World::new(),
+            physics: Physics::new(),
         }
     }
 
@@ -35,12 +38,36 @@ impl GameCore {
             spawn.frame_count,
             spawn.frame_duration,
         );
-        self.world.spawn((transform, animation));
+
+        if spawn.collider_half_w > 0.0 && spawn.collider_half_h > 0.0 {
+            let body = self
+                .physics
+                .bodies
+                .insert(RigidBodyBuilder::dynamic().translation(vector![spawn.x, spawn.y]));
+            let collider = self.physics.colliders.insert_with_parent(
+                ColliderBuilder::cuboid(spawn.collider_half_w, spawn.collider_half_h),
+                body,
+                &mut self.physics.bodies,
+            );
+            self.world
+                .spawn((transform, animation, Collider { body, collider }));
+        } else {
+            self.world.spawn((transform, animation));
+        }
     }
 
     fn tick(&mut self, dt: f32) {
         for (_, animation) in self.world.query_mut::<&mut SpriteAnimation>() {
             animation.advance(dt);
+        }
+
+        self.physics.step(dt);
+
+        for (_, (transform, collider)) in self.world.query_mut::<(&mut Transform, &Collider)>() {
+            if let Some(translation) = self.physics.body_translation(collider.body) {
+                transform.x = translation.x;
+                transform.y = translation.y;
+            }
         }
     }
 }

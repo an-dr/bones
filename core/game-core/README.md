@@ -18,5 +18,14 @@ Renders by turning simulated state into `gfx/*` draw-command batches each
 tick, the same as any other module or extension — this crate has no
 rendering authority of its own.
 
+- `game-core/spawn-entity` — spawns one entity with a `Transform` and a
+  `SpriteAnimation`. A nonzero `collider_half_w`/`collider_half_h` also
+  gives it a dynamic `rapier2d` box collider (`0.0` spawns a purely
+  visual entity, no physics body).
+- Every `core/tick`: sprite-animation timers advance, `rapier2d` steps
+  once, and every collider-bearing entity's `Transform` is overwritten
+  from its rigid body's post-step position — physics owns position for
+  those entities, not the other way around.
+
 No logger, same stance as `core/audio`: registered via the generic
 `.module(...)` path, which has no access to `Engine`'s internal logger.

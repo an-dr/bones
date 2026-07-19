@@ -16,6 +16,8 @@ fn spawn_entity_round_trips() {
         frame_h: 16,
         frame_count: 4,
         frame_duration: 0.1,
+        collider_half_w: 8.0,
+        collider_half_h: 8.0,
     };
     assert_eq!(
         Command::decode(SpawnEntity::TOPIC, &spawn.encode()),
