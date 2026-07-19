@@ -546,6 +546,83 @@ fn tick_publishes_a_draw_rect_for_a_square_entity() {
 }
 
 #[test]
+fn debug_hitboxes_are_off_by_default() {
+    let (mut game_core, bus, spy) = ready_game_core();
+    game_core.handle(&entity_op_envelope(spawn_with_collider(
+        10.0, 10.0, 8.0, 8.0,
+    )));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    bus.dispatch();
+
+    let published = spy.0.lock().unwrap();
+    let yellow_rects = published
+        .iter()
+        .filter(|e| e.topic == gfx::DrawRect::TOPIC)
+        .map(|e| gfx::DrawRect::decode(&e.payload).unwrap())
+        .filter(|rect| rect.color == (255, 255, 0, 255))
+        .count();
+    assert_eq!(yellow_rects, 0);
+}
+
+#[test]
+fn enabling_debug_hitboxes_outlines_every_collider_bearing_entity() {
+    let (mut game_core, bus, spy) = ready_game_core();
+    // A sprite entity and a plain square entity, both with colliders.
+    game_core.handle(&entity_op_envelope(spawn_with_collider_and_id(
+        1, 10.0, 10.0, 8.0, 8.0,
+    )));
+    game_core.handle(&entity_op_envelope(spawn_square_with_collider(
+        2, 20.0, 20.0, 4.0, 4.0,
+    )));
+    game_core.handle(&entity_op_envelope(EntityOp::SetDebugHitboxes {
+        enabled: true,
+    }));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    bus.dispatch();
+
+    let published = spy.0.lock().unwrap();
+    let yellow_rects: Vec<_> = published
+        .iter()
+        .filter(|e| e.topic == gfx::DrawRect::TOPIC)
+        .map(|e| gfx::DrawRect::decode(&e.payload).unwrap())
+        .filter(|rect| rect.color == (255, 255, 0, 255))
+        .collect();
+
+    assert_eq!(yellow_rects.len(), 2);
+    assert!(yellow_rects.iter().all(|rect| !rect.filled));
+    assert!(yellow_rects.iter().any(|rect| (rect.w, rect.h) == (16, 16)));
+    assert!(yellow_rects.iter().any(|rect| (rect.w, rect.h) == (8, 8)));
+}
+
+#[test]
+fn disabling_debug_hitboxes_stops_the_outline() {
+    let (mut game_core, bus, spy) = ready_game_core();
+    game_core.handle(&entity_op_envelope(spawn_with_collider(
+        10.0, 10.0, 8.0, 8.0,
+    )));
+    game_core.handle(&entity_op_envelope(EntityOp::SetDebugHitboxes {
+        enabled: true,
+    }));
+    game_core.handle(&entity_op_envelope(EntityOp::SetDebugHitboxes {
+        enabled: false,
+    }));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    bus.dispatch();
+
+    let published = spy.0.lock().unwrap();
+    let yellow_rects = published
+        .iter()
+        .filter(|e| e.topic == gfx::DrawRect::TOPIC)
+        .map(|e| gfx::DrawRect::decode(&e.payload).unwrap())
+        .filter(|rect| rect.color == (255, 255, 0, 255))
+        .count();
+    assert_eq!(yellow_rects, 0);
+}
+
+#[test]
 fn a_module_with_no_bus_service_never_panics_on_tick() {
     // `GameCore::new()` directly, bypassing `init` — `bus` stays `None`,
     // exercising the same silent-no-op path a caller that skips `init`

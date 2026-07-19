@@ -80,7 +80,9 @@ fn respond_calls_on_message_with_an_empty_topic() {
 
     let records = sink.records();
     assert!(
-        records.iter().any(|(_, _, msg)| msg.contains("message on  from someone")),
+        records
+            .iter()
+            .any(|(_, _, msg)| msg.contains("message on  from someone")),
         "expected on-message to run with an empty topic for a direct send, got {records:?}"
     );
 }
@@ -163,7 +165,9 @@ fn publish_reaches_other_subscribers_on_the_same_bus() {
 
     let received = Arc::new(Mutex::new(Vec::new()));
     let sink = received.clone();
-    let listener_ep = bus.register("listener", move |e: &Envelope| sink.lock().unwrap().push(e.clone()));
+    let listener_ep = bus.register("listener", move |e: &Envelope| {
+        sink.lock().unwrap().push(e.clone())
+    });
     listener_ep.subscribe("hello/received");
 
     bus.publish(Envelope {
@@ -177,7 +181,8 @@ fn publish_reaches_other_subscribers_on_the_same_bus() {
 
     let got = received.lock().unwrap();
     assert!(
-        got.iter().any(|e| e.topic == "hello/received" && e.sender == "hello"),
+        got.iter()
+            .any(|e| e.topic == "hello/received" && e.sender == "hello"),
         "expected hello's publish to reach another subscriber, got {got:?}"
     );
 }
@@ -195,16 +200,28 @@ fn tick_envelope() -> Envelope {
 fn a_call_that_never_returns_traps_and_faults_instead_of_hanging_forever() {
     let sink = RecordingSink::new();
     let engine = new_engine().unwrap();
-    let mut host = Host::load(&engine, RUNAWAY_WASM, "runaway", Bus::new(), Registry::new(), Logger::new(Arc::new(sink.clone())))
-        .expect("build extensions/runaway_demo first: pwsh extensions/runaway_demo/build.ps1");
+    let mut host = Host::load(
+        &engine,
+        RUNAWAY_WASM,
+        "runaway",
+        Bus::new(),
+        Registry::new(),
+        Logger::new(Arc::new(sink.clone())),
+    )
+    .expect("build extensions/runaway_demo first: pwsh extensions/runaway_demo/build.ps1");
     assert!(!host.is_faulted(), "must not start out faulted");
 
     host.handle(&tick_envelope()); // blocks for ~the time budget, then traps
 
-    assert!(host.is_faulted(), "an on-tick that never returns must fault the extension");
+    assert!(
+        host.is_faulted(),
+        "an on-tick that never returns must fault the extension"
+    );
     let records = sink.records();
     assert!(
-        records.iter().any(|(_, _, msg)| msg.contains("handler trapped")),
+        records
+            .iter()
+            .any(|(_, _, msg)| msg.contains("handler trapped")),
         "expected a trap log line, got {records:?}"
     );
 }
@@ -212,8 +229,15 @@ fn a_call_that_never_returns_traps_and_faults_instead_of_hanging_forever() {
 #[test]
 fn a_faulted_host_ignores_further_deliveries_instead_of_hanging_again() {
     let engine = new_engine().unwrap();
-    let mut host = Host::load(&engine, RUNAWAY_WASM, "runaway", Bus::new(), Registry::new(), Logger::default())
-        .expect("build extensions/runaway_demo first: pwsh extensions/runaway_demo/build.ps1");
+    let mut host = Host::load(
+        &engine,
+        RUNAWAY_WASM,
+        "runaway",
+        Bus::new(),
+        Registry::new(),
+        Logger::default(),
+    )
+    .expect("build extensions/runaway_demo first: pwsh extensions/runaway_demo/build.ps1");
     host.handle(&tick_envelope());
     assert!(host.is_faulted());
 

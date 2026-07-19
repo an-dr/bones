@@ -25,6 +25,10 @@ white for 0.3s (an `EntityOp::SetColor` set then reverted on a timer
 this extension tracks itself, not `game-core`) and a distinct hit tone
 plays. Pushing a red obstacle into another demonstrates it; the blue
 squares never trigger a flash — only obstacle-on-obstacle contact does.
+The H key toggles `EntityOp::SetDebugHitboxes`: a yellow unfilled
+outline over every collider-bearing entity's actual `rapier2d` extent,
+drawn by `game-core` itself — useful for checking a sprite's visible
+frame or a square's fill actually lines up with what it collides as.
 
 ## Build
 
@@ -43,3 +47,4 @@ executable. WASD or a connected gamepad's left stick moves the
 controlled entity around the open arena into the stationary obstacles,
 the blue squares (which it can push, unlike the red obstacles they
 don't drift once released), and the boundary walls at the arena's edge.
+Press H to toggle yellow hitbox outlines on every object.

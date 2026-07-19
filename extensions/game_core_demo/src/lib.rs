@@ -97,6 +97,10 @@ struct State {
     // here — a hit always flashes back to OBSTACLE_COLOR, which every
     // obstacle in this demo shares.
     flashing: HashMap<u32, f32>,
+    // Local mirror of game-core's own EntityOp::SetDebugHitboxes toggle —
+    // tracked here (rather than reading it back) so pressing H can flip
+    // it without this extension needing any state from game-core itself.
+    debug_hitboxes: bool,
 }
 
 thread_local! {
@@ -248,15 +252,15 @@ impl Guest for Component {
         spawn_obstacle(4, 350.0, 260.0);
         spawn_obstacle(5, 120.0, 260.0);
 
-        // Two blue Kinematic squares: solid and immovable — pushing the
-        // robot into one stops the robot without the square ever budging,
-        // unlike the red Dynamic obstacles above.
+        // Two blue Frictionless squares: pushable, but carry no momentum —
+        // pushing the robot into one moves it, but it stops the instant
+        // contact ends, unlike the red Dynamic obstacles above.
         spawn_mover(6, 220.0, 60.0);
         spawn_mover(7, 220.0, 260.0);
 
         log(
             Level::Info,
-            "init: tilemap + sprite loaded; WASD/gamepad-left-stick moves the entity into obstacles",
+            "init: tilemap + sprite loaded; WASD/gamepad-left-stick moves the entity into obstacles; H toggles hitbox outlines",
         );
     }
 
@@ -313,7 +317,11 @@ impl Guest for Component {
         match topic.as_str() {
             KeyDown::TOPIC => {
                 if let Ok(message) = KeyDown::decode(&payload) {
-                    set_key_held(message.key, true);
+                    if message.key == "H" {
+                        toggle_debug_hitboxes();
+                    } else {
+                        set_key_held(message.key, true);
+                    }
                 }
             }
             KeyUp::TOPIC => {
@@ -377,6 +385,15 @@ fn on_collision(collision: Collision) {
         }
         .encode(),
     );
+}
+
+fn toggle_debug_hitboxes() {
+    let enabled = STATE.with(|state| {
+        let mut state = state.borrow_mut();
+        state.debug_hitboxes = !state.debug_hitboxes;
+        state.debug_hitboxes
+    });
+    publish_entity_op(EntityOp::SetDebugHitboxes { enabled });
 }
 
 fn set_key_held(key: &str, is_down: bool) {

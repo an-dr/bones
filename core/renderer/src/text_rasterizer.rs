@@ -14,7 +14,12 @@ const MAX_TEXT_CHARS: usize = 512;
 /// glyph/atlas cache — text draws are rare enough per frame that
 /// re-rasterizing each one is simpler and not worth the cache-invalidation
 /// cost (same reasoning as the sprite/shape draws' lack of a cache).
-pub(crate) fn rasterize_text(font: &FontRef, text: &str, size: f32, color: (u8, u8, u8, u8)) -> (u32, u32, Vec<u8>) {
+pub(crate) fn rasterize_text(
+    font: &FontRef,
+    text: &str,
+    size: f32,
+    color: (u8, u8, u8, u8),
+) -> (u32, u32, Vec<u8>) {
     let size = size.clamp(1.0, MAX_TEXT_SIZE_PX);
     let scaled = font.as_scaled(PxScale::from(size));
     let ascent = scaled.ascent();

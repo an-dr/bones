@@ -11,8 +11,8 @@
     "done": "A minimal 2D scene simulates entities with collision on a loaded tilemap, rendered through gfx/*, demonstrated via a runnable example extension.",
     "outOfScope": "gfx/* rendering authority, sprite-animation asset pipeline beyond timing state machine, physics beyond 2D collision, any change to renderer ownership of the window surface."
   },
-  "currentIncrementId": "3e061d3d2e71470682c7725a32b53f7b",
-  "commitBaseline": "613a8659ed426268518592e274e9c48909499054",
+  "currentIncrementId": "6323db9c26894889b195b5862a36a53c",
+  "commitBaseline": "02884b6f0be4c3f3a021607c0a13572e697c1afd",
   "increments": [
     {
       "id": "6bb8259e81814fe4bff2d05f094ea2da",
@@ -115,9 +115,16 @@
     {
       "id": "3e061d3d2e71470682c7725a32b53f7b",
       "number": 15,
-      "status": "verified",
+      "status": "completed",
       "scope": "game-core",
       "description": "BodyKind::Frictionless for blue squares - blue obstacles switch from Kinematic (immovable) to a new Frictionless BodyKind: a Dynamic rapier2d body with high linear damping and locked rotation, so it is pushed by contact (robot or red boxes) but settles to rest almost instantly with no coasting/drift once contact ends, and never spins. EntityOp::BodyKind gains this third tagged variant (open/closed, no new topic/fields). Demo: pushing a blue square moves it in the push direction and it stops the moment contact stops; it never slides on its own."
+    },
+    {
+      "id": "6323db9c26894889b195b5862a36a53c",
+      "number": 16,
+      "status": "verified",
+      "scope": "game-core",
+      "description": "Debug hitbox outlines - EntityOp gains SetDebugHitboxes { enabled: bool }, a global toggle (default off) stored on GameCore. While enabled, publish_gfx additionally draws a yellow (255,255,0,255) unfilled gfx::DrawRect matching every collider-bearing entity's actual rapier2d extent (half_w/half_h around its Transform center) each tick - sprite entities, plain-square obstacles, and tilemap colliders alike, on top of their normal draw. game_core_demo binds a key (e.g. H) to publish SetDebugHitboxes toggling a held bool. Demo: pressing the key overlays yellow outlines on every object matching its actual collision extent, toggling off removes them."
     }
   ],
   "approvals": [],
@@ -531,8 +538,43 @@
       "at": "2026-07-19T19:39:03.8586721Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-07-19T19:39:20.5549887Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to MR."
+    },
+    {
+      "at": "2026-07-19T19:39:27.4423779Z",
+      "action": "advance",
+      "detail": "Advanced from MR to FINAL_REVIEW."
+    },
+    {
+      "at": "2026-07-19T19:49:54.2737491Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 16: game-core"
+    },
+    {
+      "at": "2026-07-19T19:50:03.6059533Z",
+      "action": "advance",
+      "detail": "Advanced from SPLIT to BRANCH."
+    },
+    {
+      "at": "2026-07-19T19:50:11.8377072Z",
+      "action": "advance",
+      "detail": "Advanced from BRANCH to BUILD."
+    },
+    {
+      "at": "2026-07-19T19:58:24.0307693Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-07-19T19:58:32.8855989Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-07-19T13:14:27.3797032Z",
-  "updatedAt": "2026-07-19T19:39:03.8672530Z"
+  "updatedAt": "2026-07-19T19:58:32.8954493Z"
 }

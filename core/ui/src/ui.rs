@@ -8,7 +8,9 @@ use logging::Logger;
 use renderer::{Renderer, UiMesh, UiVertex};
 
 use crate::input_translation::{compute_modifiers, translate_key, translate_mouse_button};
-use crate::output_translation::{compute_texture_key, convert_color_image_to_straight_rgba, publish};
+use crate::output_translation::{
+    compute_texture_key, convert_color_image_to_straight_rgba, publish,
+};
 use crate::owned_widget::OwnedWidget;
 use crate::pending_spec::PendingSpec;
 
@@ -69,10 +71,16 @@ impl Ui {
         match event {
             E::MouseMotion { x, y, .. } => {
                 self.pointer_pos = egui::pos2(*x, *y);
-                self.events.push(egui::Event::PointerMoved(self.pointer_pos));
+                self.events
+                    .push(egui::Event::PointerMoved(self.pointer_pos));
                 self.wants_pointer_input()
             }
-            E::MouseButtonDown { mouse_btn, x, y, .. } | E::MouseButtonUp { mouse_btn, x, y, .. } => {
+            E::MouseButtonDown {
+                mouse_btn, x, y, ..
+            }
+            | E::MouseButtonUp {
+                mouse_btn, x, y, ..
+            } => {
                 let Some(button) = translate_mouse_button(*mouse_btn) else {
                     return false;
                 };
@@ -89,8 +97,18 @@ impl Ui {
                 self.events.push(egui::Event::Text(text.clone()));
                 true
             }
-            E::KeyDown { keycode: Some(key), repeat, keymod, .. }
-            | E::KeyUp { keycode: Some(key), repeat, keymod, .. } => {
+            E::KeyDown {
+                keycode: Some(key),
+                repeat,
+                keymod,
+                ..
+            }
+            | E::KeyUp {
+                keycode: Some(key),
+                repeat,
+                keymod,
+                ..
+            } => {
                 let Some(mapped) = translate_key(*key) else {
                     return false;
                 };
@@ -142,7 +160,13 @@ impl Ui {
                                 OwnedWidget::TextEdit { id, text } => {
                                     let mut buf = text.clone();
                                     if ui.text_edit_singleline(&mut buf).changed() {
-                                        publish(bus, Changed { id: *id, text: &buf });
+                                        publish(
+                                            bus,
+                                            Changed {
+                                                id: *id,
+                                                text: &buf,
+                                            },
+                                        );
                                     }
                                 }
                                 OwnedWidget::Button { id, label } => {
@@ -164,14 +188,19 @@ impl Ui {
             let height = image.size[1] as u32;
             let result = match delta.pos {
                 None => renderer.set_ui_texture(key, width, height, &rgba),
-                Some([x, y]) => renderer.update_ui_texture_region(key, x as u32, y as u32, width, height, &rgba),
+                Some([x, y]) => {
+                    renderer.update_ui_texture_region(key, x as u32, y as u32, width, height, &rgba)
+                }
             };
             if let Err(err) = result {
-                self.logger.error("ui", &format!("uploading texture {id:?}: {err}"));
+                self.logger
+                    .error("ui", &format!("uploading texture {id:?}: {err}"));
             }
         }
 
-        let clipped = self.ctx.tessellate(full_output.shapes, full_output.pixels_per_point);
+        let clipped = self
+            .ctx
+            .tessellate(full_output.shapes, full_output.pixels_per_point);
         for primitive in &clipped {
             let egui::epaint::Primitive::Mesh(mesh) = &primitive.primitive else {
                 continue; // TODO: PaintCallback (custom GPU code) primitives aren't supported.
@@ -222,11 +251,14 @@ impl Handler for Ui {
     fn handle(&mut self, envelope: &Envelope) {
         match Spec::decode(&envelope.payload) {
             Ok(spec) => {
-                self.pending.insert(envelope.sender.clone(), PendingSpec::from_message(&spec));
+                self.pending
+                    .insert(envelope.sender.clone(), PendingSpec::from_message(&spec));
             }
             Err(err) => {
-                self.logger
-                    .error("ui", &format!("{} from '{}': {err}", envelope.topic, envelope.sender));
+                self.logger.error(
+                    "ui",
+                    &format!("{} from '{}': {err}", envelope.topic, envelope.sender),
+                );
             }
         }
     }

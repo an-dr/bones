@@ -42,6 +42,11 @@ const MOVING_SPEED_THRESHOLD_SQUARED: f32 = 0.01;
 /// ends.
 const FRICTIONLESS_LINEAR_DAMPING: f32 = 50.0;
 
+/// Color for `EntityOp::SetDebugHitboxes`'s outline — distinct from every
+/// other color this module draws (sprite tint, obstacle/tilemap
+/// `square_color`), so it reads unambiguously as a debug overlay.
+const DEBUG_HITBOX_COLOR: (u8, u8, u8, u8) = (255, 255, 0, 255);
+
 pub struct GameCore {
     world: hecs::World,
     physics: Physics,
@@ -55,6 +60,9 @@ pub struct GameCore {
     // `CollisionEvent`'s `ColliderHandle` pair translate back into the
     // caller-assigned `entity_id` pair a `game-core/collision` event names.
     entity_ids_by_collider: HashMap<ColliderHandle, u32>,
+    // Global toggle for `EntityOp::SetDebugHitboxes` — not per-entity, so
+    // it lives here rather than as a component.
+    debug_hitboxes: bool,
 }
 
 impl GameCore {
@@ -65,6 +73,7 @@ impl GameCore {
             bus: None,
             entities: HashMap::new(),
             entity_ids_by_collider: HashMap::new(),
+            debug_hitboxes: false,
         }
     }
 
@@ -104,6 +113,7 @@ impl GameCore {
             EntityOp::SetVelocity { entity_id, vx, vy } => self.set_velocity(entity_id, vx, vy),
             EntityOp::Despawn { entity_id } => self.despawn(entity_id),
             EntityOp::SetColor { entity_id, color } => self.set_color(entity_id, color),
+            EntityOp::SetDebugHitboxes { enabled } => self.debug_hitboxes = enabled,
         }
     }
 
@@ -368,6 +378,24 @@ impl GameCore {
                 color: color.0,
                 layer: ENTITY_LAYER,
             });
+        }
+        if self.debug_hitboxes {
+            // Every collider-bearing entity, sprite or square alike — a
+            // sprite's drawn frame and a square's fill can each differ
+            // slightly from what actually collides, which is exactly what
+            // this overlay is for checking. Drawn on `ENTITY_LAYER` after
+            // every normal draw above, so the outline lands on top.
+            for (_, (transform, collider)) in self.world.query::<(&Transform, &Collider)>().iter() {
+                self.publish(DrawRect {
+                    x: (transform.x - collider.half_w) as i32,
+                    y: (transform.y - collider.half_h) as i32,
+                    w: (collider.half_w * 2.0) as u32,
+                    h: (collider.half_h * 2.0) as u32,
+                    filled: false,
+                    color: DEBUG_HITBOX_COLOR,
+                    layer: ENTITY_LAYER,
+                });
+            }
         }
     }
 }

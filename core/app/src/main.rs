@@ -19,7 +19,11 @@ fn run() -> Result<(), String> {
 
     let mut engine = runner::Engine::new()
         .extensions_dir(config.extensions_dir)
-        .window(config.window_title, config.window_width, config.window_height)
+        .window(
+            config.window_title,
+            config.window_width,
+            config.window_height,
+        )
         .saves_dir(config.saves_dir);
     if config.renderer {
         engine = engine.renderer();

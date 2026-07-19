@@ -79,10 +79,16 @@ mod tests {
         assert_eq!((config.window_width, config.window_height), (800, 600));
         assert!(config.renderer);
         assert!(config.ui);
-        assert!(!config.audio, "not every deployment target has a working audio device");
+        assert!(
+            !config.audio,
+            "not every deployment target has a working audio device"
+        );
         assert!(!config.game_core, "not every project is a game");
         assert_eq!(config.saves_dir, "saves");
-        assert!(!config.persistence_read_only, "extensions can save by default");
+        assert!(
+            !config.persistence_read_only,
+            "extensions can save by default"
+        );
     }
 
     #[test]
@@ -98,7 +104,10 @@ mod tests {
 
         let config = config.unwrap();
         assert_eq!((config.window_width, config.window_height), (1920, 1080));
-        assert_eq!(config.extensions_dir, "extensions", "omitted field should default");
+        assert_eq!(
+            config.extensions_dir, "extensions",
+            "omitted field should default"
+        );
     }
 
     #[test]
@@ -126,6 +135,9 @@ mod tests {
 
         std::fs::remove_dir_all(&dir).ok();
 
-        assert!(result.is_err(), "a typo'd field name should not be silently ignored");
+        assert!(
+            result.is_err(),
+            "a typo'd field name should not be silently ignored"
+        );
     }
 }

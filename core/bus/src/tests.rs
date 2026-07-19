@@ -163,7 +163,11 @@ fn unregistered_endpoint_stops_receiving_events() {
     bus.unregister(&ep);
     bus.publish(envelope("core/tick", "runner"));
     bus.dispatch();
-    assert_eq!(received.lock().unwrap().len(), 1, "unregistered endpoint must not be delivered to");
+    assert_eq!(
+        received.lock().unwrap().len(),
+        1,
+        "unregistered endpoint must not be delivered to"
+    );
 }
 
 #[test]
@@ -184,7 +188,10 @@ fn publish_without_dispatch_is_not_delivered() {
 
     bus.publish(envelope("core/tick", "runner"));
 
-    assert!(received.lock().unwrap().is_empty(), "publish alone must not deliver");
+    assert!(
+        received.lock().unwrap().is_empty(),
+        "publish alone must not deliver"
+    );
 }
 
 #[test]
@@ -271,7 +278,10 @@ fn call_reaches_the_named_target_and_returns_its_reply() {
 #[test]
 fn call_to_an_unknown_endpoint_errors() {
     let registry = Registry::new();
-    assert_eq!(registry.call("caller", "nobody", b"hi"), Err(SendError::UnknownEndpoint));
+    assert_eq!(
+        registry.call("caller", "nobody", b"hi"),
+        Err(SendError::UnknownEndpoint)
+    );
 }
 
 #[test]
@@ -288,7 +298,10 @@ fn removed_endpoint_is_unreachable() {
     registry.insert("echo", Arc::new(Echo));
     registry.remove("echo");
 
-    assert_eq!(registry.call("caller", "echo", b"hi"), Err(SendError::UnknownEndpoint));
+    assert_eq!(
+        registry.call("caller", "echo", b"hi"),
+        Err(SendError::UnknownEndpoint)
+    );
 }
 
 #[test]
@@ -320,7 +333,11 @@ fn a_direct_cycle_fails_immediately_instead_of_deadlocking() {
 
     let result = registry.call("test", "a", b"go");
 
-    assert_eq!(result, Ok(Vec::new()), "b's call back to a fails, but a's own call to b still completes");
+    assert_eq!(
+        result,
+        Ok(Vec::new()),
+        "b's call back to a fails, but a's own call to b still completes"
+    );
 }
 
 #[test]

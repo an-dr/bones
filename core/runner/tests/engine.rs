@@ -22,25 +22,47 @@ fn sdl_test_lock() -> &'static Mutex<()> {
 }
 
 // Built by extensions/hello/build.ps1 (see its README).
-const HELLO_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../extensions/hello/target/wasm32-wasip2/release");
+const HELLO_DIR: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../extensions/hello/target/wasm32-wasip2/release"
+);
 // Built by extensions/keyecho/build.ps1 (see its README).
-const KEYECHO_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../extensions/keyecho/target/wasm32-wasip2/release");
+const KEYECHO_DIR: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../extensions/keyecho/target/wasm32-wasip2/release"
+);
 // Built by extensions/sprite_demo/build.ps1 (see its README).
-const SPRITE_DEMO_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../extensions/sprite_demo/target/wasm32-wasip2/release");
+const SPRITE_DEMO_DIR: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../extensions/sprite_demo/target/wasm32-wasip2/release"
+);
 // Built by extensions/runaway_demo/build.ps1 (see its README).
-const RUNAWAY_DEMO_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../extensions/runaway_demo/target/wasm32-wasip2/release");
+const RUNAWAY_DEMO_DIR: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../extensions/runaway_demo/target/wasm32-wasip2/release"
+);
 // Built by extensions/audio_demo/build.ps1 (see its README).
-const AUDIO_DEMO_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../extensions/audio_demo/target/wasm32-wasip2/release");
+const AUDIO_DEMO_DIR: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../extensions/audio_demo/target/wasm32-wasip2/release"
+);
 // Built by extensions/persistence_demo/build.ps1 (see its README).
-const PERSISTENCE_DEMO_DIR: &str =
-    concat!(env!("CARGO_MANIFEST_DIR"), "/../../extensions/persistence_demo/target/wasm32-wasip2/release");
+const PERSISTENCE_DEMO_DIR: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../extensions/persistence_demo/target/wasm32-wasip2/release"
+);
 
 #[test]
 fn build_discovers_loads_and_registers_a_real_extension() {
     let sink = RecordingSink::new();
     let logger = Logger::new(Arc::new(sink.clone()));
 
-    let BuiltEngine { runner, platform, renderer, .. } = Engine::new()
+    let BuiltEngine {
+        runner,
+        platform,
+        renderer,
+        ..
+    } = Engine::new()
         .extensions_dir(HELLO_DIR)
         .logger(logger)
         .build()
@@ -52,7 +74,9 @@ fn build_discovers_loads_and_registers_a_real_extension() {
 
     let records = sink.records();
     assert!(
-        records.iter().any(|(_, _, msg)| msg.contains("loaded 'hello'")),
+        records
+            .iter()
+            .any(|(_, _, msg)| msg.contains("loaded 'hello'")),
         "expected a load confirmation, got {records:?}"
     );
     assert!(
@@ -81,7 +105,9 @@ fn build_skips_a_component_that_fails_to_load_without_failing_the_engine() {
 
     let records = sink.records();
     assert!(
-        records.iter().any(|(_, _, msg)| msg.contains("failed to load")),
+        records
+            .iter()
+            .any(|(_, _, msg)| msg.contains("failed to load")),
         "expected a load failure to be logged, got {records:?}"
     );
 }
@@ -98,7 +124,9 @@ fn a_key_down_envelope_reaches_an_extension_through_a_real_window() {
     let sink = RecordingSink::new();
     let logger = Logger::new(Arc::new(sink.clone()));
 
-    let BuiltEngine { runner, platform, .. } = Engine::new()
+    let BuiltEngine {
+        runner, platform, ..
+    } = Engine::new()
         .extensions_dir(KEYECHO_DIR)
         .logger(logger)
         .window("test", 64, 64)
@@ -116,7 +144,9 @@ fn a_key_down_envelope_reaches_an_extension_through_a_real_window() {
 
     let records = sink.records();
     assert!(
-        records.iter().any(|(_, _, msg)| msg.contains("key pressed: A")),
+        records
+            .iter()
+            .any(|(_, _, msg)| msg.contains("key pressed: A")),
         "expected keyecho to log the injected keypress, got {records:?}"
     );
 }
@@ -130,7 +160,9 @@ fn a_mouse_down_envelope_reaches_an_extension_through_a_real_window() {
     let sink = RecordingSink::new();
     let logger = Logger::new(Arc::new(sink.clone()));
 
-    let BuiltEngine { runner, platform, .. } = Engine::new()
+    let BuiltEngine {
+        runner, platform, ..
+    } = Engine::new()
         .extensions_dir(KEYECHO_DIR)
         .logger(logger)
         .window("test", 64, 64)
@@ -142,13 +174,20 @@ fn a_mouse_down_envelope_reaches_an_extension_through_a_real_window() {
         topic: "input/mouse-down".to_string(),
         sender: "platform".to_string(),
         correlation: None,
-        payload: bones_messages::input::MouseDown { button: 1, x: 10.0, y: 20.0 }.encode(),
+        payload: bones_messages::input::MouseDown {
+            button: 1,
+            x: 10.0,
+            y: 20.0,
+        }
+        .encode(),
     });
     runner.step(1.0 / 60.0);
 
     let records = sink.records();
     assert!(
-        records.iter().any(|(_, _, msg)| msg.contains("mouse button 1 pressed at (10, 20)")),
+        records
+            .iter()
+            .any(|(_, _, msg)| msg.contains("mouse button 1 pressed at (10, 20)")),
         "expected keyecho to log the injected mouse-down, got {records:?}"
     );
 }
@@ -170,7 +209,9 @@ fn audio_demo_loads_plays_music_and_reacts_to_a_key_press_through_a_real_audio_m
 
     let records = sink.records();
     assert!(
-        records.iter().any(|(_, _, msg)| msg.contains("init: loaded sfx + music")),
+        records
+            .iter()
+            .any(|(_, _, msg)| msg.contains("init: loaded sfx + music")),
         "expected audio_demo's init log (sfx/music loaded, music started), got {records:?}"
     );
     assert!(
@@ -202,12 +243,16 @@ fn persistence_demo_state_survives_a_full_engine_rebuild() {
     std::fs::remove_dir_all(&dir).ok();
 
     let sink_a = RecordingSink::new();
-    let BuiltEngine { runner: runner_a, .. } = Engine::new()
+    let BuiltEngine {
+        runner: runner_a, ..
+    } = Engine::new()
         .extensions_dir(PERSISTENCE_DEMO_DIR)
         .logger(Logger::new(Arc::new(sink_a.clone())))
         .saves_dir(&dir)
         .build()
-        .expect("build extensions/persistence_demo first: pwsh extensions/persistence_demo/build.ps1");
+        .expect(
+            "build extensions/persistence_demo first: pwsh extensions/persistence_demo/build.ps1",
+        );
 
     // dt=1.5 clears the demo's 1-second save throttle in a single tick;
     // the `persistence/save` it reactively publishes from inside that
@@ -220,17 +265,23 @@ fn persistence_demo_state_survives_a_full_engine_rebuild() {
 
     let records_a = sink_a.records();
     assert!(
-        records_a.iter().any(|(_, _, msg)| msg.contains("loaded counter = 0")),
+        records_a
+            .iter()
+            .any(|(_, _, msg)| msg.contains("loaded counter = 0")),
         "a fresh save directory should load as counter 0, got {records_a:?}"
     );
     assert!(
-        records_a.iter().any(|(_, _, msg)| msg.contains("saved counter = 1")),
+        records_a
+            .iter()
+            .any(|(_, _, msg)| msg.contains("saved counter = 1")),
         "expected the first elapsed second to save counter 1, got {records_a:?}"
     );
     drop(runner_a);
 
     let sink_b = RecordingSink::new();
-    let BuiltEngine { runner: runner_b, .. } = Engine::new()
+    let BuiltEngine {
+        runner: runner_b, ..
+    } = Engine::new()
         .extensions_dir(PERSISTENCE_DEMO_DIR)
         .logger(Logger::new(Arc::new(sink_b.clone())))
         .saves_dir(&dir)
@@ -293,7 +344,10 @@ fn a_custom_module_can_consume_window_surface_without_renderer() {
         .build()
         .unwrap();
 
-    assert!(*got_window.lock().unwrap(), "expected the custom module to consume window-surface");
+    assert!(
+        *got_window.lock().unwrap(),
+        "expected the custom module to consume window-surface"
+    );
 }
 
 #[test]
@@ -302,7 +356,9 @@ fn a_real_extension_draws_a_sprite_through_a_real_renderer() {
     let sink = RecordingSink::new();
     let logger = Logger::new(Arc::new(sink.clone()));
 
-    let BuiltEngine { runner, renderer, .. } = Engine::new()
+    let BuiltEngine {
+        runner, renderer, ..
+    } = Engine::new()
         .extensions_dir(SPRITE_DEMO_DIR)
         .logger(logger)
         .window("test", 400, 300)
@@ -323,11 +379,15 @@ fn a_real_extension_draws_a_sprite_through_a_real_renderer() {
 
     let records = sink.records();
     assert!(
-        records.iter().any(|(_, _, msg)| msg.contains("sprite loaded")),
+        records
+            .iter()
+            .any(|(_, _, msg)| msg.contains("sprite loaded")),
         "expected sprite_demo's init log, got {records:?}"
     );
     assert!(
-        records.iter().all(|(_, category, _)| category != "renderer"),
+        records
+            .iter()
+            .all(|(_, category, _)| category != "renderer"),
         "expected no renderer errors (bad PNG decode or unknown sprite id), got {records:?}"
     );
 }
@@ -338,8 +398,11 @@ fn a_runaway_extension_is_quarantined_while_the_engine_keeps_running() {
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::copy(format!("{HELLO_DIR}/hello.wasm"), dir.join("hello.wasm"))
         .expect("build extensions/hello first: pwsh extensions/hello/build.ps1");
-    std::fs::copy(format!("{RUNAWAY_DEMO_DIR}/runaway_demo.wasm"), dir.join("runaway_demo.wasm"))
-        .expect("build extensions/runaway_demo first: pwsh extensions/runaway_demo/build.ps1");
+    std::fs::copy(
+        format!("{RUNAWAY_DEMO_DIR}/runaway_demo.wasm"),
+        dir.join("runaway_demo.wasm"),
+    )
+    .expect("build extensions/runaway_demo first: pwsh extensions/runaway_demo/build.ps1");
 
     let sink = RecordingSink::new();
     let logger = Logger::new(Arc::new(sink.clone()));
@@ -350,7 +413,11 @@ fn a_runaway_extension_is_quarantined_while_the_engine_keeps_running() {
         runner,
         mut supervisor,
         ..
-    } = Engine::new().extensions_dir(&dir).logger(logger).build().unwrap();
+    } = Engine::new()
+        .extensions_dir(&dir)
+        .logger(logger)
+        .build()
+        .unwrap();
     let watcher = runner.bus().register("watcher", move |e: &Envelope| {
         sink_events.lock().unwrap().push(e.clone());
     });
@@ -383,7 +450,10 @@ fn a_runaway_extension_is_quarantined_while_the_engine_keeps_running() {
         .iter()
         .filter(|(_, category, msg)| category == "hello" && msg.contains("tick"))
         .count();
-    assert_eq!(hello_ticks, 2, "expected hello to keep ticking normally, got {records:?}");
+    assert_eq!(
+        hello_ticks, 2,
+        "expected hello to keep ticking normally, got {records:?}"
+    );
     assert!(
         records
             .iter()
@@ -420,7 +490,10 @@ impl RecordingModule {
 
 impl Handler for RecordingModule {
     fn handle(&mut self, envelope: &Envelope) {
-        self.0.lock().unwrap().push(format!("handle:{}", envelope.topic));
+        self.0
+            .lock()
+            .unwrap()
+            .push(format!("handle:{}", envelope.topic));
     }
 }
 
@@ -453,15 +526,24 @@ impl Module for RecordingModule {
 fn a_custom_module_is_initialized_subscribed_and_hooked() {
     let module = RecordingModule::default();
     let dir = std::env::temp_dir().join("bones-runner-test-custom-module-hooks");
-    let BuiltEngine { runner, modules, .. } =
-        Engine::new().module(module.clone()).saves_dir(&dir).build().unwrap();
+    let BuiltEngine {
+        runner, modules, ..
+    } = Engine::new()
+        .module(module.clone())
+        .saves_dir(&dir)
+        .build()
+        .unwrap();
 
     assert_eq!(
         modules.len(),
         2,
         "expected the custom module plus the unconditional persistence module"
     );
-    assert_eq!(module.calls(), vec!["init"], "init should run at build time, before any message or hook");
+    assert_eq!(
+        module.calls(),
+        vec!["init"],
+        "init should run at build time, before any message or hook"
+    );
 
     runner.bus().publish(Envelope {
         topic: "test/topic".to_string(),
@@ -486,9 +568,15 @@ fn a_custom_module_answers_a_direct_send_through_the_call_registry() {
     let module = RecordingModule::default();
     let BuiltEngine { supervisor, .. } = Engine::new().module(module.clone()).build().unwrap();
 
-    let reply = supervisor.registry.call("caller", "recording", b"abc").expect("recording is registered");
+    let reply = supervisor
+        .registry
+        .call("caller", "recording", b"abc")
+        .expect("recording is registered");
 
-    assert_eq!(reply, b"cba", "expected the module's own respond() reply, not a default/empty one");
+    assert_eq!(
+        reply, b"cba",
+        "expected the module's own respond() reply, not a default/empty one"
+    );
     assert_eq!(module.calls(), vec!["init", "respond:caller"]);
 }
 
@@ -509,7 +597,11 @@ fn a_changed_wasm_file_is_hot_reloaded_in_place() {
         runner,
         mut supervisor,
         ..
-    } = Engine::new().extensions_dir(&dir).logger(logger).build().unwrap();
+    } = Engine::new()
+        .extensions_dir(&dir)
+        .logger(logger)
+        .build()
+        .unwrap();
     let watcher = runner.bus().register("watcher", move |e: &Envelope| {
         sink_events.lock().unwrap().push(e.clone());
     });
@@ -520,8 +612,12 @@ fn a_changed_wasm_file_is_hot_reloaded_in_place() {
     // supervisor's polling notices — a real edit's mtime is real-clock-
     // later too, this just avoids a flaky sleep in the test.
     let original_mtime = std::fs::metadata(&wasm_path).unwrap().modified().unwrap();
-    let file = std::fs::File::options().write(true).open(&wasm_path).unwrap();
-    file.set_modified(original_mtime + Duration::from_secs(1)).unwrap();
+    let file = std::fs::File::options()
+        .write(true)
+        .open(&wasm_path)
+        .unwrap();
+    file.set_modified(original_mtime + Duration::from_secs(1))
+        .unwrap();
     drop(file);
 
     supervisor.check();
@@ -534,9 +630,14 @@ fn a_changed_wasm_file_is_hot_reloaded_in_place() {
         .iter()
         .filter(|(_, category, msg)| category == "level" && msg.contains("init"))
         .count();
-    assert_eq!(init_count, 2, "expected init to run again for the reloaded instance, got {records:?}");
+    assert_eq!(
+        init_count, 2,
+        "expected init to run again for the reloaded instance, got {records:?}"
+    );
     assert!(
-        records.iter().any(|(_, _, msg)| msg.contains("reloaded 'level'")),
+        records
+            .iter()
+            .any(|(_, _, msg)| msg.contains("reloaded 'level'")),
         "expected a reload confirmation, got {records:?}"
     );
 

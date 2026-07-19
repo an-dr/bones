@@ -30,13 +30,18 @@ struct State {
 
 impl State {
     fn inner_mut(&mut self) -> &mut Inner {
-        self.inner.as_mut().expect("Renderer used before Module::init built its SDL state")
+        self.inner
+            .as_mut()
+            .expect("Renderer used before Module::init built its SDL state")
     }
 }
 
 impl Renderer {
     pub fn new(logger: Logger) -> Self {
-        Self(SendWrapper::new(State { logger, inner: None }))
+        Self(SendWrapper::new(State {
+            logger,
+            inner: None,
+        }))
     }
 
     pub fn present(&mut self) {
@@ -46,14 +51,26 @@ impl Renderer {
     /// Current window size in pixels, for callers (the ui module) that need
     /// to size their own output to match without holding a window handle.
     pub fn size(&self) -> (u32, u32) {
-        self.0.inner.as_ref().expect("Renderer used before Module::init built its SDL state").canvas.window().size()
+        self.0
+            .inner
+            .as_ref()
+            .expect("Renderer used before Module::init built its SDL state")
+            .canvas
+            .window()
+            .size()
     }
 
     /// Registers or fully replaces the RGBA8 (straight alpha) texture the
     /// ui module addresses as `id` in `UiMesh::texture` — egui's own
     /// texture ids (font atlas plus any user textures). `rgba.len()` must
     /// be `width * height * 4`.
-    pub fn set_ui_texture(&mut self, id: u64, width: u32, height: u32, rgba: &[u8]) -> Result<(), String> {
+    pub fn set_ui_texture(
+        &mut self,
+        id: u64,
+        width: u32,
+        height: u32,
+        rgba: &[u8],
+    ) -> Result<(), String> {
         self.0.inner_mut().set_ui_texture(id, width, height, rgba)
     }
 
@@ -70,7 +87,9 @@ impl Renderer {
         height: u32,
         rgba: &[u8],
     ) -> Result<(), String> {
-        self.0.inner_mut().update_ui_texture_region(id, x, y, width, height, rgba)
+        self.0
+            .inner_mut()
+            .update_ui_texture_region(id, x, y, width, height, rgba)
     }
 
     /// Drops a texture registered by `set_ui_texture` (egui's `TexturesDelta::free`).
@@ -124,13 +143,14 @@ impl Module for Renderer {
     /// builds the real SDL canvas/texture-creator state; errors if no
     /// window was provided (e.g. `.renderer()` without `.window(...)`).
     fn init(&mut self, ctx: &mut ModuleContext) -> Result<(), String> {
-        let window = ctx
-            .consume_service::<Window>()
-            .ok_or_else(|| "renderer needs a window-surface service (configure .window(...))".to_string())?;
+        let window = ctx.consume_service::<Window>().ok_or_else(|| {
+            "renderer needs a window-surface service (configure .window(...))".to_string()
+        })?;
         let canvas = window.into_canvas();
         let texture_creator = canvas.texture_creator();
 
-        let font = FontRef::try_from_slice(epaint_default_fonts::HACK_REGULAR).map_err(|e| e.to_string())?;
+        let font = FontRef::try_from_slice(epaint_default_fonts::HACK_REGULAR)
+            .map_err(|e| e.to_string())?;
 
         self.0.inner = Some(Inner::new(canvas, texture_creator, font));
         Ok(())
@@ -141,7 +161,9 @@ impl Module for Renderer {
     /// `present` runs (design/modules.md's `render` phase).
     fn render(&mut self) {
         if let Err(err) = self.0.inner_mut().composite() {
-            self.0.logger.error("renderer", &format!("composite: {err}"));
+            self.0
+                .logger
+                .error("renderer", &format!("composite: {err}"));
         }
     }
 

@@ -11,7 +11,9 @@ fn init_creates_the_save_directory_and_subscribes_persistence_topics() {
     let mut ctx = ModuleContext::new(&mut registry);
     let mut persistence = Persistence::new(&dir, false);
 
-    persistence.init(&mut ctx).expect("creating a scratch directory should succeed");
+    persistence
+        .init(&mut ctx)
+        .expect("creating a scratch directory should succeed");
 
     assert!(dir.is_dir());
     assert_eq!(ctx.into_subscriptions(), vec!["persistence/*"]);
@@ -28,7 +30,9 @@ fn init_is_fine_with_an_already_existing_directory() {
     let mut ctx = ModuleContext::new(&mut registry);
     let mut persistence = Persistence::new(&dir, false);
 
-    persistence.init(&mut ctx).expect("an already-existing directory is not an error");
+    persistence
+        .init(&mut ctx)
+        .expect("an already-existing directory is not an error");
 
     std::fs::remove_dir_all(&dir).ok();
 }
@@ -64,7 +68,9 @@ fn save_then_load_round_trips_through_a_real_file() {
     persistence.handle(&envelope(
         Save::TOPIC,
         "sprite_demo",
-        bones_messages::EncodeMessage::encode(&Save { bytes: b"level=3;hp=42" }),
+        bones_messages::EncodeMessage::encode(&Save {
+            bytes: b"level=3;hp=42",
+        }),
     ));
 
     let loaded = persistence.respond("sprite_demo", &[]);
@@ -90,7 +96,9 @@ fn one_sender_cannot_load_another_senders_save() {
     persistence.handle(&envelope(
         Save::TOPIC,
         "sprite_demo",
-        bones_messages::EncodeMessage::encode(&Save { bytes: b"sprite_demo's save" }),
+        bones_messages::EncodeMessage::encode(&Save {
+            bytes: b"sprite_demo's save",
+        }),
     ));
 
     assert_eq!(
@@ -109,7 +117,9 @@ fn a_sender_name_that_looks_like_a_path_is_rejected_not_traversed() {
     persistence.handle(&envelope(
         Save::TOPIC,
         "../evil",
-        bones_messages::EncodeMessage::encode(&Save { bytes: b"should not land anywhere" }),
+        bones_messages::EncodeMessage::encode(&Save {
+            bytes: b"should not land anywhere",
+        }),
     ));
 
     assert!(persistence.resolve_path("../evil").is_none());
@@ -127,7 +137,9 @@ fn read_only_mode_drops_new_saves_but_still_serves_existing_ones() {
         writable.handle(&envelope(
             Save::TOPIC,
             "sprite_demo",
-            bones_messages::EncodeMessage::encode(&Save { bytes: b"before read-only" }),
+            bones_messages::EncodeMessage::encode(&Save {
+                bytes: b"before read-only",
+            }),
         ));
     }
 
@@ -145,7 +157,9 @@ fn read_only_mode_drops_new_saves_but_still_serves_existing_ones() {
     read_only.handle(&envelope(
         Save::TOPIC,
         "sprite_demo",
-        bones_messages::EncodeMessage::encode(&Save { bytes: b"attempted overwrite" }),
+        bones_messages::EncodeMessage::encode(&Save {
+            bytes: b"attempted overwrite",
+        }),
     ));
 
     assert_eq!(
@@ -156,4 +170,3 @@ fn read_only_mode_drops_new_saves_but_still_serves_existing_ones() {
 
     std::fs::remove_dir_all(&dir).ok();
 }
-

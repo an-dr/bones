@@ -110,6 +110,26 @@ fn set_color_round_trips() {
 }
 
 #[test]
+fn set_debug_hitboxes_enabled_round_trips() {
+    let op = EntityOp::SetDebugHitboxes { enabled: true };
+    let message = EntityOpMessage(op);
+    assert_eq!(
+        EntityOpMessage::decode(&message.encode()),
+        Ok(EntityOpMessage(op))
+    );
+}
+
+#[test]
+fn set_debug_hitboxes_disabled_round_trips() {
+    let op = EntityOp::SetDebugHitboxes { enabled: false };
+    let message = EntityOpMessage(op);
+    assert_eq!(
+        EntityOpMessage::decode(&message.encode()),
+        Ok(EntityOpMessage(op))
+    );
+}
+
+#[test]
 fn an_invalid_tag_is_rejected() {
     assert_eq!(
         EntityOpMessage::decode(&[255]),

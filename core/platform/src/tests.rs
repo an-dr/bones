@@ -71,7 +71,12 @@ fn mouse_button_down_becomes_an_input_mouse_down_envelope() {
     assert_eq!(envelope.topic, "input/mouse-down");
     assert_eq!(
         envelope.payload,
-        bones_messages::input::MouseDown { button: 3, x: 12.0, y: 34.0 }.encode()
+        bones_messages::input::MouseDown {
+            button: 3,
+            x: 12.0,
+            y: 34.0
+        }
+        .encode()
     );
 }
 
@@ -127,7 +132,12 @@ fn gamepad_axis_motion_becomes_a_normalized_input_gamepad_axis_envelope() {
     assert_eq!(envelope.topic, "input/gamepad-axis");
     assert_eq!(
         envelope.payload,
-        bones_messages::input::GamepadAxis { id: 3, axis: "LeftX", value: 1.0 }.encode()
+        bones_messages::input::GamepadAxis {
+            id: 3,
+            axis: "LeftX",
+            value: 1.0
+        }
+        .encode()
     );
 
     let negative = Event::ControllerAxisMotion {
@@ -139,7 +149,12 @@ fn gamepad_axis_motion_becomes_a_normalized_input_gamepad_axis_envelope() {
     let envelope = translate_event(&negative, "platform").expect("should translate");
     assert_eq!(
         envelope.payload,
-        bones_messages::input::GamepadAxis { id: 3, axis: "LeftX", value: -1.0 }.encode(),
+        bones_messages::input::GamepadAxis {
+            id: 3,
+            axis: "LeftX",
+            value: -1.0
+        }
+        .encode(),
         "i16::MIN is more negative than -i16::MAX; must clamp to -1.0, not overshoot"
     );
 }
@@ -155,7 +170,11 @@ fn gamepad_button_events_become_input_gamepad_button_envelopes() {
     assert_eq!(envelope.topic, "input/gamepad-button-down");
     assert_eq!(
         envelope.payload,
-        bones_messages::input::GamepadButtonDown { id: 3, button: "South" }.encode()
+        bones_messages::input::GamepadButtonDown {
+            id: 3,
+            button: "South"
+        }
+        .encode()
     );
 
     let up = Event::ControllerButtonUp {

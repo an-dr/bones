@@ -87,12 +87,20 @@ pub enum EntityOp {
         entity_id: u32,
         color: (u8, u8, u8, u8),
     },
+    /// Globally toggles a yellow unfilled outline over every collider-
+    /// bearing entity's actual rapier2d extent (sprite entities, plain
+    /// squares, and tilemap colliders alike), drawn on top of each
+    /// entity's normal draw each tick — a debug aid for checking a
+    /// visible sprite/square lines up with what it actually collides as.
+    /// Not addressed by `entity_id`: applies to the whole simulation.
+    SetDebugHitboxes { enabled: bool },
 }
 
 const TAG_SPAWN: u8 = 0;
 const TAG_SET_VELOCITY: u8 = 1;
 const TAG_DESPAWN: u8 = 2;
 const TAG_SET_COLOR: u8 = 3;
+const TAG_SET_DEBUG_HITBOXES: u8 = 4;
 
 impl EntityOp {
     pub(super) fn encode_into(&self, writer: Writer) -> Writer {
@@ -148,6 +156,9 @@ impl EntityOp {
                     .u8(b)
                     .u8(a)
             }
+            EntityOp::SetDebugHitboxes { enabled } => writer
+                .u8(TAG_SET_DEBUG_HITBOXES)
+                .u8(if *enabled { 1 } else { 0 }),
         }
     }
 
@@ -213,6 +224,9 @@ impl EntityOp {
                 );
                 Ok(EntityOp::SetColor { entity_id, color })
             }
+            TAG_SET_DEBUG_HITBOXES => Ok(EntityOp::SetDebugHitboxes {
+                enabled: reader.read_u8()? != 0,
+            }),
             _ => Err(DecodeError::InvalidTag {
                 message: "game-core entity op",
                 tag,

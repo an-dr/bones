@@ -47,6 +47,12 @@ rendering authority of its own.
     back) without `game-core` itself needing to know about flash timing.
     A no-op for an unknown `entity_id`, or one with no `SquareColor` (a
     sprite entity has none).
+  - `SetDebugHitboxes { enabled }` — not addressed by `entity_id`: a
+    global toggle (default off) for a yellow unfilled outline drawn over
+    every collider-bearing entity's actual `rapier2d` extent — sprite
+    entities, plain squares, and tilemap colliders alike — on top of
+    each entity's normal draw. A debug aid for checking a visible
+    sprite/square actually lines up with what it collides as.
 - Every `core/tick`: `rapier2d` steps once, every collider-bearing
   entity's `Transform` is overwritten from its rigid body's post-step
   position (physics owns position for those entities, not the other way

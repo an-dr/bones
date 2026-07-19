@@ -24,7 +24,10 @@ fn find_wasm_files_finds_only_wasm_extensions_sorted() {
 
 #[test]
 fn find_wasm_files_on_a_missing_directory_is_empty_not_an_error() {
-    assert_eq!(find_wasm_files(Path::new("no/such/directory")), Vec::<PathBuf>::new());
+    assert_eq!(
+        find_wasm_files(Path::new("no/such/directory")),
+        Vec::<PathBuf>::new()
+    );
 }
 
 #[test]

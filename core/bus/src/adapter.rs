@@ -23,7 +23,11 @@ impl Subscriber<Envelope, ()> for Adapter {
 
     fn on_event(&mut self, event: &BusEvent<Envelope, ()>) {
         let envelope = event.get_content();
-        if self.patterns.iter().any(|p| topic_matches(p, &envelope.topic)) {
+        if self
+            .patterns
+            .iter()
+            .any(|p| topic_matches(p, &envelope.topic))
+        {
             self.handler.handle(envelope);
         }
     }

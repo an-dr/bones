@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
+use ab_glyph::FontRef;
 use bones_messages::gfx::Command;
 use sdl3::image::LoadTexture;
 use sdl3::pixels::{Color, FColor, PixelFormat};
 use sdl3::rect::Rect;
 use sdl3::render::{Canvas, FPoint, Texture, TextureCreator, Vertex};
 use sdl3::video::{Window, WindowContext};
-use ab_glyph::FontRef;
 
 use crate::circle_geometry::{circle_fill_lines, circle_outline_points};
 use crate::retained_draw::RetainedDraw;
@@ -56,7 +56,11 @@ pub(crate) struct Inner {
 }
 
 impl Inner {
-    pub(crate) fn new(canvas: Canvas<Window>, texture_creator: TextureCreator<WindowContext>, font: FontRef<'static>) -> Self {
+    pub(crate) fn new(
+        canvas: Canvas<Window>,
+        texture_creator: TextureCreator<WindowContext>,
+        font: FontRef<'static>,
+    ) -> Self {
         Self {
             canvas,
             texture_creator,
@@ -117,14 +121,17 @@ impl Inner {
                     .push(RetainedDraw::Circle(draw));
             }
             Command::DrawText(draw) => {
-                self.pending_draws.entry(sender.to_string()).or_default().push(RetainedDraw::Text {
-                    text: draw.text.to_string(),
-                    x: draw.x,
-                    y: draw.y,
-                    size: draw.size,
-                    color: draw.color,
-                    layer: draw.layer,
-                });
+                self.pending_draws
+                    .entry(sender.to_string())
+                    .or_default()
+                    .push(RetainedDraw::Text {
+                        text: draw.text.to_string(),
+                        x: draw.x,
+                        y: draw.y,
+                        size: draw.size,
+                        color: draw.color,
+                        layer: draw.layer,
+                    });
             }
         }
         Ok(())
@@ -150,7 +157,10 @@ impl Inner {
 
         let mut ordered: Vec<RetainedDraw> = Vec::new();
         for sender in &self.sender_order {
-            let draws = self.retained_draws.get(sender).expect("sender_order and retained_draws stay in sync");
+            let draws = self
+                .retained_draws
+                .get(sender)
+                .expect("sender_order and retained_draws stay in sync");
             ordered.extend_from_slice(draws);
         }
         ordered.sort_by_key(|draw| draw.layer());
@@ -179,7 +189,15 @@ impl Inner {
                     let screen_h = (draw.dst_h as f32 * zoom).round().max(0.0) as u32;
                     let dst = Rect::new(screen_x, screen_y, screen_w, screen_h);
                     self.canvas
-                        .copy_ex(texture, src, dst, draw.angle as f64, None::<FPoint>, draw.flip_h, draw.flip_v)
+                        .copy_ex(
+                            texture,
+                            src,
+                            dst,
+                            draw.angle as f64,
+                            None::<FPoint>,
+                            draw.flip_h,
+                            draw.flip_v,
+                        )
                         .map_err(|e| e.to_string())?;
                 }
                 RetainedDraw::Rect(draw) => {
@@ -202,7 +220,10 @@ impl Inner {
                     let (x1, y1) = to_screen(draw.x1, draw.y1);
                     let (x2, y2) = to_screen(draw.x2, draw.y2);
                     self.canvas
-                        .draw_line(FPoint::new(x1 as f32, y1 as f32), FPoint::new(x2 as f32, y2 as f32))
+                        .draw_line(
+                            FPoint::new(x1 as f32, y1 as f32),
+                            FPoint::new(x2 as f32, y2 as f32),
+                        )
                         .map_err(|e| e.to_string())?;
                 }
                 RetainedDraw::Circle(draw) => {
@@ -216,26 +237,42 @@ impl Inner {
                         }
                     } else {
                         let points = circle_outline_points(cx, cy, radius);
-                        self.canvas.draw_points(points.as_slice()).map_err(|e| e.to_string())?;
+                        self.canvas
+                            .draw_points(points.as_slice())
+                            .map_err(|e| e.to_string())?;
                     }
                 }
-                RetainedDraw::Text { text, x, y, size, color, .. } => {
+                RetainedDraw::Text {
+                    text,
+                    x,
+                    y,
+                    size,
+                    color,
+                    ..
+                } => {
                     if text.is_empty() {
                         continue;
                     }
-                    let (width, height, rgba) = rasterize_text(&self.font, text, *size as f32, *color);
+                    let (width, height, rgba) =
+                        rasterize_text(&self.font, text, *size as f32, *color);
                     let mut texture = self
                         .texture_creator
                         .create_texture_streaming(PixelFormat::RGBA32, width, height)
                         .map_err(|e| e.to_string())?;
                     texture.set_blend_mode(sdl3::render::BlendMode::Blend);
-                    texture.update(None, &rgba, width as usize * 4).map_err(|e| e.to_string())?;
+                    texture
+                        .update(None, &rgba, width as usize * 4)
+                        .map_err(|e| e.to_string())?;
 
                     let (screen_x, screen_y) = to_screen(*x, *y);
                     let screen_w = (width as f32 * zoom).round().max(0.0) as u32;
                     let screen_h = (height as f32 * zoom).round().max(0.0) as u32;
                     self.canvas
-                        .copy(&texture, None, Rect::new(screen_x, screen_y, screen_w, screen_h))
+                        .copy(
+                            &texture,
+                            None,
+                            Rect::new(screen_x, screen_y, screen_w, screen_h),
+                        )
                         .map_err(|e| e.to_string())?;
                 }
             }
@@ -243,7 +280,13 @@ impl Inner {
         Ok(())
     }
 
-    pub(crate) fn set_ui_texture(&mut self, id: u64, width: u32, height: u32, rgba: &[u8]) -> Result<(), String> {
+    pub(crate) fn set_ui_texture(
+        &mut self,
+        id: u64,
+        width: u32,
+        height: u32,
+        rgba: &[u8],
+    ) -> Result<(), String> {
         let mut texture = self
             .texture_creator
             .create_texture_streaming(PixelFormat::RGBA32, width, height)
@@ -274,7 +317,11 @@ impl Inner {
             .get_mut(&id)
             .ok_or_else(|| format!("unknown ui texture id {id}"))?;
         texture
-            .update(Rect::new(x as i32, y as i32, width, height), rgba, width as usize * 4)
+            .update(
+                Rect::new(x as i32, y as i32, width, height),
+                rgba,
+                width as usize * 4,
+            )
             .map_err(|e| e.to_string())
     }
 

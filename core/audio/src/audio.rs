@@ -53,7 +53,10 @@ impl Handler for Audio {
     //   (`Module::init` never ran or failed) are silently no-ops rather
     //   than reported nowhere useful.
     fn handle(&mut self, envelope: &Envelope) {
-        let Some(command) = Command::decode(&envelope.topic, &envelope.payload).ok().flatten() else {
+        let Some(command) = Command::decode(&envelope.topic, &envelope.payload)
+            .ok()
+            .flatten()
+        else {
             return;
         };
         let Some(manager) = self.manager.as_mut() else {
@@ -76,7 +79,10 @@ impl Handler for Audio {
                     if let Some(mut previous) = self.music.take() {
                         previous.stop(Tween::default());
                     }
-                    let data = data.clone().loop_region(..).volume(linear_to_decibels(play.volume));
+                    let data = data
+                        .clone()
+                        .loop_region(..)
+                        .volume(linear_to_decibels(play.volume));
                     if let Ok(handle) = manager.play(data) {
                         self.music = Some(handle);
                     }
@@ -109,8 +115,9 @@ impl Module for Audio {
     ///   from.
     fn init(&mut self, ctx: &mut ModuleContext) -> Result<(), String> {
         ctx.subscribe("audio/*");
-        let manager = kira::AudioManager::<kira::DefaultBackend>::new(kira::AudioManagerSettings::default())
-            .map_err(|e| e.to_string())?;
+        let manager =
+            kira::AudioManager::<kira::DefaultBackend>::new(kira::AudioManagerSettings::default())
+                .map_err(|e| e.to_string())?;
         self.manager = Some(manager);
         Ok(())
     }

@@ -26,7 +26,10 @@ impl ServiceRegistry {
     /// not something to silently overwrite.
     pub fn provide<T: 'static>(&mut self, value: T) -> Result<(), String> {
         if self.services.contains_key(&TypeId::of::<T>()) {
-            return Err(format!("service of type {} already provided", std::any::type_name::<T>()));
+            return Err(format!(
+                "service of type {} already provided",
+                std::any::type_name::<T>()
+            ));
         }
         self.services.insert(TypeId::of::<T>(), Box::new(value));
         Ok(())
