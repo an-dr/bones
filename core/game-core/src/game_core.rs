@@ -97,6 +97,18 @@ impl GameCore {
             ),
             EntityOp::SetVelocity { entity_id, vx, vy } => self.set_velocity(entity_id, vx, vy),
             EntityOp::Despawn { entity_id } => self.despawn(entity_id),
+            EntityOp::SetColor { entity_id, color } => self.set_color(entity_id, color),
+        }
+    }
+
+    /// A no-op if `entity_id` names no entity, or one with no
+    /// `SquareColor` — a sprite entity has none to overwrite.
+    fn set_color(&mut self, entity_id: u32, color: (u8, u8, u8, u8)) {
+        let Some(&entity) = self.entities.get(&entity_id) else {
+            return;
+        };
+        if let Ok(mut square_color) = self.world.get::<&mut SquareColor>(entity) {
+            square_color.0 = color;
         }
     }
 

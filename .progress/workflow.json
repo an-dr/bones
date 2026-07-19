@@ -11,8 +11,8 @@
     "done": "A minimal 2D scene simulates entities with collision on a loaded tilemap, rendered through gfx/*, demonstrated via a runnable example extension.",
     "outOfScope": "gfx/* rendering authority, sprite-animation asset pipeline beyond timing state machine, physics beyond 2D collision, any change to renderer ownership of the window surface."
   },
-  "currentIncrementId": "db8765903e044c48b892affb19f5c915",
-  "commitBaseline": "0800330f1e184f29be9156b922ec433bcafd1f86",
+  "currentIncrementId": "8911195cae8f4154b97624a864b6efd6",
+  "commitBaseline": "22b220e76f7f229fb78d582c9a8508b647e1176e",
   "increments": [
     {
       "id": "6bb8259e81814fe4bff2d05f094ea2da",
@@ -94,14 +94,14 @@
     {
       "id": "db8765903e044c48b892affb19f5c915",
       "number": 12,
-      "status": "verified",
+      "status": "completed",
       "scope": "game-core collision events",
       "description": "GameCore installs a rapier2d EventHandler to collect CollisionEvent::Started for collider pairs where both colliders belong to hecs entities tracked in self.entities (ignoring tilemap colliders). Each such contact publishes a new game-core/collision message carrying both entity_ids. Unit test spawns two overlapping dynamic entities and asserts a collision event with both ids is published exactly once per new contact (not every tick while overlapping)."
     },
     {
       "id": "8911195cae8f4154b97624a864b6efd6",
       "number": 13,
-      "status": "planned",
+      "status": "verified",
       "scope": "game-core SetColor entity op",
       "description": "EntityOp gains SetColor { entity_id, color }: overwrites an existing SquareColor components color in place (no-op for an unknown entity_id or one with no SquareColor, e.g. a sprite entity). Lets a caller implement a temporary color flash (set, wait, set back) without needing game-core to know about hit-flash timing itself. Unit tests cover a successful color change and both no-op cases."
     },
@@ -459,8 +459,23 @@
       "at": "2026-07-19T18:41:29.7489414Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-07-19T18:41:54.9592624Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to BUILD."
+    },
+    {
+      "at": "2026-07-19T18:46:47.6202361Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-07-19T18:46:57.4359576Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-07-19T13:14:27.3797032Z",
-  "updatedAt": "2026-07-19T18:41:29.7593406Z"
+  "updatedAt": "2026-07-19T18:46:57.4460378Z"
 }

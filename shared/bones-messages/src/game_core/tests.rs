@@ -78,6 +78,19 @@ fn despawn_round_trips() {
 }
 
 #[test]
+fn set_color_round_trips() {
+    let op = EntityOp::SetColor {
+        entity_id: 4,
+        color: (255, 0, 128, 255),
+    };
+    let message = EntityOpMessage(op);
+    assert_eq!(
+        EntityOpMessage::decode(&message.encode()),
+        Ok(EntityOpMessage(op))
+    );
+}
+
+#[test]
 fn an_invalid_tag_is_rejected() {
     assert_eq!(
         EntityOpMessage::decode(&[255]),

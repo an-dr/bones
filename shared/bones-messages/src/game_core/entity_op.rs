@@ -72,11 +72,21 @@ pub enum EntityOp {
     SetVelocity { entity_id: u32, vx: f32, vy: f32 },
     /// Removes an entity (and its collider, if any) entirely.
     Despawn { entity_id: u32 },
+    /// Overwrites a spawned entity's `SquareColor` in place — the
+    /// mechanism a caller uses for a temporary flash (set, wait, set
+    /// back), without `game-core` itself needing to know about flash
+    /// timing. A no-op if `entity_id` names no entity, or one with no
+    /// `SquareColor` (a sprite entity, which has none).
+    SetColor {
+        entity_id: u32,
+        color: (u8, u8, u8, u8),
+    },
 }
 
 const TAG_SPAWN: u8 = 0;
 const TAG_SET_VELOCITY: u8 = 1;
 const TAG_DESPAWN: u8 = 2;
+const TAG_SET_COLOR: u8 = 3;
 
 impl EntityOp {
     pub(super) fn encode_into(&self, writer: Writer) -> Writer {
@@ -121,6 +131,16 @@ impl EntityOp {
                 .f32(*vx)
                 .f32(*vy),
             EntityOp::Despawn { entity_id } => writer.u8(TAG_DESPAWN).u32(*entity_id),
+            EntityOp::SetColor { entity_id, color } => {
+                let (r, g, b, a) = *color;
+                writer
+                    .u8(TAG_SET_COLOR)
+                    .u32(*entity_id)
+                    .u8(r)
+                    .u8(g)
+                    .u8(b)
+                    .u8(a)
+            }
         }
     }
 
@@ -175,6 +195,16 @@ impl EntityOp {
             TAG_DESPAWN => Ok(EntityOp::Despawn {
                 entity_id: reader.read_u32()?,
             }),
+            TAG_SET_COLOR => {
+                let entity_id = reader.read_u32()?;
+                let color = (
+                    reader.read_u8()?,
+                    reader.read_u8()?,
+                    reader.read_u8()?,
+                    reader.read_u8()?,
+                );
+                Ok(EntityOp::SetColor { entity_id, color })
+            }
             _ => Err(DecodeError::InvalidTag {
                 message: "game-core entity op",
                 tag,

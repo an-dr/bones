@@ -716,3 +716,47 @@ fn a_tilemap_collider_never_publishes_a_collision_event() {
         "a tilemap collider has no entity_id, so a contact with one must never be published"
     );
 }
+
+#[test]
+fn set_color_overwrites_a_square_entitys_color() {
+    let mut game_core = GameCore::new();
+    game_core.handle(&entity_op_envelope(spawn_square_with_collider(
+        1, 0.0, 0.0, 8.0, 8.0,
+    )));
+
+    game_core.handle(&entity_op_envelope(EntityOp::SetColor {
+        entity_id: 1,
+        color: (0, 255, 0, 255),
+    }));
+
+    let (_, color) = game_core
+        .world
+        .query_mut::<&SquareColor>()
+        .into_iter()
+        .next()
+        .unwrap();
+    assert_eq!(color.0, (0, 255, 0, 255));
+}
+
+#[test]
+fn set_color_for_a_sprite_entity_is_a_no_op() {
+    let mut game_core = GameCore::new();
+    game_core.handle(&entity_op_envelope(spawn_with_id(1, 0.0, 0.0)));
+
+    game_core.handle(&entity_op_envelope(EntityOp::SetColor {
+        entity_id: 1,
+        color: (0, 255, 0, 255),
+    }));
+    // Reaching here without panicking is the assertion — a sprite entity
+    // has no SquareColor to overwrite.
+}
+
+#[test]
+fn set_color_for_an_unknown_entity_id_is_a_no_op() {
+    let mut game_core = GameCore::new();
+    game_core.handle(&entity_op_envelope(EntityOp::SetColor {
+        entity_id: 99,
+        color: (0, 255, 0, 255),
+    }));
+    // Reaching here without panicking is the assertion.
+}

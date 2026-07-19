@@ -38,6 +38,11 @@ rendering authority of its own.
     collider.
   - `Despawn` — removes an entity and its collider, if any. A no-op for
     an unknown `entity_id`.
+  - `SetColor` — overwrites a spawned entity's `SquareColor` in place —
+    the mechanism a caller uses for a temporary flash (set, wait, set
+    back) without `game-core` itself needing to know about flash timing.
+    A no-op for an unknown `entity_id`, or one with no `SquareColor` (a
+    sprite entity has none).
 - Every `core/tick`: `rapier2d` steps once, every collider-bearing
   entity's `Transform` is overwritten from its rigid body's post-step
   position (physics owns position for those entities, not the other way
