@@ -25,14 +25,12 @@
 </data>
  </layer>
  <objectgroup id="2" name="Collision">
-  <!-- Outer walls, boxing in the 480x320 world so nothing walks off-map. -->
+  <!-- Outer walls only, boxing in the 480x320 world so nothing walks
+       off-map. No interior walls: an open arena so the controlled entity
+       can reach every spawned obstacle directly from its spawn point. -->
   <object id="1" x="0" y="0" width="480" height="16"/>
   <object id="2" x="0" y="304" width="480" height="16"/>
   <object id="3" x="0" y="0" width="16" height="320"/>
   <object id="4" x="464" y="0" width="16" height="320"/>
-  <!-- A cross of interior obstacles to navigate around/through gaps. -->
-  <object id="5" x="160" y="120" width="160" height="16"/>
-  <object id="6" x="232" y="40" width="16" height="100"/>
-  <object id="7" x="232" y="180" width="16" height="100"/>
  </objectgroup>
 </map>

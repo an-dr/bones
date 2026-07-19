@@ -1,14 +1,15 @@
 # game_core_demo
 
-Loads a Tiled `.tmx` level (outer walls plus a cross of interior
-obstacles, all on a `"Collision"` object layer) and a sprite, then spawns
-a WASD/gamepad-controlled sprite entity and four stationary obstacle
-squares in `init`. Proves `game-core` end to end: `rapier2d` blocks the
-controlled entity against both the tilemap's fixed colliders and the
-obstacles' dynamic colliders, the controlled entity animating through its
-sprite's 4 frames while the obstacles draw as plain colored squares,
-rendered through `gfx/*` — all driven by `game-core`'s own `core/tick`
-subscription, not this extension's.
+Loads a Tiled `.tmx` level (an open arena — just its outer boundary
+walls on a `"Collision"` object layer, no interior obstacles to path
+around) and a sprite, then spawns a WASD/gamepad-controlled sprite
+entity and four stationary obstacle squares in `init`. Proves `game-core`
+end to end: `rapier2d` blocks the controlled entity against both the
+tilemap's fixed boundary colliders and the obstacles' dynamic colliders,
+the controlled entity animating through its sprite's 4 frames while the
+obstacles draw as plain colored squares, rendered through `gfx/*` — all
+driven by `game-core`'s own `core/tick` subscription, not this
+extension's.
 
 Movement itself is this extension's own logic: it tracks held WASD keys
 and the gamepad left stick via `input/*`, and every tick publishes a
@@ -28,5 +29,6 @@ Requires PowerShell 7+ (`pwsh`). Output:
 
 Enable `game_core` in `bones.toml` (see `core/app`'s config), then drop
 the built `.wasm` into `extensions/` next to the `bones` executable. WASD
-or a connected gamepad's left stick moves the controlled entity into the
-tilemap walls and the stationary obstacles.
+or a connected gamepad's left stick moves the controlled entity around
+the open arena into the stationary obstacles, and into the boundary
+walls at the arena's edge.
