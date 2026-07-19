@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "flow": "DetailedAuto",
-  "phase": "FINAL_REVIEW",
+  "phase": "MERGE",
   "baseBranch": "main",
   "baseCommit": "fcd9c9dd97e059fd6637665935e107ab1de01ca7",
   "featureBranch": "feature/game-core-physics-fixes",
@@ -36,7 +36,15 @@
       "description": "Clamp commanded velocity against contact normals to stop overlap under sustained input - research confirms the primary mechanism behind visible interpenetration is set_velocity hard-overwriting rapier2d linear velocity every tick via body.set_linvel, which re-drives a body into an obstacle faster than the compliant solver's per-step corrective velocity (normalized_max_corrective_velocity) can push it back out, regardless of stiffness tuning (increment 2). Fix: before tick's physics.step, or immediately after via querying active contacts for each collider-bearing entity, zero or reflect the component of a Dynamic/Frictionless body's linear velocity that points into an active contact's normal (only when actually touching, i.e. has_any_active_contact, reusing increment 1's real-contact check) so continuous held input can push but not tunnel/overlap through a blocked direction while still allowing motion along the free axis (sliding along a wall). Unit test: a body driven continuously into a fixed obstacle settles at (or very near) zero penetration rather than the deeper steady-state overlap from before this increment, while a body driven diagonally against a wall still slides along the open axis. Live-verify: push the robot directly into a red obstacle and hold for several seconds - no visible overlap in a screenshot, and pushing diagonally still lets the robot slide along the obstacle's edge."
     }
   ],
-  "approvals": [],
+  "approvals": [
+    {
+      "gate": "final",
+      "phase": "FINAL_REVIEW",
+      "incrementId": null,
+      "note": "User explicitly approved merging feature/game-core-physics-fixes into main after reviewing the FINAL_REVIEW summary for all 3 increments (phantom collision fix, solver stiffness tuning, velocity-clamp fix).",
+      "approvedAt": "2026-07-19T22:19:01.7411801Z"
+    }
+  ],
   "history": [
     {
       "at": "2026-07-19T20:17:48.9411078Z",
@@ -127,8 +135,18 @@
       "at": "2026-07-19T21:50:51.2194271Z",
       "action": "advance",
       "detail": "Advanced from MR to FINAL_REVIEW."
+    },
+    {
+      "at": "2026-07-19T22:19:01.7464517Z",
+      "action": "approve",
+      "detail": "Approved final during FINAL_REVIEW."
+    },
+    {
+      "at": "2026-07-19T22:19:10.4859268Z",
+      "action": "advance",
+      "detail": "Advanced from FINAL_REVIEW to MERGE."
     }
   ],
   "createdAt": "2026-07-19T20:17:48.8779903Z",
-  "updatedAt": "2026-07-19T21:50:51.2284125Z"
+  "updatedAt": "2026-07-19T22:19:10.4950379Z"
 }
