@@ -1,7 +1,9 @@
 use std::sync::{Arc, Mutex};
 
 use super::*;
-use bones_messages::game_core::{BodyKind, EntityOp, EntityOpMessage, LoadTilemap, Sprite};
+use bones_messages::game_core::{
+    BodyKind, Collision, EntityOp, EntityOpMessage, LoadTilemap, Sprite,
+};
 use bones_messages::gfx;
 use bones_messages::EncodeMessage;
 use bus::ServiceRegistry;
@@ -17,7 +19,8 @@ impl Handler for Spy {
     }
 }
 
-/// Wires `game_core` to a fresh `Bus`, subscribes a `Spy` to `gfx/*`, and
+/// Wires `game_core` to a fresh `Bus`, subscribes a `Spy` to `gfx/*` and
+/// `game-core/*` (so it also observes published `Collision` events), and
 /// returns both plus the bus so a test can call `dispatch()` after
 /// `handle`/`tick` to actually deliver what was enqueued (ADR-015:
 /// `publish` only enqueues).
@@ -26,6 +29,7 @@ fn ready_game_core() -> (GameCore, Bus, Spy) {
     let spy = Spy::default();
     let ep = bus.register("spy", spy.clone());
     ep.subscribe("gfx/*");
+    ep.subscribe("game-core/*");
 
     let mut registry = ServiceRegistry::new();
     registry.provide(bus.clone()).unwrap();
@@ -633,5 +637,82 @@ fn a_kinematic_body_pushes_a_dynamic_one_without_being_displaced() {
         "the dynamic body should have been pushed ahead of the kinematic one, got kinematic={} dynamic={}",
         kinematic_transform.x,
         dynamic_transform.x
+    );
+}
+
+#[test]
+fn two_overlapping_entities_publish_exactly_one_collision_event() {
+    let (mut game_core, bus, spy) = ready_game_core();
+    game_core.handle(&entity_op_envelope(spawn_with_collider_and_id(
+        1, 0.0, 0.0, 1.0, 1.0,
+    )));
+    game_core.handle(&entity_op_envelope(spawn_with_collider_and_id(
+        2, 0.5, 0.0, 1.0, 1.0,
+    )));
+
+    // Several ticks: the pair starts in contact and stays in contact while
+    // separating — a `Collision` should fire once for the new contact,
+    // not once per tick they remain overlapping.
+    for _ in 0..10 {
+        game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    }
+    bus.dispatch();
+
+    let published = spy.0.lock().unwrap();
+    let collisions: Vec<_> = published
+        .iter()
+        .filter(|e| e.topic == Collision::TOPIC)
+        .map(|e| Collision::decode(&e.payload).unwrap())
+        .collect();
+
+    assert_eq!(collisions.len(), 1, "got {collisions:?}");
+    let ids = [collisions[0].entity_id_a, collisions[0].entity_id_b];
+    assert!(ids.contains(&1) && ids.contains(&2), "got {ids:?}");
+}
+
+#[test]
+fn a_non_overlapping_pair_publishes_no_collision_event() {
+    let (mut game_core, bus, spy) = ready_game_core();
+    game_core.handle(&entity_op_envelope(spawn_with_collider_and_id(
+        1, 0.0, 0.0, 1.0, 1.0,
+    )));
+    game_core.handle(&entity_op_envelope(spawn_with_collider_and_id(
+        2, 100.0, 100.0, 1.0, 1.0,
+    )));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    bus.dispatch();
+
+    let published = spy.0.lock().unwrap();
+    let collisions = published
+        .iter()
+        .filter(|e| e.topic == Collision::TOPIC)
+        .count();
+    assert_eq!(collisions, 0);
+}
+
+#[test]
+fn a_tilemap_collider_never_publishes_a_collision_event() {
+    let (mut game_core, bus, spy) = ready_game_core();
+    let load = LoadTilemap {
+        tmx_bytes: FIXTURE_TMX,
+    };
+    game_core.handle(&envelope(LoadTilemap::TOPIC, load.encode()));
+    // Overlaps the fixture's collider rect centered at (8, 8), half-extent 8.
+    game_core.handle(&entity_op_envelope(spawn_with_collider_and_id(
+        1, 8.0, 8.0, 4.0, 4.0,
+    )));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    bus.dispatch();
+
+    let published = spy.0.lock().unwrap();
+    let collisions = published
+        .iter()
+        .filter(|e| e.topic == Collision::TOPIC)
+        .count();
+    assert_eq!(
+        collisions, 0,
+        "a tilemap collider has no entity_id, so a contact with one must never be published"
     );
 }

@@ -7,12 +7,14 @@
 
 use std::collections::HashMap;
 
-use bones_messages::game_core::{BodyKind, EntityOp, EntityOpMessage, LoadTilemap};
+use bones_messages::game_core::{BodyKind, Collision, EntityOp, EntityOpMessage, LoadTilemap};
 use bones_messages::gfx::{Clear, DrawRect, DrawSprite, SetCamera};
 use bones_messages::tick::Tick;
 use bones_messages::{DecodeMessage, EncodeMessage, Message};
 use bus::{Bus, Envelope, Handler, Module, ModuleContext};
-use rapier2d::prelude::{nalgebra, vector, ColliderBuilder, RigidBodyBuilder};
+use rapier2d::prelude::{
+    nalgebra, vector, ActiveEvents, ColliderBuilder, ColliderHandle, RigidBodyBuilder,
+};
 
 use crate::{load_collision_rects, Collider, Physics, SpriteAnimation, SquareColor, Transform};
 
@@ -42,6 +44,11 @@ pub struct GameCore {
     // `hecs::Entity` it became — the caller's addressing scheme never sees
     // a raw `hecs::Entity`, which is this module's own internal handle.
     entities: HashMap<u32, hecs::Entity>,
+    // The inverse of `entities`, restricted to `EntityOp::Spawn`-created
+    // colliders (tilemap colliders never appear here) — lets a rapier2d
+    // `CollisionEvent`'s `ColliderHandle` pair translate back into the
+    // caller-assigned `entity_id` pair a `game-core/collision` event names.
+    entity_ids_by_collider: HashMap<ColliderHandle, u32>,
 }
 
 impl GameCore {
@@ -51,6 +58,7 @@ impl GameCore {
             physics: Physics::new(),
             bus: None,
             entities: HashMap::new(),
+            entity_ids_by_collider: HashMap::new(),
         }
     }
 
@@ -140,7 +148,8 @@ impl GameCore {
                 .bodies
                 .insert(rigid_body.translation(vector![x, y]));
             let collider = self.physics.colliders.insert_with_parent(
-                ColliderBuilder::cuboid(collider_half_w, collider_half_h),
+                ColliderBuilder::cuboid(collider_half_w, collider_half_h)
+                    .active_events(ActiveEvents::COLLISION_EVENTS),
                 body,
                 &mut self.physics.bodies,
             );
@@ -150,6 +159,7 @@ impl GameCore {
                 half_w: collider_half_w,
                 half_h: collider_half_h,
             });
+            self.entity_ids_by_collider.insert(collider, entity_id);
         }
 
         let entity = self.world.spawn(builder.build());
@@ -177,6 +187,7 @@ impl GameCore {
             return;
         };
         if let Ok(collider) = self.world.get::<&Collider>(entity) {
+            self.entity_ids_by_collider.remove(&collider.collider);
             self.physics.remove_body(collider.body);
         }
         let _ = self.world.despawn(entity);
@@ -246,7 +257,26 @@ impl GameCore {
             }
         }
 
+        self.publish_collisions();
         self.publish_gfx();
+    }
+
+    /// Translates every rapier2d contact-start this tick's `step` produced
+    /// into a `game-core/collision` event, by `ColliderHandle`. A pair
+    /// where either side isn't in `entity_ids_by_collider` (a tilemap
+    /// collider, or a collider whose entity was already despawned this
+    /// tick) is silently skipped rather than published with a missing id.
+    fn publish_collisions(&mut self) {
+        for (collider_a, collider_b) in self.physics.drain_collision_starts() {
+            let entity_id_a = self.entity_ids_by_collider.get(&collider_a).copied();
+            let entity_id_b = self.entity_ids_by_collider.get(&collider_b).copied();
+            if let (Some(entity_id_a), Some(entity_id_b)) = (entity_id_a, entity_id_b) {
+                self.publish(Collision {
+                    entity_id_a,
+                    entity_id_b,
+                });
+            }
+        }
     }
 
     /// Turns every entity's simulated state into a `gfx::DrawSprite` or

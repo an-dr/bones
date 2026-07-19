@@ -103,3 +103,12 @@ fn load_tilemap_round_trips() {
     };
     assert_eq!(LoadTilemap::decode(&load.encode()), Ok(load));
 }
+
+#[test]
+fn collision_round_trips() {
+    let collision = Collision {
+        entity_id_a: 3,
+        entity_id_b: 7,
+    };
+    assert_eq!(Collision::decode(&collision.encode()), Ok(collision));
+}

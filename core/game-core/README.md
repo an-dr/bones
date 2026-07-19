@@ -59,6 +59,13 @@ rendering authority of its own.
   A map with no `"Collision"` layer loads fine and adds no colliders.
   Stays its own topic rather than folding into `EntityOp`: a one-shot
   asset load, not a per-entity operation.
+- `game-core/collision` — published whenever two `EntityOp::Spawn`-created
+  colliders start touching (a rapier2d contact `Started` event), carrying
+  both entities' `entity_id`s (unordered — which is `entity_id_a` vs.
+  `entity_id_b` depends on rapier2d's internal collider ordering, not on
+  which entity moved into the other). Fires once per new contact, not
+  once per tick two entities stay overlapping; a tilemap collider (no
+  `entity_id` of its own) never appears in one.
 
 No logger, same stance as `core/audio`: registered via the generic
 `.module(...)` path, which has no access to `Engine`'s internal logger.

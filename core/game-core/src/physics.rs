@@ -1,6 +1,8 @@
 //! Bundles the rapier2d pipeline state `GameCore` steps each tick
 //! (ADR-019: physics/collision is bought, not hand-rolled).
 
+use rapier2d::crossbeam::channel::{unbounded, Receiver};
+use rapier2d::pipeline::ChannelEventCollector;
 use rapier2d::prelude::*;
 
 pub struct Physics {
@@ -15,6 +17,8 @@ pub struct Physics {
     impulse_joints: ImpulseJointSet,
     multibody_joints: MultibodyJointSet,
     ccd_solver: CCDSolver,
+    collision_events: Receiver<CollisionEvent>,
+    event_handler: ChannelEventCollector,
 }
 
 impl Physics {
@@ -22,6 +26,8 @@ impl Physics {
     /// an RPG, ADR-019) has no natural "down"; a side-view game can set it
     /// itself via a later API if this module grows one.
     pub fn new() -> Self {
+        let (collision_sender, collision_events) = unbounded();
+        let (force_sender, _force_events) = unbounded();
         Self {
             bodies: RigidBodySet::new(),
             colliders: ColliderSet::new(),
@@ -34,6 +40,8 @@ impl Physics {
             impulse_joints: ImpulseJointSet::new(),
             multibody_joints: MultibodyJointSet::new(),
             ccd_solver: CCDSolver::new(),
+            collision_events,
+            event_handler: ChannelEventCollector::new(collision_sender, force_sender),
         }
     }
 
@@ -53,8 +61,23 @@ impl Physics {
             &mut self.ccd_solver,
             None,
             &(),
-            &(),
+            &self.event_handler,
         );
+    }
+
+    /// Drains every `CollisionEvent::Started` produced since the last call
+    /// — `Stopped` events are ignored (`game-core` only surfaces new
+    /// contact, not separation, for now). Only fires for collider pairs
+    /// where at least one collider requested `ActiveEvents::COLLISION_EVENTS`
+    /// (set on every `EntityOp::Spawn`-created collider, not tilemap ones).
+    pub fn drain_collision_starts(&mut self) -> Vec<(ColliderHandle, ColliderHandle)> {
+        self.collision_events
+            .try_iter()
+            .filter_map(|event| match event {
+                CollisionEvent::Started(a, b, _) => Some((a, b)),
+                CollisionEvent::Stopped(..) => None,
+            })
+            .collect()
     }
 
     pub fn body_translation(&self, handle: RigidBodyHandle) -> Option<Vector<Real>> {

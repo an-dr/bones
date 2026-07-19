@@ -89,3 +89,63 @@ fn removing_an_already_removed_body_is_a_no_op() {
     physics.remove_body(body);
     // Reaching here without panicking is the assertion.
 }
+
+#[test]
+fn drain_collision_starts_reports_a_new_contact_once() {
+    let mut physics = Physics::new();
+    let body_a = physics
+        .bodies
+        .insert(RigidBodyBuilder::dynamic().translation(vector![0.0, 0.0]));
+    let collider_a = physics.colliders.insert_with_parent(
+        ColliderBuilder::cuboid(1.0, 1.0).active_events(ActiveEvents::COLLISION_EVENTS),
+        body_a,
+        &mut physics.bodies,
+    );
+    let body_b = physics
+        .bodies
+        .insert(RigidBodyBuilder::dynamic().translation(vector![0.5, 0.0]));
+    let collider_b = physics.colliders.insert_with_parent(
+        ColliderBuilder::cuboid(1.0, 1.0).active_events(ActiveEvents::COLLISION_EVENTS),
+        body_b,
+        &mut physics.bodies,
+    );
+
+    physics.step(1.0 / 60.0);
+    let starts = physics.drain_collision_starts();
+
+    assert_eq!(starts.len(), 1);
+    let (a, b) = starts[0];
+    assert!(
+        (a == collider_a && b == collider_b) || (a == collider_b && b == collider_a),
+        "got {starts:?}"
+    );
+
+    // Still overlapping, but no *new* start — draining again should be empty.
+    physics.step(1.0 / 60.0);
+    assert!(physics.drain_collision_starts().is_empty());
+}
+
+#[test]
+fn colliders_without_active_events_report_no_collision_starts() {
+    let mut physics = Physics::new();
+    let body_a = physics
+        .bodies
+        .insert(RigidBodyBuilder::dynamic().translation(vector![0.0, 0.0]));
+    physics.colliders.insert_with_parent(
+        ColliderBuilder::cuboid(1.0, 1.0),
+        body_a,
+        &mut physics.bodies,
+    );
+    let body_b = physics
+        .bodies
+        .insert(RigidBodyBuilder::dynamic().translation(vector![0.5, 0.0]));
+    physics.colliders.insert_with_parent(
+        ColliderBuilder::cuboid(1.0, 1.0),
+        body_b,
+        &mut physics.bodies,
+    );
+
+    physics.step(1.0 / 60.0);
+
+    assert!(physics.drain_collision_starts().is_empty());
+}
