@@ -159,9 +159,10 @@ fn spawn_obstacle(entity_id: u32, x: f32, y: f32) {
     });
 }
 
-/// A blue square with no inertia: `Kinematic`, so it's solid (blocks and
-/// pushes the `Dynamic` obstacles/robot) but nothing can push it back —
-/// stays exactly where spawned unless a future `SetVelocity` moves it.
+/// A blue square with no inertia: `Frictionless`, so the robot or a red
+/// obstacle can push it around like any other body, but it carries no
+/// momentum of its own — it stops the instant nothing is pushing it,
+/// instead of coasting or drifting.
 fn spawn_mover(entity_id: u32, x: f32, y: f32) {
     publish_entity_op(EntityOp::Spawn {
         entity_id,
@@ -171,7 +172,7 @@ fn spawn_mover(entity_id: u32, x: f32, y: f32) {
         square_color: MOVER_COLOR,
         collider_half_w: MOVER_HALF_EXTENT,
         collider_half_h: MOVER_HALF_EXTENT,
-        body_kind: BodyKind::Kinematic,
+        body_kind: BodyKind::Frictionless,
     });
 }
 

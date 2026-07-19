@@ -3,15 +3,16 @@
 Loads a Tiled `.tmx` level (an open arena — just its outer boundary
 walls on a `"Collision"` object layer, no interior obstacles to path
 around) and a sprite, then spawns a WASD/gamepad-controlled sprite
-entity, four stationary red obstacle squares, and two blue immovable
-squares in `init`. Proves `game-core` end to end: `rapier2d` blocks the
-controlled entity against the tilemap's fixed boundary colliders, the
-red obstacles' `Dynamic` colliders (pushable), and the blue squares'
-`Kinematic` colliders (solid but never pushed); the controlled entity
-animates through its sprite's 4 frames only while moving, freezing on
-its current frame at rest; everything renders through `gfx/*` — all
-driven by `game-core`'s own `core/tick` subscription, not this
-extension's.
+entity, four stationary red obstacle squares, and two blue squares with
+no inertia in `init`. Proves `game-core` end to end: `rapier2d` blocks
+the controlled entity against the tilemap's fixed boundary colliders,
+the red obstacles' `Dynamic` colliders (pushable, carries momentum), and
+the blue squares' `Frictionless` colliders (pushable too, but with no
+momentum — they stop the instant nothing is pushing them rather than
+coasting); the controlled entity animates through its sprite's 4 frames
+only while moving, freezing on its current frame at rest; everything
+renders through `gfx/*` — all driven by `game-core`'s own `core/tick`
+subscription, not this extension's.
 
 Movement itself is this extension's own logic: it tracks held WASD keys
 and the gamepad left stick via `input/*`, and every tick publishes a
@@ -40,4 +41,5 @@ Enable `game_core` and `audio` in `bones.toml` (see `core/app`'s config),
 then drop the built `.wasm` into `extensions/` next to the `bones`
 executable. WASD or a connected gamepad's left stick moves the
 controlled entity around the open arena into the stationary obstacles,
-the blue squares, and the boundary walls at the arena's edge.
+the blue squares (which it can push, unlike the red obstacles they
+don't drift once released), and the boundary walls at the arena's edge.

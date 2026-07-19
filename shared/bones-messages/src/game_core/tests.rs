@@ -54,6 +54,25 @@ fn spawn_square_with_no_sprite_round_trips() {
 }
 
 #[test]
+fn spawn_with_frictionless_body_kind_round_trips() {
+    let op = EntityOp::Spawn {
+        entity_id: 2,
+        x: 0.0,
+        y: 0.0,
+        sprite: None,
+        square_color: (60, 120, 220, 255),
+        collider_half_w: 8.0,
+        collider_half_h: 8.0,
+        body_kind: BodyKind::Frictionless,
+    };
+    let message = EntityOpMessage(op);
+    assert_eq!(
+        EntityOpMessage::decode(&message.encode()),
+        Ok(EntityOpMessage(op))
+    );
+}
+
+#[test]
 fn set_velocity_round_trips() {
     let op = EntityOp::SetVelocity {
         entity_id: 1,

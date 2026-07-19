@@ -36,6 +36,12 @@ const TILEMAP_COLLIDER_COLOR: (u8, u8, u8, u8) = (90, 90, 100, 255);
 /// requiring an exact `0.0`.
 const MOVING_SPEED_THRESHOLD_SQUARED: f32 = 0.01;
 
+/// Linear damping for `BodyKind::Frictionless` bodies: high enough that
+/// velocity decays to rest within a fraction of a tick once nothing is
+/// pushing the body, so it never visibly coasts or drifts after contact
+/// ends.
+const FRICTIONLESS_LINEAR_DAMPING: f32 = 50.0;
+
 pub struct GameCore {
     world: hecs::World,
     physics: Physics,
@@ -154,6 +160,9 @@ impl GameCore {
             let rigid_body = match body_kind {
                 BodyKind::Dynamic => RigidBodyBuilder::dynamic(),
                 BodyKind::Kinematic => RigidBodyBuilder::kinematic_velocity_based(),
+                BodyKind::Frictionless => RigidBodyBuilder::dynamic()
+                    .linear_damping(FRICTIONLESS_LINEAR_DAMPING)
+                    .lock_rotations(),
             };
             let body = self
                 .physics

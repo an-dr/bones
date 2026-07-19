@@ -27,10 +27,14 @@ rendering authority of its own.
     square (obstacles/walls that don't need art). A nonzero
     `collider_half_w`/`collider_half_h` also gives it a `rapier2d` box
     collider (`0.0` spawns a purely visual entity, no physics body) of
-    the given `body_kind`: `Dynamic` (pushed by other bodies, the
-    default) or `Kinematic` (moves exactly as `SetVelocity` commands it
-    and pushes `Dynamic` bodies out of its way, but is never itself
-    pushed — the standard "platform/mover" body type).
+    the given `body_kind`: `Dynamic` (pushed by other bodies, carries
+    momentum, the default), `Kinematic` (moves exactly as `SetVelocity`
+    commands it and pushes `Dynamic` bodies out of its way, but is never
+    itself pushed — the standard "platform/mover" body type), or
+    `Frictionless` (a `Dynamic` body under very high linear damping with
+    rotation locked: pushed by contact same as `Dynamic`, but carries no
+    momentum — it settles to rest almost immediately once nothing is
+    pushing it, rather than coasting or drifting).
   - `SetVelocity` — sets a spawned entity's rapier2d linear velocity
     directly, addressed by `entity_id`. The mechanism a caller (e.g. an
     extension reading `input/*` for WASD/gamepad movement) drives an
@@ -80,6 +84,6 @@ unconditionally (design/modules.md) — `init` fails if none is available.
 
 See `extensions/game_core_demo` for a runnable example: a tilemap, a
 WASD/gamepad-controlled sprite entity, red `Dynamic` obstacles, and blue
-`Kinematic` squares, all colliding — plus `core/audio` footstep and
+`Frictionless` squares, all colliding — plus `core/audio` footstep and
 hit-flash sound driven entirely from the demo's own `game-core/collision`
 handling, not from `game-core` itself.

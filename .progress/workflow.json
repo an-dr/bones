@@ -11,8 +11,8 @@
     "done": "A minimal 2D scene simulates entities with collision on a loaded tilemap, rendered through gfx/*, demonstrated via a runnable example extension.",
     "outOfScope": "gfx/* rendering authority, sprite-animation asset pipeline beyond timing state machine, physics beyond 2D collision, any change to renderer ownership of the window surface."
   },
-  "currentIncrementId": "ff2b1145b2f1464fb1c7c39956acf556",
-  "commitBaseline": "47ef3b19287249a3edba816606930e2b122c6e64",
+  "currentIncrementId": "3e061d3d2e71470682c7725a32b53f7b",
+  "commitBaseline": "613a8659ed426268518592e274e9c48909499054",
   "increments": [
     {
       "id": "6bb8259e81814fe4bff2d05f094ea2da",
@@ -108,9 +108,16 @@
     {
       "id": "ff2b1145b2f1464fb1c7c39956acf556",
       "number": 14,
-      "status": "verified",
+      "status": "completed",
       "scope": "demo: blue kinematic squares, footstep audio, hit-flash + sound",
       "description": "game_core_demo spawns two blue Kinematic obstacle squares alongside the existing red Dynamic ones. The extension enables core/audio, synthesizes two short WAV tones (footstep click, hit blip) in code, and: plays the footstep tone on a fixed interval while its own held-input velocity is nonzero; subscribes to game-core/collision and, on an event naming two red obstacle entity_ids, publishes a brief SquareColor override (a new EntityOp op or SetVelocity-adjacent mechanism) for 0.1-0.5s plus the hit tone. Demo: moving the robot produces footstep sound only while moving and only while the sprite is animating; a red square driven into another red square flashes color and plays a sound."
+    },
+    {
+      "id": "3e061d3d2e71470682c7725a32b53f7b",
+      "number": 15,
+      "status": "verified",
+      "scope": "game-core",
+      "description": "BodyKind::Frictionless for blue squares - blue obstacles switch from Kinematic (immovable) to a new Frictionless BodyKind: a Dynamic rapier2d body with high linear damping and locked rotation, so it is pushed by contact (robot or red boxes) but settles to rest almost instantly with no coasting/drift once contact ends, and never spins. EntityOp::BodyKind gains this third tagged variant (open/closed, no new topic/fields). Demo: pushing a blue square moves it in the push direction and it stops the moment contact stops; it never slides on its own."
     }
   ],
   "approvals": [],
@@ -489,8 +496,43 @@
       "at": "2026-07-19T19:02:03.7665517Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-07-19T19:02:20.6210232Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to MR."
+    },
+    {
+      "at": "2026-07-19T19:02:28.6668554Z",
+      "action": "advance",
+      "detail": "Advanced from MR to FINAL_REVIEW."
+    },
+    {
+      "at": "2026-07-19T19:27:09.4903177Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 15: game-core"
+    },
+    {
+      "at": "2026-07-19T19:27:24.9250152Z",
+      "action": "advance",
+      "detail": "Advanced from SPLIT to BRANCH."
+    },
+    {
+      "at": "2026-07-19T19:27:34.4151699Z",
+      "action": "advance",
+      "detail": "Advanced from BRANCH to BUILD."
+    },
+    {
+      "at": "2026-07-19T19:38:55.8819638Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-07-19T19:39:03.8586721Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-07-19T13:14:27.3797032Z",
-  "updatedAt": "2026-07-19T19:02:03.7744392Z"
+  "updatedAt": "2026-07-19T19:39:03.8672530Z"
 }

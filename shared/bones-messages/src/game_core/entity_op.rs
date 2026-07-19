@@ -14,6 +14,12 @@ pub enum BodyKind {
     /// rapier2d's standard "platform/mover" body type (`kinematic` in
     /// Unity, Godot, and Box2D alike).
     Kinematic,
+    /// A `Dynamic` body (pushed by contact, participates in collision
+    /// response) with very high linear damping and rotation locked: it
+    /// moves when pushed, but carries no momentum — velocity decays to
+    /// rest almost immediately once nothing is pushing it, instead of
+    /// coasting or drifting, and it never spins from an off-center hit.
+    Frictionless,
 }
 
 /// The drawable appearance of a spawned entity: either an animated sprite
@@ -123,6 +129,7 @@ impl EntityOp {
                     .u8(match body_kind {
                         BodyKind::Dynamic => 0,
                         BodyKind::Kinematic => 1,
+                        BodyKind::Frictionless => 2,
                     })
             }
             EntityOp::SetVelocity { entity_id, vx, vy } => writer
@@ -174,6 +181,7 @@ impl EntityOp {
                 let collider_half_h = reader.read_f32()?;
                 let body_kind = match reader.read_u8()? {
                     1 => BodyKind::Kinematic,
+                    2 => BodyKind::Frictionless,
                     _ => BodyKind::Dynamic,
                 };
                 Ok(EntityOp::Spawn {

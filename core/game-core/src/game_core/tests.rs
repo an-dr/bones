@@ -122,6 +122,25 @@ fn spawn_kinematic_with_collider(
     }
 }
 
+fn spawn_frictionless_with_collider(
+    entity_id: u32,
+    x: f32,
+    y: f32,
+    half_w: f32,
+    half_h: f32,
+) -> EntityOp {
+    EntityOp::Spawn {
+        entity_id,
+        x,
+        y,
+        sprite: Some(sprite()),
+        square_color: (0, 0, 0, 0),
+        collider_half_w: half_w,
+        collider_half_h: half_h,
+        body_kind: BodyKind::Frictionless,
+    }
+}
+
 fn spawn_square_with_collider(
     entity_id: u32,
     x: f32,
@@ -637,6 +656,66 @@ fn a_kinematic_body_pushes_a_dynamic_one_without_being_displaced() {
         "the dynamic body should have been pushed ahead of the kinematic one, got kinematic={} dynamic={}",
         kinematic_transform.x,
         dynamic_transform.x
+    );
+}
+
+#[test]
+fn a_frictionless_body_is_pushed_by_contact_but_stops_almost_immediately() {
+    let mut game_core = GameCore::new();
+    // A moving dynamic "pusher" approaches a stationary frictionless body
+    // from the left.
+    game_core.handle(&entity_op_envelope(spawn_with_collider_and_id(
+        1, 0.0, 0.0, 1.0, 1.0,
+    )));
+    game_core.handle(&entity_op_envelope(spawn_frictionless_with_collider(
+        2, 2.0, 0.0, 1.0, 1.0,
+    )));
+    game_core.handle(&entity_op_envelope(EntityOp::SetVelocity {
+        entity_id: 1,
+        vx: 5.0,
+        vy: 0.0,
+    }));
+
+    // Drive the pusher into the frictionless body.
+    for _ in 0..30 {
+        game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    }
+    let frictionless_entity = *game_core.entities.get(&2).unwrap();
+    let x_at_contact = game_core
+        .world
+        .get::<&Transform>(frictionless_entity)
+        .unwrap()
+        .x;
+    assert!(
+        x_at_contact > 2.0,
+        "the frictionless body should have been pushed off its spawn position, got x={}",
+        x_at_contact
+    );
+
+    // Stop the pusher and remove it from the frictionless body's path so
+    // there's no more contact force, then let a few more ticks pass.
+    game_core.handle(&entity_op_envelope(EntityOp::SetVelocity {
+        entity_id: 1,
+        vx: 0.0,
+        vy: 0.0,
+    }));
+    game_core.handle(&entity_op_envelope(EntityOp::Despawn { entity_id: 1 }));
+    for _ in 0..30 {
+        game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    }
+    let x_after_settling = game_core
+        .world
+        .get::<&Transform>(frictionless_entity)
+        .unwrap()
+        .x;
+
+    // No inertia: once nothing is pushing it, the body should have barely
+    // coasted at all rather than drifting on under its last velocity.
+    assert!(
+        (x_after_settling - x_at_contact).abs() < 0.1,
+        "a frictionless body should settle almost immediately once contact ends, got x_at_contact={} x_after_settling={}",
+        x_at_contact,
+        x_after_settling
     );
 }
 
