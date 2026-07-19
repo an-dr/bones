@@ -83,10 +83,16 @@ adding one is a design change, not a convenience:
 | Service        | Provider          | Consumers      | Carries                     |
 | -------------- | ----------------- | -------------- | --------------------------- |
 | window-surface | platform (kernel), via `Engine::build` | renderer, web | `sdl3::video::Window` |
+| bus            | kernel, via `Engine::build`        | game-core      | `bus::Bus` |
 | draw-target    | *renderer module*  | *ui*           | *draw-data submission (egui triangles)* |
 
-`window-surface` is real — `renderer`'s `init` consumes it. `draw-target`
-is still aspirational: `ui` direct-wires to `renderer`'s crate instead
+`window-surface` is real — `renderer`'s `init` consumes it. `bus` is also
+real — unlike `renderer`/`ui`, which get a `Bus` handle from their own
+hardcoded builder sugar (`.renderer()`/`.ui()`), a module injected via the
+generic `.module(...)` path (game-core is the first that needs to publish)
+has no other way to reach one, so `Engine::build` provides it as a service
+unconditionally, the same as `window-surface`. `draw-target` is still
+aspirational: `ui` direct-wires to `renderer`'s crate instead
 (docs/structure.md) rather than consuming a service, pending its own
 migration onto `Module`.
 

@@ -19,7 +19,11 @@ fn run() -> Result<(), String> {
 
     let mut engine = runner::Engine::new()
         .extensions_dir(config.extensions_dir)
-        .window(config.window_title, config.window_width, config.window_height)
+        .window(
+            config.window_title,
+            config.window_width,
+            config.window_height,
+        )
         .saves_dir(config.saves_dir);
     if config.renderer {
         engine = engine.renderer();
@@ -29,6 +33,9 @@ fn run() -> Result<(), String> {
     }
     if config.audio {
         engine = engine.module(audio::Audio::new());
+    }
+    if config.game_core {
+        engine = engine.module(game_core::GameCore::new());
     }
     if config.persistence_read_only {
         engine = engine.read_only_persistence();

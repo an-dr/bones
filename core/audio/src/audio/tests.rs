@@ -8,7 +8,9 @@ fn init_opens_a_real_audio_device_and_subscribes_audio_topics() {
     let mut ctx = ModuleContext::new(&mut registry);
     let mut audio = Audio::new();
 
-    audio.init(&mut ctx).expect("a real audio device should open on this machine");
+    audio
+        .init(&mut ctx)
+        .expect("a real audio device should open on this machine");
 
     assert_eq!(ctx.into_subscriptions(), vec!["audio/*"]);
     assert!(audio.manager.is_some());
@@ -50,7 +52,9 @@ fn ready_audio() -> Audio {
     let mut registry = ServiceRegistry::new();
     let mut ctx = ModuleContext::new(&mut registry);
     let mut audio = Audio::new();
-    audio.init(&mut ctx).expect("a real audio device should open on this machine");
+    audio
+        .init(&mut ctx)
+        .expect("a real audio device should open on this machine");
     audio
 }
 
@@ -66,8 +70,14 @@ fn envelope(topic: &str, payload: Vec<u8>) -> Envelope {
 #[test]
 fn load_sound_decodes_a_real_wav_into_the_cache() {
     let mut audio = ready_audio();
-    let load = bones_messages::audio::LoadSound { id: 1, bytes: &tiny_wav() };
-    audio.handle(&envelope(bones_messages::audio::LoadSound::TOPIC, load.encode()));
+    let load = bones_messages::audio::LoadSound {
+        id: 1,
+        bytes: &tiny_wav(),
+    };
+    audio.handle(&envelope(
+        bones_messages::audio::LoadSound::TOPIC,
+        load.encode(),
+    ));
 
     assert!(audio.sounds.contains_key(&1));
 }
@@ -75,17 +85,35 @@ fn load_sound_decodes_a_real_wav_into_the_cache() {
 #[test]
 fn play_music_retains_a_playing_handle_and_stop_music_clears_it() {
     let mut audio = ready_audio();
-    let load = bones_messages::audio::LoadSound { id: 1, bytes: &tiny_wav() };
-    audio.handle(&envelope(bones_messages::audio::LoadSound::TOPIC, load.encode()));
+    let load = bones_messages::audio::LoadSound {
+        id: 1,
+        bytes: &tiny_wav(),
+    };
+    audio.handle(&envelope(
+        bones_messages::audio::LoadSound::TOPIC,
+        load.encode(),
+    ));
 
     let play = bones_messages::audio::PlayMusic { id: 1, volume: 0.5 };
-    audio.handle(&envelope(bones_messages::audio::PlayMusic::TOPIC, play.encode()));
+    audio.handle(&envelope(
+        bones_messages::audio::PlayMusic::TOPIC,
+        play.encode(),
+    ));
 
-    let handle = audio.music.as_ref().expect("play-music should retain a handle");
+    let handle = audio
+        .music
+        .as_ref()
+        .expect("play-music should retain a handle");
     assert_eq!(handle.state(), kira::sound::PlaybackState::Playing);
 
-    audio.handle(&envelope(bones_messages::audio::StopMusic::TOPIC, bones_messages::audio::StopMusic.encode()));
-    assert!(audio.music.is_none(), "stop-music should clear the retained handle");
+    audio.handle(&envelope(
+        bones_messages::audio::StopMusic::TOPIC,
+        bones_messages::audio::StopMusic.encode(),
+    ));
+    assert!(
+        audio.music.is_none(),
+        "stop-music should clear the retained handle"
+    );
 }
 
 #[test]
@@ -93,11 +121,20 @@ fn play_sound_and_set_music_volume_for_an_unloaded_or_absent_id_do_not_panic() {
     let mut audio = ready_audio();
     // No LoadSound first — an extension racing its own load/play order,
     // or a bogus id, must not crash the render loop.
-    let play = bones_messages::audio::PlaySound { id: 99, volume: 1.0 };
-    audio.handle(&envelope(bones_messages::audio::PlaySound::TOPIC, play.encode()));
+    let play = bones_messages::audio::PlaySound {
+        id: 99,
+        volume: 1.0,
+    };
+    audio.handle(&envelope(
+        bones_messages::audio::PlaySound::TOPIC,
+        play.encode(),
+    ));
 
     let set_volume = bones_messages::audio::SetMusicVolume { volume: 0.2 };
-    audio.handle(&envelope(bones_messages::audio::SetMusicVolume::TOPIC, set_volume.encode()));
+    audio.handle(&envelope(
+        bones_messages::audio::SetMusicVolume::TOPIC,
+        set_volume.encode(),
+    ));
     // No music ever started — nothing to adjust, and no panic either.
     assert!(audio.music.is_none());
 }

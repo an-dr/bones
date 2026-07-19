@@ -1,5 +1,5 @@
-use std::sync::{Arc, Mutex};
 use pubsub_bus::Subscriber;
+use std::sync::{Arc, Mutex};
 
 use crate::adapter::Adapter;
 use crate::{Endpoint, Envelope, Handler};

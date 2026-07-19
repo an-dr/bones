@@ -16,10 +16,26 @@ fn logger_forwards_to_sink() {
     assert_eq!(
         records,
         vec![
-            (Level::Debug, "bus".to_string(), "subscribed to input/*".to_string()),
-            (Level::Info, "host".to_string(), "extension loaded".to_string()),
-            (Level::Warn, "bus".to_string(), "queue nearing budget".to_string()),
-            (Level::Error, "host".to_string(), "extension trapped".to_string()),
+            (
+                Level::Debug,
+                "bus".to_string(),
+                "subscribed to input/*".to_string()
+            ),
+            (
+                Level::Info,
+                "host".to_string(),
+                "extension loaded".to_string()
+            ),
+            (
+                Level::Warn,
+                "bus".to_string(),
+                "queue nearing budget".to_string()
+            ),
+            (
+                Level::Error,
+                "host".to_string(),
+                "extension trapped".to_string()
+            ),
         ]
     );
 }

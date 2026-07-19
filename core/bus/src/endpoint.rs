@@ -20,7 +20,11 @@ impl Endpoint {
     }
 
     pub fn release(&self, pattern: &str) {
-        self.adapter.lock().unwrap().patterns.retain(|p| p != pattern);
+        self.adapter
+            .lock()
+            .unwrap()
+            .patterns
+            .retain(|p| p != pattern);
     }
 
     pub fn release_all(&self) {

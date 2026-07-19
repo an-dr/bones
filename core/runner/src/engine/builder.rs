@@ -17,7 +17,10 @@ use wasm_extensions::lifecycle;
 use wasm_extensions::lifecycle::Event;
 use wasm_extensions::persistence::Persistence;
 
-use crate::loading::{attach_extension, derive_extension_name, find_wasm_files, is_first_occurrence, read_file_mtime, ENGINE_SENDER};
+use crate::loading::{
+    attach_extension, derive_extension_name, find_wasm_files, is_first_occurrence, read_file_mtime,
+    ENGINE_SENDER,
+};
 use crate::supervisor::TrackedExtension;
 use crate::Runner;
 use crate::Supervisor;
@@ -167,6 +170,14 @@ impl Engine {
         if let Some(platform) = &mut platform {
             platform.provide_window(&mut services);
         }
+        // `bus` service: lets a `.module(...)`-injected module (game-core
+        // is the first) publish, not just receive — the same no-privileged-
+        // access stance as `window-surface`. `Bus` is cheap to clone (an
+        // `Arc` internally), so providing it doesn't compete with anything
+        // else that also wants a `Bus` handle.
+        services
+            .provide(bus.clone())
+            .expect("no other service registers as Bus");
 
         let renderer = if renderer_enabled {
             if platform.is_none() {
@@ -208,15 +219,22 @@ impl Engine {
         // already run and failed its `send` with `SendError::UnknownEndpoint`.
         let mut modules = Vec::new();
         for module in self.modules.drain(..) {
-            register_module(&bus, &registry, &mut services, &mut modules, module).map_err(wasmtime::Error::msg)?;
+            register_module(&bus, &registry, &mut services, &mut modules, module)
+                .map_err(wasmtime::Error::msg)?;
         }
 
         // Unconditional (persistence's own doc comment explains why) —
         // registered here, not through `self.modules`, so there's no
         // `.persistence()`-style opt-in to forget.
         let persistence = Persistence::new(self.saves_dir.clone(), self.persistence_read_only);
-        register_module(&bus, &registry, &mut services, &mut modules, Box::new(persistence))
-            .map_err(wasmtime::Error::msg)?;
+        register_module(
+            &bus,
+            &registry,
+            &mut services,
+            &mut modules,
+            Box::new(persistence),
+        )
+        .map_err(wasmtime::Error::msg)?;
 
         let mut tracked = Vec::new();
         let mut loaded_names = std::collections::HashSet::new();
@@ -227,7 +245,10 @@ impl Engine {
                 if !is_first_occurrence(&mut loaded_names, &name) {
                     self.logger.error(
                         "engine",
-                        &format!("skipping {}: an extension named '{name}' is already loaded", path.display()),
+                        &format!(
+                            "skipping {}: an extension named '{name}' is already loaded",
+                            path.display()
+                        ),
                     );
                     continue;
                 }
@@ -235,7 +256,10 @@ impl Engine {
                     Ok((ep, shared, topics)) => {
                         self.logger.info(
                             "engine",
-                            &format!("loaded '{name}' from {} (subscribed: {topics:?})", path.display()),
+                            &format!(
+                                "loaded '{name}' from {} (subscribed: {topics:?})",
+                                path.display()
+                            ),
                         );
                         lifecycle::publish(&bus, ENGINE_SENDER, &name, Event::Loaded);
                         tracked.push(TrackedExtension {
@@ -248,15 +272,23 @@ impl Engine {
                         });
                     }
                     Err(err) => {
-                        self.logger
-                            .error("engine", &format!("failed to load {}: {err}", path.display()));
+                        self.logger.error(
+                            "engine",
+                            &format!("failed to load {}: {err}", path.display()),
+                        );
                         lifecycle::publish(&bus, ENGINE_SENDER, &name, Event::Faulted);
                     }
                 }
             }
         }
 
-        let supervisor = Supervisor::new(wasm_engine, bus.clone(), registry, self.logger.clone(), tracked);
+        let supervisor = Supervisor::new(
+            wasm_engine,
+            bus.clone(),
+            registry,
+            self.logger.clone(),
+            tracked,
+        );
 
         if let Some(platform) = &mut platform {
             platform.reclaim_window(&mut services);

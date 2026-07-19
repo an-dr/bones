@@ -74,8 +74,10 @@ impl Supervisor {
             // request ends in silence".
             self.registry.remove(&extension.name);
             extension.quarantined = true;
-            self.logger
-                .error("engine", &format!("'{}' faulted and was quarantined", extension.name));
+            self.logger.error(
+                "engine",
+                &format!("'{}' faulted and was quarantined", extension.name),
+            );
             lifecycle::publish(&self.bus, ENGINE_SENDER, &extension.name, Event::Faulted);
         }
 
@@ -95,7 +97,14 @@ impl Supervisor {
             }
 
             lifecycle::publish(&self.bus, ENGINE_SENDER, &extension.name, Event::Reloading);
-            match attach_extension(&self.wasm_engine, &self.bus, &self.registry, &self.logger, &extension.path, &extension.name) {
+            match attach_extension(
+                &self.wasm_engine,
+                &self.bus,
+                &self.registry,
+                &self.logger,
+                &extension.path,
+                &extension.name,
+            ) {
                 Ok((ep, shared, topics)) => {
                     if !extension.quarantined {
                         self.bus.unregister(&extension.endpoint);
@@ -113,7 +122,10 @@ impl Supervisor {
                 Err(err) => {
                     self.logger.error(
                         "engine",
-                        &format!("reload of '{}' failed, keeping the running instance: {err}", extension.name),
+                        &format!(
+                            "reload of '{}' failed, keeping the running instance: {err}",
+                            extension.name
+                        ),
                     );
                 }
             }

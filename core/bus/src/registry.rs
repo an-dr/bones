@@ -32,7 +32,11 @@ impl Registry {
     }
 
     pub fn insert(&self, name: impl Into<String>, target: Arc<dyn Respond>) {
-        self.inner.lock().unwrap().targets.insert(name.into(), target);
+        self.inner
+            .lock()
+            .unwrap()
+            .targets
+            .insert(name.into(), target);
     }
 
     pub fn remove(&self, name: &str) {

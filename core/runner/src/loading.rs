@@ -29,7 +29,14 @@ pub(crate) fn attach_extension(
     path: &Path,
     name: &str,
 ) -> wasmtime::Result<(Endpoint, SharedHost, Vec<String>)> {
-    let mut extension = Host::load(wasm_engine, &path.to_string_lossy(), name, bus.clone(), registry.clone(), logger.clone())?;
+    let mut extension = Host::load(
+        wasm_engine,
+        &path.to_string_lossy(),
+        name,
+        bus.clone(),
+        registry.clone(),
+        logger.clone(),
+    )?;
     let topics = extension.requested_topics();
     let shared = SharedHost(Arc::new(Mutex::new(extension)));
 
@@ -73,7 +80,10 @@ pub(crate) fn derive_extension_name(path: &Path) -> String {
 /// A single real directory listing can never actually repeat a stem, but a
 /// future multi-directory `extensions_dir` could — this is what makes
 /// extensions.md's "the host rejects duplicates at load" claim true.
-pub(crate) fn is_first_occurrence(seen: &mut std::collections::HashSet<String>, name: &str) -> bool {
+pub(crate) fn is_first_occurrence(
+    seen: &mut std::collections::HashSet<String>,
+    name: &str,
+) -> bool {
     seen.insert(name.to_string())
 }
 

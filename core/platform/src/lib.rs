@@ -69,7 +69,9 @@ impl Platform {
     /// logic bug in `Engine::build`, not a normal runtime condition.
     pub fn provide_window(&mut self, services: &mut bus::ServiceRegistry) {
         if let Some(window) = self.take_window() {
-            services.provide(window).expect("window-surface provided twice");
+            services
+                .provide(window)
+                .expect("window-surface provided twice");
         }
     }
 
@@ -123,7 +125,10 @@ impl Platform {
                     // re-export to build one, rather than patching sdl3.
                     // Silently drops a device this fails to open (no
                     // logger available in Platform to report it to).
-                    if let Ok(gamepad) = self.gamepad_subsystem.open(sdl3::sys::joystick::SDL_JoystickID(*which)) {
+                    if let Ok(gamepad) = self
+                        .gamepad_subsystem
+                        .open(sdl3::sys::joystick::SDL_JoystickID(*which))
+                    {
                         self.gamepads.insert(*which, gamepad);
                         bus.publish(Envelope {
                             topic: GamepadConnected::TOPIC.to_string(),
@@ -193,19 +198,43 @@ fn translate_event(event: &sdl3::event::Event, sender: &str) -> Option<Envelope>
             let key = key.to_string();
             (KeyUp::TOPIC, KeyUp { key: &key }.encode())
         }
-        sdl3::event::Event::MouseMotion { x, y, xrel, yrel, .. } => (
+        sdl3::event::Event::MouseMotion {
+            x, y, xrel, yrel, ..
+        } => (
             MouseMove::TOPIC,
-            MouseMove { x: *x, y: *y, dx: *xrel, dy: *yrel }.encode(),
+            MouseMove {
+                x: *x,
+                y: *y,
+                dx: *xrel,
+                dy: *yrel,
+            }
+            .encode(),
         ),
-        sdl3::event::Event::MouseButtonDown { mouse_btn, x, y, .. } => (
+        sdl3::event::Event::MouseButtonDown {
+            mouse_btn, x, y, ..
+        } => (
             MouseDown::TOPIC,
-            MouseDown { button: *mouse_btn as u8, x: *x, y: *y }.encode(),
+            MouseDown {
+                button: *mouse_btn as u8,
+                x: *x,
+                y: *y,
+            }
+            .encode(),
         ),
-        sdl3::event::Event::MouseButtonUp { mouse_btn, x, y, .. } => (
+        sdl3::event::Event::MouseButtonUp {
+            mouse_btn, x, y, ..
+        } => (
             MouseUp::TOPIC,
-            MouseUp { button: *mouse_btn as u8, x: *x, y: *y }.encode(),
+            MouseUp {
+                button: *mouse_btn as u8,
+                x: *x,
+                y: *y,
+            }
+            .encode(),
         ),
-        sdl3::event::Event::MouseWheel { x, y, direction, .. } => {
+        sdl3::event::Event::MouseWheel {
+            x, y, direction, ..
+        } => {
             // Normalize "flipped" (natural scrolling) so `input/mouse-wheel`
             // always has the same sign convention regardless of the OS
             // setting that produced it.
@@ -213,21 +242,45 @@ fn translate_event(event: &sdl3::event::Event, sender: &str) -> Option<Envelope>
             let (x, y) = if flip { (-x, -y) } else { (*x, *y) };
             (MouseWheel::TOPIC, MouseWheel { x, y }.encode())
         }
-        sdl3::event::Event::ControllerAxisMotion { which, axis, value, .. } => {
+        sdl3::event::Event::ControllerAxisMotion {
+            which, axis, value, ..
+        } => {
             let axis = format!("{axis:?}");
             // SDL's raw range is roughly i16::MIN..=i16::MAX (sticks) or
             // 0..=i16::MAX (triggers); normalize against MAX and clamp so
             // the negative extreme (MIN < -MAX) never exceeds -1.0.
             let value = (*value as f32 / i16::MAX as f32).clamp(-1.0, 1.0);
-            (GamepadAxis::TOPIC, GamepadAxis { id: *which, axis: &axis, value }.encode())
+            (
+                GamepadAxis::TOPIC,
+                GamepadAxis {
+                    id: *which,
+                    axis: &axis,
+                    value,
+                }
+                .encode(),
+            )
         }
         sdl3::event::Event::ControllerButtonDown { which, button, .. } => {
             let button = format!("{button:?}");
-            (GamepadButtonDown::TOPIC, GamepadButtonDown { id: *which, button: &button }.encode())
+            (
+                GamepadButtonDown::TOPIC,
+                GamepadButtonDown {
+                    id: *which,
+                    button: &button,
+                }
+                .encode(),
+            )
         }
         sdl3::event::Event::ControllerButtonUp { which, button, .. } => {
             let button = format!("{button:?}");
-            (GamepadButtonUp::TOPIC, GamepadButtonUp { id: *which, button: &button }.encode())
+            (
+                GamepadButtonUp::TOPIC,
+                GamepadButtonUp {
+                    id: *which,
+                    button: &button,
+                }
+                .encode(),
+            )
         }
         _ => return None,
     };

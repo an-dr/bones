@@ -49,7 +49,11 @@ fn map_send_error(err: bus::SendError) -> SendError {
 /// wall-clock terms; runs for the engine's lifetime, no shutdown needed for
 /// a process-lifetime `Engine`.
 pub fn new_engine() -> wasmtime::Result<Engine> {
-    let engine = Engine::new(Config::new().wasm_component_model(true).epoch_interruption(true))?;
+    let engine = Engine::new(
+        Config::new()
+            .wasm_component_model(true)
+            .epoch_interruption(true),
+    )?;
     let ticker = engine.clone();
     std::thread::spawn(move || loop {
         std::thread::sleep(EPOCH_TICK_INTERVAL);
@@ -103,7 +107,9 @@ impl HostApiImports for State {
     }
 
     fn send(&mut self, endpoint: String, payload: Vec<u8>) -> Result<Vec<u8>, SendError> {
-        self.registry.call(&self.name, &endpoint, &payload).map_err(map_send_error)
+        self.registry
+            .call(&self.name, &endpoint, &payload)
+            .map_err(map_send_error)
     }
 }
 
@@ -207,10 +213,16 @@ impl Host {
         }
         let store = self.store.get_mut().unwrap();
         store.set_epoch_deadline(CALL_TIMEOUT_TICKS);
-        match self.bindings.call_on_message(&mut *store, "", sender, payload) {
+        match self
+            .bindings
+            .call_on_message(&mut *store, "", sender, payload)
+        {
             Ok(reply) => reply,
             Err(err) => {
-                store.data().logger.error("host", &format!("handler trapped during send: {err}"));
+                store
+                    .data()
+                    .logger
+                    .error("host", &format!("handler trapped during send: {err}"));
                 self.faulted.store(true, Ordering::Relaxed);
                 None
             }
@@ -243,7 +255,10 @@ impl Handler for Host {
             ),
         };
         if let Err(err) = result {
-            store.data().logger.error("host", &format!("handler trapped: {err}"));
+            store
+                .data()
+                .logger
+                .error("host", &format!("handler trapped: {err}"));
             self.faulted.store(true, Ordering::Relaxed);
         }
     }
