@@ -6,6 +6,10 @@ use crate::{DecodeError, DecodeMessage, EncodeMessage, Message, Reader, Writer};
 // No `Eq`: every field but the counts is `f32`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SpawnEntity {
+    /// Application-assigned entity identifier — its own namespace, separate
+    /// from `sprite_id`. Lets a later `game-core/set-velocity` address this
+    /// entity without the caller needing an ECS-internal handle.
+    pub entity_id: u32,
     /// Application-assigned sprite identifier (matches `gfx::LoadSprite`).
     pub sprite_id: u32,
     /// World x coordinate.
@@ -37,6 +41,7 @@ impl Message for SpawnEntity {
 impl EncodeMessage for SpawnEntity {
     fn encode(&self) -> Vec<u8> {
         Writer::new()
+            .u32(self.entity_id)
             .u32(self.sprite_id)
             .f32(self.x)
             .f32(self.y)
@@ -54,6 +59,7 @@ impl<'a> DecodeMessage<'a> for SpawnEntity {
     fn decode(payload: &'a [u8]) -> Result<Self, DecodeError> {
         let mut reader = Reader::new(payload);
         let message = Self {
+            entity_id: reader.read_u32()?,
             sprite_id: reader.read_u32()?,
             x: reader.read_f32()?,
             y: reader.read_f32()?,

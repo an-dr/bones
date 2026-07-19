@@ -1,14 +1,15 @@
 use crate::{DecodeError, DecodeMessage, Message};
 
-use super::{LoadTilemap, SpawnEntity};
+use super::{LoadTilemap, SetVelocity, SpawnEntity};
 
 /// Any currently supported `game-core/*` command, decoded by exact topic —
 /// the same grouping-enum pattern as `gfx::Command`/`audio::Command`.
-// No `Eq`: `SpawnEntity` carries `f32` fields.
+// No `Eq`: `SpawnEntity`/`SetVelocity` carry `f32` fields.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Command<'a> {
     SpawnEntity(SpawnEntity),
     LoadTilemap(LoadTilemap<'a>),
+    SetVelocity(SetVelocity),
 }
 
 impl<'a> Command<'a> {
@@ -21,6 +22,9 @@ impl<'a> Command<'a> {
             }
             LoadTilemap::TOPIC => {
                 LoadTilemap::decode(payload).map(|value| Some(Self::LoadTilemap(value)))
+            }
+            SetVelocity::TOPIC => {
+                SetVelocity::decode(payload).map(|value| Some(Self::SetVelocity(value)))
             }
             _ => Ok(None),
         }

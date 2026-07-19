@@ -45,7 +45,12 @@ fn envelope(topic: &str, payload: Vec<u8>) -> Envelope {
 }
 
 fn spawn_at(x: f32, y: f32) -> SpawnEntity {
+    spawn_with_id(0, x, y)
+}
+
+fn spawn_with_id(entity_id: u32, x: f32, y: f32) -> SpawnEntity {
     SpawnEntity {
+        entity_id,
         sprite_id: 1,
         x,
         y,
@@ -59,10 +64,20 @@ fn spawn_at(x: f32, y: f32) -> SpawnEntity {
 }
 
 fn spawn_with_collider(x: f32, y: f32, half_w: f32, half_h: f32) -> SpawnEntity {
+    spawn_with_collider_and_id(0, x, y, half_w, half_h)
+}
+
+fn spawn_with_collider_and_id(
+    entity_id: u32,
+    x: f32,
+    y: f32,
+    half_w: f32,
+    half_h: f32,
+) -> SpawnEntity {
     SpawnEntity {
         collider_half_w: half_w,
         collider_half_h: half_h,
-        ..spawn_at(x, y)
+        ..spawn_with_id(entity_id, x, y)
     }
 }
 
@@ -144,11 +159,11 @@ fn tick_steps_physics_and_syncs_transforms_for_colliding_entities() {
     let mut game_core = GameCore::new();
     game_core.handle(&envelope(
         SpawnEntity::TOPIC,
-        spawn_with_collider(0.0, 0.0, 1.0, 1.0).encode(),
+        spawn_with_collider_and_id(1, 0.0, 0.0, 1.0, 1.0).encode(),
     ));
     game_core.handle(&envelope(
         SpawnEntity::TOPIC,
-        spawn_with_collider(0.5, 0.0, 1.0, 1.0).encode(),
+        spawn_with_collider_and_id(2, 0.5, 0.0, 1.0, 1.0).encode(),
     ));
 
     for _ in 0..60 {
@@ -281,6 +296,75 @@ fn a_module_with_no_bus_service_never_panics_on_tick() {
     let mut game_core = GameCore::new();
     game_core.handle(&envelope(SpawnEntity::TOPIC, spawn_at(0.0, 0.0).encode()));
     game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 0.1 }.encode()));
+    // Reaching here without panicking is the assertion.
+}
+
+#[test]
+fn set_velocity_moves_a_collider_bearing_entity_over_time() {
+    let mut game_core = GameCore::new();
+    game_core.handle(&envelope(
+        SpawnEntity::TOPIC,
+        spawn_with_collider_and_id(7, 0.0, 0.0, 1.0, 1.0).encode(),
+    ));
+    game_core.handle(&envelope(
+        bones_messages::game_core::SetVelocity::TOPIC,
+        bones_messages::game_core::SetVelocity {
+            entity_id: 7,
+            vx: 10.0,
+            vy: 0.0,
+        }
+        .encode(),
+    ));
+
+    for _ in 0..60 {
+        game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    }
+
+    let (_, transform) = game_core
+        .world
+        .query_mut::<&Transform>()
+        .into_iter()
+        .next()
+        .expect("the spawned entity should still exist");
+    assert!(
+        transform.x > 5.0,
+        "a 10 units/sec x velocity for 1 second should have moved the entity, got x={}",
+        transform.x
+    );
+}
+
+#[test]
+fn set_velocity_for_an_entity_with_no_collider_is_a_no_op() {
+    let mut game_core = GameCore::new();
+    game_core.handle(&envelope(
+        SpawnEntity::TOPIC,
+        spawn_with_id(1, 0.0, 0.0).encode(),
+    ));
+
+    game_core.handle(&envelope(
+        bones_messages::game_core::SetVelocity::TOPIC,
+        bones_messages::game_core::SetVelocity {
+            entity_id: 1,
+            vx: 10.0,
+            vy: 0.0,
+        }
+        .encode(),
+    ));
+    // Reaching here without panicking is the assertion.
+}
+
+#[test]
+fn set_velocity_for_an_unknown_entity_id_is_a_no_op() {
+    let mut game_core = GameCore::new();
+    game_core.handle(&envelope(
+        bones_messages::game_core::SetVelocity::TOPIC,
+        bones_messages::game_core::SetVelocity {
+            entity_id: 99,
+            vx: 10.0,
+            vy: 0.0,
+        }
+        .encode(),
+    ));
     // Reaching here without panicking is the assertion.
 }
 

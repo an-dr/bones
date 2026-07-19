@@ -17,10 +17,16 @@ Renders by turning simulated state into `gfx/*` draw-command batches each
 tick, the same as any other module or extension — this crate has no
 rendering authority of its own.
 
-- `game-core/spawn-entity` — spawns one entity with a `Transform` and a
+- `game-core/spawn-entity` — spawns one entity, addressable afterward by
+  its caller-assigned `entity_id`, with a `Transform` and a
   `SpriteAnimation`. A nonzero `collider_half_w`/`collider_half_h` also
   gives it a dynamic `rapier2d` box collider (`0.0` spawns a purely
   visual entity, no physics body).
+- `game-core/set-velocity` — sets a spawned entity's rapier2d linear
+  velocity directly, addressed by `entity_id`. The mechanism a caller
+  (e.g. an extension reading `input/*` for WASD/gamepad movement) drives
+  an entity with; a no-op for an unknown `entity_id` or one with no
+  collider.
 - Every `core/tick`: sprite-animation timers advance, `rapier2d` steps
   once, and every collider-bearing entity's `Transform` is overwritten
   from its rigid body's post-step position — physics owns position for
@@ -39,4 +45,5 @@ Unlike `audio`, this module also needs to publish (not just receive), so
 unconditionally (design/modules.md) — `init` fails if none is available.
 
 See `extensions/game_core_demo` for a runnable example: a small tilemap
-plus two overlapping colliding entities, both animating.
+with several static obstacles, a WASD/gamepad-controlled entity, and a
+few stationary colliding entities, all animating.

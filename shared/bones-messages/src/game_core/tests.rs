@@ -9,6 +9,7 @@ fn non_game_core_topics_are_ignored() {
 #[test]
 fn spawn_entity_round_trips() {
     let spawn = SpawnEntity {
+        entity_id: 1,
         sprite_id: 3,
         x: 10.5,
         y: -4.0,
@@ -41,5 +42,18 @@ fn load_tilemap_round_trips() {
     assert_eq!(
         Command::decode(LoadTilemap::TOPIC, &load.encode()),
         Ok(Some(Command::LoadTilemap(load)))
+    );
+}
+
+#[test]
+fn set_velocity_round_trips() {
+    let set = SetVelocity {
+        entity_id: 1,
+        vx: -3.5,
+        vy: 2.0,
+    };
+    assert_eq!(
+        Command::decode(SetVelocity::TOPIC, &set.encode()),
+        Ok(Some(Command::SetVelocity(set)))
     );
 }

@@ -11,8 +11,8 @@
     "done": "A minimal 2D scene simulates entities with collision on a loaded tilemap, rendered through gfx/*, demonstrated via a runnable example extension.",
     "outOfScope": "gfx/* rendering authority, sprite-animation asset pipeline beyond timing state machine, physics beyond 2D collision, any change to renderer ownership of the window surface."
   },
-  "currentIncrementId": "9f7a9b2683f84ee98e8875037f5ccc14",
-  "commitBaseline": "77c15a544d20d0c237bf31b5e3100dbd76a455dc",
+  "currentIncrementId": "f01dc2df9a974c1ba0fdd0c82ca1f4c4",
+  "commitBaseline": "0863430ff17db219230251a34715c4276c828f46",
   "increments": [
     {
       "id": "6bb8259e81814fe4bff2d05f094ea2da",
@@ -45,9 +45,16 @@
     {
       "id": "9f7a9b2683f84ee98e8875037f5ccc14",
       "number": 5,
-      "status": "verified",
+      "status": "completed",
       "scope": "gfx rendering bridge + runnable demo",
       "description": "GameCore turns ECS transforms/sprite-animation frames into gfx::SetCamera + gfx::DrawSprite batches published each tick; new extensions/game_core_demo WASM extension spawns a few colliding entities on a loaded tilemap; app config gains a game_core toggle. Demo: the scene visibly simulates entities colliding on the tilemap through gfx/*."
+    },
+    {
+      "id": "f01dc2df9a974c1ba0fdd0c82ca1f4c4",
+      "number": 6,
+      "status": "verified",
+      "scope": "game-core entity control + expanded demo",
+      "description": "SpawnEntity gains an application-assigned entity id; new game-core/set-velocity command lets a caller drive a spawned entitys rapier2d velocity directly (both dynamic and kinematic bodies keep working). game_core_demo gains WASD + gamepad-left-stick movement for one entity and several additional static obstacles on the level tilemap to collide against. Demo: moving the controlled entity into obstacles/other entities visibly blocks it."
     }
   ],
   "approvals": [],
@@ -168,11 +175,46 @@
       "detail": "Advanced from BUILD to VERIFY."
     },
     {
-      "at": "2026-07-19T15:21:43.6014920Z",
+      "at": "2026-07-19T15:21:43.601492Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-07-19T15:22:26.7766538Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to MR."
+    },
+    {
+      "at": "2026-07-19T15:22:52.261919Z",
+      "action": "advance",
+      "detail": "Advanced from MR to FINAL_REVIEW."
+    },
+    {
+      "at": "2026-07-19T15:39:13.0681396Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 6: game-core entity control + expanded demo"
+    },
+    {
+      "at": "2026-07-19T15:39:25.3334355Z",
+      "action": "advance",
+      "detail": "Advanced from SPLIT to BRANCH."
+    },
+    {
+      "at": "2026-07-19T15:39:34.4049971Z",
+      "action": "advance",
+      "detail": "Advanced from BRANCH to BUILD."
+    },
+    {
+      "at": "2026-07-19T15:51:38.7083308Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-07-19T15:51:48.0353658Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-07-19T13:14:27.3797032Z",
-  "updatedAt": "2026-07-19T15:21:43.6120287Z"
+  "updatedAt": "2026-07-19T15:51:48.0444339Z"
 }

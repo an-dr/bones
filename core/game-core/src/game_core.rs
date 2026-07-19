@@ -5,7 +5,9 @@
 //! rationale). Renders by turning simulated state into `gfx/*` draw-command
 //! batches, same as any other module — no rendering authority of its own.
 
-use bones_messages::game_core::{Command, LoadTilemap, SpawnEntity};
+use std::collections::HashMap;
+
+use bones_messages::game_core::{Command, LoadTilemap, SetVelocity, SpawnEntity};
 use bones_messages::gfx::{DrawSprite, SetCamera};
 use bones_messages::tick::Tick;
 use bones_messages::{DecodeMessage, EncodeMessage, Message};
@@ -23,6 +25,11 @@ pub struct GameCore {
     world: hecs::World,
     physics: Physics,
     bus: Option<Bus>,
+    // Maps the caller's own `SpawnEntity::entity_id` to the `hecs::Entity`
+    // it became — the caller's addressing scheme (`game-core/set-velocity`)
+    // never sees a raw `hecs::Entity`, which is this module's own internal
+    // handle.
+    entities: HashMap<u32, hecs::Entity>,
 }
 
 impl GameCore {
@@ -31,6 +38,7 @@ impl GameCore {
             world: hecs::World::new(),
             physics: Physics::new(),
             bus: None,
+            entities: HashMap::new(),
         }
     }
 
@@ -59,7 +67,7 @@ impl GameCore {
             spawn.frame_duration,
         );
 
-        if spawn.collider_half_w > 0.0 && spawn.collider_half_h > 0.0 {
+        let entity = if spawn.collider_half_w > 0.0 && spawn.collider_half_h > 0.0 {
             let body = self
                 .physics
                 .bodies
@@ -70,9 +78,24 @@ impl GameCore {
                 &mut self.physics.bodies,
             );
             self.world
-                .spawn((transform, animation, Collider { body, collider }));
+                .spawn((transform, animation, Collider { body, collider }))
         } else {
-            self.world.spawn((transform, animation));
+            self.world.spawn((transform, animation))
+        };
+        self.entities.insert(spawn.entity_id, entity);
+    }
+
+    /// A no-op if `entity_id` names no entity, or one with no collider —
+    /// a purely visual entity has no rapier2d body to set velocity on.
+    fn set_velocity(&mut self, set: SetVelocity) {
+        let Some(&entity) = self.entities.get(&set.entity_id) else {
+            return;
+        };
+        let Ok(collider) = self.world.get::<&Collider>(entity) else {
+            return;
+        };
+        if let Some(body) = self.physics.bodies.get_mut(collider.body) {
+            body.set_linvel(vector![set.vx, set.vy], true);
         }
     }
 
@@ -172,6 +195,7 @@ impl Handler for GameCore {
         match Command::decode(&envelope.topic, &envelope.payload) {
             Ok(Some(Command::SpawnEntity(spawn))) => self.spawn_entity(spawn),
             Ok(Some(Command::LoadTilemap(load))) => self.load_tilemap(load),
+            Ok(Some(Command::SetVelocity(set))) => self.set_velocity(set),
             _ => {}
         }
     }
