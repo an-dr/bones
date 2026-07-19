@@ -1,4 +1,5 @@
 use super::*;
+use crate::{DecodeError, DecodeMessage, EncodeMessage};
 
 #[test]
 fn every_event_round_trips() {
