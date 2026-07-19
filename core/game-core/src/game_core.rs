@@ -297,8 +297,16 @@ impl GameCore {
     /// where either side isn't in `entity_ids_by_collider` (a tilemap
     /// collider, or a collider whose entity was already despawned this
     /// tick) is silently skipped rather than published with a missing id.
+    /// `CollisionEvent::Started` alone isn't proof of a real touch — rapier2d
+    /// uses speculative contacts, so a pair can appear "Started" while still
+    /// a hair's width apart (the mechanism behind real-world phantom "hit"
+    /// reports with no visible contact). `has_real_contact` filters those
+    /// out by checking the actual contact manifold, not just the event.
     fn publish_collisions(&mut self) {
         for (collider_a, collider_b) in self.physics.drain_collision_starts() {
+            if !self.physics.has_real_contact(collider_a, collider_b) {
+                continue;
+            }
             let entity_id_a = self.entity_ids_by_collider.get(&collider_a).copied();
             let entity_id_b = self.entity_ids_by_collider.get(&collider_b).copied();
             if let (Some(entity_id_a), Some(entity_id_b)) = (entity_id_a, entity_id_b) {

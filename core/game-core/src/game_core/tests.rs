@@ -848,6 +848,38 @@ fn a_non_overlapping_pair_publishes_no_collision_event() {
 }
 
 #[test]
+fn colliders_within_the_speculative_margin_but_not_touching_publish_no_collision_event() {
+    let (mut game_core, bus, spy) = ready_game_core();
+    // rapier2d's default IntegrationParameters::prediction_distance is
+    // 0.002 units: two half-extent-1.0 colliders centered 2.0 + 0.001
+    // apart have a real gap of 0.001 (inside the speculative margin, so
+    // rapier2d's CollisionEvent::Started fires for them) but are not
+    // actually touching. Without has_real_contact filtering, this used to
+    // publish a phantom Collision.
+    game_core.handle(&entity_op_envelope(spawn_with_collider_and_id(
+        1, 0.0, 0.0, 1.0, 1.0,
+    )));
+    game_core.handle(&entity_op_envelope(spawn_with_collider_and_id(
+        2, 2.001, 0.0, 1.0, 1.0,
+    )));
+
+    for _ in 0..5 {
+        game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    }
+    bus.dispatch();
+
+    let published = spy.0.lock().unwrap();
+    let collisions = published
+        .iter()
+        .filter(|e| e.topic == Collision::TOPIC)
+        .count();
+    assert_eq!(
+        collisions, 0,
+        "a speculative-only contact (close but not touching) should not publish a Collision"
+    );
+}
+
+#[test]
 fn a_tilemap_collider_never_publishes_a_collision_event() {
     let (mut game_core, bus, spy) = ready_game_core();
     let load = LoadTilemap {

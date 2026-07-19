@@ -126,6 +126,84 @@ fn drain_collision_starts_reports_a_new_contact_once() {
 }
 
 #[test]
+fn has_real_contact_is_true_for_overlapping_colliders() {
+    let mut physics = Physics::new();
+    // At least one dynamic body: rapier2d only promotes manifold points to
+    // active/solver contacts when the pair has a dynamic side — a
+    // fixed-fixed pair (neither ever needs force resolution) never gets
+    // real contact data populated, regardless of how deeply they overlap.
+    let body_a = physics
+        .bodies
+        .insert(RigidBodyBuilder::fixed().translation(vector![0.0, 0.0]));
+    let collider_a = physics.colliders.insert_with_parent(
+        ColliderBuilder::cuboid(1.0, 1.0),
+        body_a,
+        &mut physics.bodies,
+    );
+    let body_b = physics
+        .bodies
+        .insert(RigidBodyBuilder::dynamic().translation(vector![1.5, 0.0]));
+    let collider_b = physics.colliders.insert_with_parent(
+        ColliderBuilder::cuboid(1.0, 1.0),
+        body_b,
+        &mut physics.bodies,
+    );
+
+    physics.step(1.0 / 60.0);
+
+    assert!(physics.has_real_contact(collider_a, collider_b));
+}
+
+#[test]
+fn has_real_contact_is_false_for_colliders_within_the_speculative_margin_only() {
+    let mut physics = Physics::new();
+    // rapier2d's default prediction_distance is 0.002 units: a gap of
+    // 0.001 is inside that margin (rapier2d's narrow phase creates a
+    // contact pair for it) but the colliders are not actually touching.
+    // At least one dynamic body, same as the "true" case above, so this
+    // isolates the margin behavior rather than the fixed-fixed caveat.
+    let body_a = physics
+        .bodies
+        .insert(RigidBodyBuilder::fixed().translation(vector![0.0, 0.0]));
+    let collider_a = physics.colliders.insert_with_parent(
+        ColliderBuilder::cuboid(1.0, 1.0),
+        body_a,
+        &mut physics.bodies,
+    );
+    let body_b = physics
+        .bodies
+        .insert(RigidBodyBuilder::dynamic().translation(vector![2.001, 0.0]));
+    let collider_b = physics.colliders.insert_with_parent(
+        ColliderBuilder::cuboid(1.0, 1.0),
+        body_b,
+        &mut physics.bodies,
+    );
+
+    physics.step(1.0 / 60.0);
+
+    assert!(!physics.has_real_contact(collider_a, collider_b));
+}
+
+#[test]
+fn has_real_contact_is_false_for_an_unknown_pair() {
+    let mut physics = Physics::new();
+    let body_a = physics.bodies.insert(RigidBodyBuilder::fixed());
+    let collider_a = physics.colliders.insert_with_parent(
+        ColliderBuilder::cuboid(1.0, 1.0),
+        body_a,
+        &mut physics.bodies,
+    );
+    let body_b = physics.bodies.insert(RigidBodyBuilder::fixed());
+    let collider_b = physics.colliders.insert_with_parent(
+        ColliderBuilder::cuboid(1.0, 1.0),
+        body_b,
+        &mut physics.bodies,
+    );
+
+    assert!(!physics.has_real_contact(collider_a, collider_b));
+}
+
+#[test]
 fn colliders_without_active_events_report_no_collision_starts() {
     let mut physics = Physics::new();
     let body_a = physics

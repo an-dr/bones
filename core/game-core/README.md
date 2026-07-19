@@ -75,12 +75,17 @@ rendering authority of its own.
   Stays its own topic rather than folding into `EntityOp`: a one-shot
   asset load, not a per-entity operation.
 - `game-core/collision` — published whenever two `EntityOp::Spawn`-created
-  colliders start touching (a rapier2d contact `Started` event), carrying
-  both entities' `entity_id`s (unordered — which is `entity_id_a` vs.
-  `entity_id_b` depends on rapier2d's internal collider ordering, not on
-  which entity moved into the other). Fires once per new contact, not
-  once per tick two entities stay overlapping; a tilemap collider (no
-  `entity_id` of its own) never appears in one.
+  colliders actually touch, carrying both entities' `entity_id`s
+  (unordered — which is `entity_id_a` vs. `entity_id_b` depends on
+  rapier2d's internal collider ordering, not on which entity moved into
+  the other). Fires once per new contact, not once per tick two entities
+  stay overlapping; a tilemap collider (no `entity_id` of its own) never
+  appears in one. rapier2d's `CollisionEvent::Started` alone isn't proof
+  of a real touch — it also fires for colliders merely within its small
+  speculative-contact prediction margin, not yet overlapping — so a
+  `Started` event is confirmed against the actual contact manifold
+  (`Physics::has_real_contact`) before publishing, filtering out that
+  false-positive case.
 
 No logger, same stance as `core/audio`: registered via the generic
 `.module(...)` path, which has no access to `Engine`'s internal logger.

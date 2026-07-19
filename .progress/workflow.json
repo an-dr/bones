@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "flow": "DetailedAuto",
+  "phase": "COMMIT",
+  "baseBranch": "main",
+  "baseCommit": "fcd9c9dd97e059fd6637665935e107ab1de01ca7",
+  "featureBranch": "feature/game-core-physics-fixes",
+  "requirements": {
+    "goal": "Game demo test and engine improvements: extend the game-core demo and, where gaps are found, the game-core engine itself, to cover game-engine capabilities not yet exercised. Scope is user-input-driven turn by turn rather than fully pre-planned.",
+    "constraints": "Scope for each increment comes from the user's live direction turn by turn, not a pre-authored plan; each increment must still be a coherent, independently-mergeable slice with its own tests and, where a demo-visible change is involved, live verification via the .verify-scratch harness.",
+    "done": "The user is satisfied that the demo and game-core module cover the game-engine capabilities they care about, and says so explicitly - there is no fixed feature checklist to complete.",
+    "outOfScope": "No fully pre-planned feature list up front - increments are added one at a time as the user directs; no unrelated roadmap items (e.g. shutdown sequence, queue budget, web module) unless the user redirects to them explicitly."
+  },
+  "currentIncrementId": "292600afe6d446f4badd1031bb9eebd1",
+  "commitBaseline": "fcd9c9dd97e059fd6637665935e107ab1de01ca7",
+  "increments": [
+    {
+      "id": "292600afe6d446f4badd1031bb9eebd1",
+      "number": 1,
+      "status": "verified",
+      "scope": "game-core",
+      "description": "Fix phantom collision events - game-core's collision detection currently trusts rapier2d CollisionEvent::Started alone, but rapier2d 0.22 uses speculative/predictive contacts (IntegrationParameters::normalized_prediction_distance, default ~2mm scaled by length_unit): Started can fire for colliders that are merely within that margin, not actually touching, which is what produces the reported no-real-touch hit registrations. Fix: in publish_collisions, after draining a Started pair, confirm real geometric contact via physics.narrow_phase's ContactPair::has_any_active_contact before publishing a game-core/collision event; drop pairs that are speculative-only. Unit test: two colliders positioned within the prediction margin but not overlapping produce no collision event; two colliders that actually overlap still do."
+    },
+    {
+      "id": "54e85458f26049c5a99f3912c7a9ac1d",
+      "number": 2,
+      "status": "planned",
+      "scope": "game-core",
+      "description": "Tune rapier2d solver stiffness against visible interpenetration - rapier2d's contact solver is compliant (spring-based TGS-soft) by design, not perfectly rigid; default IntegrationParameters (contact_natural_frequency, contact_damping_ratio, num_solver_iterations/num_internal_pgs_iterations) allow visible penetration under sustained driving force, which is what the reported overlapping-squares screenshots show. Raise contact stiffness (higher contact_natural_frequency, lower contact_damping_ratio if those fields exist on this exact 0.22.0 build, else the closest equivalent such as a consolidated contact_softness field) and solver iteration counts in Physics::new, and confirm the exact field names against the actual 0.22.0 API before editing (research pass gave educated-guess names that need compiler confirmation). Unit test: two bodies pushed together under continuous velocity settle to a measurably smaller steady-state penetration depth than before the change. Live-verify against the demo: push the robot into an obstacle and hold - overlap should be visibly reduced, though may not be fully eliminated (that is increment 3's job if this alone is insufficient)."
+    },
+    {
+      "id": "cb74ac830168489d976264c702946fcf",
+      "number": 3,
+      "status": "planned",
+      "scope": "game-core",
+      "description": "Clamp commanded velocity against contact normals to stop overlap under sustained input - research confirms the primary mechanism behind visible interpenetration is set_velocity hard-overwriting rapier2d linear velocity every tick via body.set_linvel, which re-drives a body into an obstacle faster than the compliant solver's per-step corrective velocity (normalized_max_corrective_velocity) can push it back out, regardless of stiffness tuning (increment 2). Fix: before tick's physics.step, or immediately after via querying active contacts for each collider-bearing entity, zero or reflect the component of a Dynamic/Frictionless body's linear velocity that points into an active contact's normal (only when actually touching, i.e. has_any_active_contact, reusing increment 1's real-contact check) so continuous held input can push but not tunnel/overlap through a blocked direction while still allowing motion along the free axis (sliding along a wall). Unit test: a body driven continuously into a fixed obstacle settles at (or very near) zero penetration rather than the deeper steady-state overlap from before this increment, while a body driven diagonally against a wall still slides along the open axis. Live-verify: push the robot directly into a red obstacle and hold for several seconds - no visible overlap in a screenshot, and pushing diagonally still lets the robot slide along the obstacle's edge."
+    }
+  ],
+  "approvals": [],
+  "history": [
+    {
+      "at": "2026-07-19T20:17:48.9411078Z",
+      "action": "start",
+      "detail": "Started DetailedAuto workflow."
+    },
+    {
+      "at": "2026-07-19T21:24:37.0282743Z",
+      "action": "advance",
+      "detail": "Advanced from START to DESIGN."
+    },
+    {
+      "at": "2026-07-19T21:24:46.9498056Z",
+      "action": "advance",
+      "detail": "Advanced from DESIGN to SPLIT."
+    },
+    {
+      "at": "2026-07-19T21:24:58.0948427Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 1: game-core"
+    },
+    {
+      "at": "2026-07-19T21:25:14.6103228Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 2: game-core"
+    },
+    {
+      "at": "2026-07-19T21:25:29.6386733Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 3: game-core"
+    },
+    {
+      "at": "2026-07-19T21:25:38.6503072Z",
+      "action": "advance",
+      "detail": "Advanced from SPLIT to BRANCH."
+    },
+    {
+      "at": "2026-07-19T21:25:53.4541301Z",
+      "action": "advance",
+      "detail": "Advanced from BRANCH to BUILD."
+    },
+    {
+      "at": "2026-07-19T21:34:17.2523856Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-07-19T21:34:27.1040632Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
+    }
+  ],
+  "createdAt": "2026-07-19T20:17:48.8779903Z",
+  "updatedAt": "2026-07-19T21:34:27.1134080Z"
+}

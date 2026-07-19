@@ -80,6 +80,29 @@ impl Physics {
             .collect()
     }
 
+    /// Whether two colliders are actually touching right now, not merely
+    /// within rapier2d's speculative-contact prediction margin (the
+    /// mechanism behind `CollisionEvent::Started` firing for colliders
+    /// that are close but not yet overlapping). `drain_collision_starts`
+    /// alone isn't enough to tell "real touch" apart from "about to
+    /// touch".
+    ///
+    /// Deliberately checks each manifold point's `dist <= 0.0` rather than
+    /// `ContactPair::has_any_active_contact`: that flag only tracks whether
+    /// the *solver* needs to push the pair apart, which rapier2d skips
+    /// entirely for a body-kind combination with no dynamic side (e.g. two
+    /// tilemap colliders) — it would silently read `false` for a real,
+    /// deep overlap in that case. Manifolds and their point distances are
+    /// populated regardless of body kind, so this is the actual geometric
+    /// ground truth.
+    pub fn has_real_contact(&self, a: ColliderHandle, b: ColliderHandle) -> bool {
+        self.narrow_phase.contact_pair(a, b).is_some_and(|pair| {
+            pair.manifolds
+                .iter()
+                .any(|manifold| manifold.points.iter().any(|point| point.dist <= 0.0))
+        })
+    }
+
     pub fn body_translation(&self, handle: RigidBodyHandle) -> Option<Vector<Real>> {
         self.bodies.get(handle).map(|body| *body.translation())
     }
