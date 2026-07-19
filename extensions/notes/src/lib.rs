@@ -12,6 +12,9 @@ use bones_messages::{DecodeMessage, EncodeMessage, Message};
 const INPUT_ID: u32 = 1;
 const ADD_ID: u32 = 2;
 
+// `State` stays with `Component` rather than splitting further: it's purely
+// this extension's own thread-local store, never constructed or named
+// outside this file, never meaningful on its own.
 #[derive(Default)]
 struct State {
     input: String,
