@@ -11,8 +11,8 @@
     "done": "A minimal 2D scene simulates entities with collision on a loaded tilemap, rendered through gfx/*, demonstrated via a runnable example extension.",
     "outOfScope": "gfx/* rendering authority, sprite-animation asset pipeline beyond timing state machine, physics beyond 2D collision, any change to renderer ownership of the window surface."
   },
-  "currentIncrementId": "f591115f73344391accb8191dedf1374",
-  "commitBaseline": "c3049f976c11a6902c322b3e2d7d72d0ac727cc7",
+  "currentIncrementId": "9f7a9b2683f84ee98e8875037f5ccc14",
+  "commitBaseline": "77c15a544d20d0c237bf31b5e3100dbd76a455dc",
   "increments": [
     {
       "id": "6bb8259e81814fe4bff2d05f094ea2da",
@@ -38,14 +38,14 @@
     {
       "id": "f591115f73344391accb8191dedf1374",
       "number": 4,
-      "status": "verified",
+      "status": "completed",
       "scope": "tiled tilemap loading",
       "description": "game-core/load-tilemap bus command carries map bytes; tiled parses it; a designated collision layer becomes static rapier2d colliders at load time. Unit test covers a small fixture map producing the expected collider count/positions."
     },
     {
       "id": "9f7a9b2683f84ee98e8875037f5ccc14",
       "number": 5,
-      "status": "planned",
+      "status": "verified",
       "scope": "gfx rendering bridge + runnable demo",
       "description": "GameCore turns ECS transforms/sprite-animation frames into gfx::SetCamera + gfx::DrawSprite batches published each tick; new extensions/game_core_demo WASM extension spawns a few colliding entities on a loaded tilemap; app config gains a game_core toggle. Demo: the scene visibly simulates entities colliding on the tilemap through gfx/*."
     }
@@ -156,8 +156,23 @@
       "at": "2026-07-19T14:03:55.8681177Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-07-19T14:04:17.6890505Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to BUILD."
+    },
+    {
+      "at": "2026-07-19T15:21:33.0847592Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-07-19T15:21:43.6014920Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-07-19T13:14:27.3797032Z",
-  "updatedAt": "2026-07-19T14:03:55.8765772Z"
+  "updatedAt": "2026-07-19T15:21:43.6120287Z"
 }

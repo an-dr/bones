@@ -108,6 +108,7 @@ name = "app"
 version = "0.1.0"
 dependencies = [
  "audio",
+ "game-core",
  "runner",
  "serde",
  "toml 1.1.2+spec-1.1.0",

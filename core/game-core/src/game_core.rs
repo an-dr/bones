@@ -6,16 +6,23 @@
 //! batches, same as any other module — no rendering authority of its own.
 
 use bones_messages::game_core::{Command, LoadTilemap, SpawnEntity};
+use bones_messages::gfx::{DrawSprite, SetCamera};
 use bones_messages::tick::Tick;
-use bones_messages::{DecodeMessage, Message};
-use bus::{Envelope, Handler, Module, ModuleContext};
+use bones_messages::{DecodeMessage, EncodeMessage, Message};
+use bus::{Bus, Envelope, Handler, Module, ModuleContext};
 use rapier2d::prelude::{nalgebra, vector, ColliderBuilder, RigidBodyBuilder};
 
 use crate::{load_collision_rects, Collider, Physics, SpriteAnimation, Transform};
 
+/// The `gfx/*` layer game-core draws its entities on. Fixed rather than
+/// configurable: this module owns exactly one concern (the game world),
+/// same simplification `renderer`'s single global camera already makes.
+const ENTITY_LAYER: u8 = 0;
+
 pub struct GameCore {
     world: hecs::World,
     physics: Physics,
+    bus: Option<Bus>,
 }
 
 impl GameCore {
@@ -23,7 +30,20 @@ impl GameCore {
         Self {
             world: hecs::World::new(),
             physics: Physics::new(),
+            bus: None,
         }
+    }
+
+    fn publish<M: EncodeMessage>(&self, message: M) {
+        let Some(bus) = &self.bus else {
+            return;
+        };
+        bus.publish(Envelope {
+            topic: M::TOPIC.to_string(),
+            sender: "game-core".to_string(),
+            correlation: None,
+            payload: message.encode(),
+        });
     }
 
     fn spawn_entity(&mut self, spawn: SpawnEntity) {
@@ -89,6 +109,49 @@ impl GameCore {
                 transform.y = translation.y;
             }
         }
+
+        self.publish_gfx();
+    }
+
+    /// Turns every entity's simulated state into a `gfx::DrawSprite`, plus
+    /// one fixed `gfx::SetCamera` — game-core has no rendering authority of
+    /// its own (ADR-019), it only ever emits `gfx/*` the same as any
+    /// extension would.
+    ///
+    /// Named `publish_gfx`, not `render`: `Module::render(&mut self)` is a
+    /// distinct frame-phase hook (design/modules.md) this module doesn't
+    /// use — game-core draws synchronously from `tick`'s `core/tick`
+    /// dispatch (ADR-004), the same as `gfx::Command` handling elsewhere,
+    /// not from the `render` phase. A same-named inherent method here
+    /// previously shadowed by call-site ambiguity with the trait default;
+    /// this name avoids the collision outright rather than relying on
+    /// resolution rules.
+    fn publish_gfx(&self) {
+        self.publish(SetCamera {
+            x: 0.0,
+            y: 0.0,
+            zoom: 1.0,
+        });
+        for (_, (transform, animation)) in
+            self.world.query::<(&Transform, &SpriteAnimation)>().iter()
+        {
+            self.publish(DrawSprite {
+                id: animation.sprite_id,
+                dst_x: transform.x as i32,
+                dst_y: transform.y as i32,
+                dst_w: animation.frame_w,
+                dst_h: animation.frame_h,
+                src_x: animation.current_src_x(),
+                src_y: 0,
+                src_w: animation.frame_w,
+                src_h: animation.frame_h,
+                layer: ENTITY_LAYER,
+                angle: 0.0,
+                flip_h: false,
+                flip_v: false,
+                tint: (255, 255, 255, 255),
+            });
+        }
     }
 }
 
@@ -119,9 +182,16 @@ impl Module for GameCore {
         "game-core"
     }
 
+    /// Errors if no `Bus` service is available — a caller/embedder mistake
+    /// (this module can't do anything useful without one), the same stance
+    /// `renderer` takes for a missing `window-surface`.
     fn init(&mut self, ctx: &mut ModuleContext) -> Result<(), String> {
         ctx.subscribe("game-core/*");
         ctx.subscribe(Tick::TOPIC);
+        self.bus = Some(
+            ctx.consume_service::<Bus>()
+                .ok_or("no Bus service available")?,
+        );
         Ok(())
     }
 }

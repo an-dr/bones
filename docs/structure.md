@@ -31,6 +31,7 @@ All feature-flagged and individually optional; embedders may add their own.
 | renderer | Executes gfx batches, presents; provides `draw-target` | bus; `window-surface` service |
 | ui       | egui integration: widget specs → draw data, events back | bus; renderer (direct-wired, not yet the `draw-target` service — see design/modules.md) |
 | audio    | Plays sound effects and music via `audio/*`, backed by `kira` | bus |
+| game-core | ECS/collision/tilemap/sprite-animation simulation via `game-core/*`, publishing `gfx/*`, backed by `hecs`/`rapier2d`/`glam`/`tiled` (ADR-019) | bus; `bus` service (to publish `gfx/*`, since it's injected via the generic `.module(...)` path, not renderer/ui's hardcoded sugar) |
 | *web*    | *wry panels, bus ↔ page JSON bridge*            | *bus; `window-surface` service*   |
 
 ## Distributions
@@ -56,14 +57,17 @@ graph TD
         Renderer["renderer"]
         UI["ui"]
         Audio["audio"]
+        GameCore["game-core"]
         Web["web"]
     end
     Renderer --> Bus
     UI --> Bus
     UI --> Renderer
     Audio --> Bus
+    GameCore --> Bus
     Web --> Bus
     Renderer -. "window-surface" .-> Platform
+    GameCore -. "bus service" .-> Bus
     Web -. "window-surface" .-> Platform
 ```
 
@@ -100,6 +104,7 @@ bones/
 │   ├── renderer/  #
 │   ├── ui/        #  first-party native modules
 │   ├── audio/     #
+│   ├── game-core/ #
 │   ├── web/       #  (planned)
 │   └── app/       #  the engine executable (default composition)
 ├── wit/           # contract: the WIT package

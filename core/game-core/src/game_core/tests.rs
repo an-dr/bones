@@ -1,6 +1,39 @@
+use std::sync::{Arc, Mutex};
+
 use super::*;
+use bones_messages::gfx;
 use bones_messages::EncodeMessage;
 use bus::ServiceRegistry;
+
+/// Records every envelope delivered to it — the minimal way to observe
+/// what a module publishes without a real renderer subscribed.
+#[derive(Clone, Default)]
+struct Spy(Arc<Mutex<Vec<Envelope>>>);
+
+impl Handler for Spy {
+    fn handle(&mut self, envelope: &Envelope) {
+        self.0.lock().unwrap().push(envelope.clone());
+    }
+}
+
+/// Wires `game_core` to a fresh `Bus`, subscribes a `Spy` to `gfx/*`, and
+/// returns both plus the bus so a test can call `dispatch()` after
+/// `handle`/`tick` to actually deliver what was enqueued (ADR-015:
+/// `publish` only enqueues).
+fn ready_game_core() -> (GameCore, Bus, Spy) {
+    let bus = Bus::new();
+    let spy = Spy::default();
+    let ep = bus.register("spy", spy.clone());
+    ep.subscribe("gfx/*");
+
+    let mut registry = ServiceRegistry::new();
+    registry.provide(bus.clone()).unwrap();
+    let mut ctx = ModuleContext::new(&mut registry);
+    let mut game_core = GameCore::new();
+    game_core.init(&mut ctx).unwrap();
+
+    (game_core, bus, spy)
+}
 
 fn envelope(topic: &str, payload: Vec<u8>) -> Envelope {
     Envelope {
@@ -48,12 +81,22 @@ fn name_is_the_bus_endpoint_id() {
 #[test]
 fn init_subscribes_game_core_and_tick_topics() {
     let mut registry = ServiceRegistry::new();
+    registry.provide(Bus::new()).unwrap();
     let mut ctx = ModuleContext::new(&mut registry);
     let mut game_core = GameCore::new();
 
     game_core.init(&mut ctx).unwrap();
 
     assert_eq!(ctx.into_subscriptions(), vec!["game-core/*", "core/tick"]);
+}
+
+#[test]
+fn init_without_a_bus_service_fails() {
+    let mut registry = ServiceRegistry::new();
+    let mut ctx = ModuleContext::new(&mut registry);
+    let mut game_core = GameCore::new();
+
+    assert!(game_core.init(&mut ctx).is_err());
 }
 
 #[test]
@@ -204,6 +247,41 @@ fn a_tilemap_collider_blocks_an_overlapping_dynamic_entity() {
         transform.x != 8.0 || transform.y != 8.0,
         "the dynamic entity should have been pushed out of the fixed tilemap collider"
     );
+}
+
+#[test]
+fn tick_publishes_a_camera_and_one_draw_sprite_per_entity() {
+    let (mut game_core, bus, spy) = ready_game_core();
+    game_core.handle(&envelope(SpawnEntity::TOPIC, spawn_at(3.0, 4.0).encode()));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    bus.dispatch();
+
+    let published = spy.0.lock().unwrap();
+    let cameras = published
+        .iter()
+        .filter(|e| e.topic == gfx::SetCamera::TOPIC)
+        .count();
+    let sprites: Vec<_> = published
+        .iter()
+        .filter(|e| e.topic == gfx::DrawSprite::TOPIC)
+        .map(|e| gfx::DrawSprite::decode(&e.payload).unwrap())
+        .collect();
+
+    assert_eq!(cameras, 1);
+    assert_eq!(sprites.len(), 1);
+    assert_eq!((sprites[0].dst_x, sprites[0].dst_y), (3, 4));
+}
+
+#[test]
+fn a_module_with_no_bus_service_never_panics_on_tick() {
+    // `GameCore::new()` directly, bypassing `init` — `bus` stays `None`,
+    // exercising the same silent-no-op path a caller that skips `init`
+    // (or an `init` that errors before this module is used) would hit.
+    let mut game_core = GameCore::new();
+    game_core.handle(&envelope(SpawnEntity::TOPIC, spawn_at(0.0, 0.0).encode()));
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 0.1 }.encode()));
+    // Reaching here without panicking is the assertion.
 }
 
 #[test]

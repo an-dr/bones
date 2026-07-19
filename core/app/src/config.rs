@@ -14,6 +14,7 @@ pub struct Config {
     pub renderer: bool,
     pub ui: bool,
     pub audio: bool,
+    pub game_core: bool,
     pub saves_dir: String,
     pub persistence_read_only: bool,
 }
@@ -33,6 +34,12 @@ impl Default for Config {
             // default on environments this scaffold hasn't been proven
             // against yet.
             audio: false,
+            // Opt-in, same as audio: a general-purpose GUI project (the
+            // README's other named use case) has no use for game-core's
+            // ECS/collision/tilemap capability — enabling it unconditionally
+            // would cost every non-game project a Bus service registration
+            // and a rapier2d/hecs dependency it never touches.
+            game_core: false,
             // persistence itself is unconditional (core/wasm-extensions —
             // creating a local directory always succeeds, unlike opening
             // an audio device, so there's no equivalent resource-scarcity
@@ -73,6 +80,7 @@ mod tests {
         assert!(config.renderer);
         assert!(config.ui);
         assert!(!config.audio, "not every deployment target has a working audio device");
+        assert!(!config.game_core, "not every project is a game");
         assert_eq!(config.saves_dir, "saves");
         assert!(!config.persistence_read_only, "extensions can save by default");
     }

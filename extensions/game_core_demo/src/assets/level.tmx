@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<map version="1.10" tiledversion="1.10.2" orientation="orthogonal" renderorder="right-down" width="8" height="6" tilewidth="16" tileheight="16" infinite="0" nextlayerid="3" nextobjectid="3">
+ <layer id="1" name="Ground" width="8" height="6">
+  <data encoding="csv">
+0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0
+</data>
+ </layer>
+ <objectgroup id="2" name="Collision">
+  <object id="1" x="0" y="64" width="128" height="16"/>
+ </objectgroup>
+</map>

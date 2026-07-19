@@ -6,8 +6,9 @@ any language. See [docs/architecture.md](docs/architecture.md) for the full
 design.
 
 **Status:** kernel (bus, extension host, platform, logging), the renderer
-and egui ui modules, hot reload, and custom native-module injection
-(`.module(...)`, see `embedding-demo/`) all work today. The web
+and egui ui modules, audio, the game-core module (ECS, collision, tilemap
+loading, sprite-animation timing), hot reload, and custom native-module
+injection (`.module(...)`, see `embedding-demo/`) all work today. The web
 presentation module is next — see [docs/roadmap.md](docs/roadmap.md).
 
 Use cases:

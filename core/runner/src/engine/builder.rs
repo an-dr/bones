@@ -167,6 +167,14 @@ impl Engine {
         if let Some(platform) = &mut platform {
             platform.provide_window(&mut services);
         }
+        // `bus` service: lets a `.module(...)`-injected module (game-core
+        // is the first) publish, not just receive — the same no-privileged-
+        // access stance as `window-surface`. `Bus` is cheap to clone (an
+        // `Arc` internally), so providing it doesn't compete with anything
+        // else that also wants a `Bus` handle.
+        services
+            .provide(bus.clone())
+            .expect("no other service registers as Bus");
 
         let renderer = if renderer_enabled {
             if platform.is_none() {

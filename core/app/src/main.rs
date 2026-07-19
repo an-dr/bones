@@ -30,6 +30,9 @@ fn run() -> Result<(), String> {
     if config.audio {
         engine = engine.module(audio::Audio::new());
     }
+    if config.game_core {
+        engine = engine.module(game_core::GameCore::new());
+    }
     if config.persistence_read_only {
         engine = engine.read_only_persistence();
     }

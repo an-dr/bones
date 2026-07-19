@@ -1,10 +1,9 @@
 # game-core
 
-A native 2D game simulation module (ADR-019, roadmap #4): entity/component
-store, collision, tilemap loading, and sprite-animation timing, composed
-from bought, engine-agnostic crates rather than written from scratch or
-taken from adopting an external engine — see ADR-019's crate-sourcing
-rationale.
+A native 2D game simulation module (ADR-019): entity/component store,
+collision, tilemap loading, and sprite-animation timing, composed from
+bought, engine-agnostic crates rather than written from scratch or taken
+from adopting an external engine — see ADR-019's crate-sourcing rationale.
 
 | Capability | Source |
 | ---------- | ------ |
@@ -35,3 +34,9 @@ rendering authority of its own.
 
 No logger, same stance as `core/audio`: registered via the generic
 `.module(...)` path, which has no access to `Engine`'s internal logger.
+Unlike `audio`, this module also needs to publish (not just receive), so
+`Module::init` consumes the `bus` service `Engine::build` provides
+unconditionally (design/modules.md) — `init` fails if none is available.
+
+See `extensions/game_core_demo` for a runnable example: a small tilemap
+plus two overlapping colliding entities, both animating.

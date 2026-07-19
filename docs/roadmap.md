@@ -16,7 +16,6 @@ registry are all done.
 | 1 | Full shutdown sequence: WIT `shutdown` export, close-request published as an event extensions can react to, `Stopped` lifecycle event (design/platform.md) | Closing the window runs every extension's `shutdown()` before the process exits |
 | 2 | ADR-007's queue budget: bounded inbound queue, per-frame publish allowance, drop counters (only the time budget is enforced today) | A flooding extension is faulted instead of starving its peers |
 | 3 | web module (wry) + `web/*` vocabulary | The "dashboard" example ([examples/web-app.md](examples/web-app.md)) runs |
-| 4 | `game-core` native module: ECS, collision, tilemap loading, sprite-animation timing (ADR-019) | A minimal 2D scene simulates entities with collision on a loaded tilemap, rendered through `gfx/*` |
 
 Guardrails while climbing:
 
