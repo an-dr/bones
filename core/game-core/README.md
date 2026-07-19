@@ -118,3 +118,15 @@ WASD/gamepad-controlled sprite entity, red `Dynamic` obstacles, and blue
 `Frictionless` squares, all colliding — plus `core/audio` footstep and
 hit-flash sound driven entirely from the demo's own `game-core/collision`
 handling, not from `game-core` itself.
+
+**Considered, not adopted:** `rapier2d::control::KinematicCharacterController`
+— a purpose-built sweep-and-slide controller that guarantees zero
+interpenetration by construction (computing allowed movement directly
+against swept geometry, rather than a force/velocity-based body fighting
+a compliant contact solver). The velocity-clamp approach above already
+fixes the reported overlap without an architecture change, so this
+wasn't pursued. Worth revisiting if this crate ever needs
+guaranteed-no-overlap collision closer to a from-scratch collision model
+(the sourcing motivation behind this being a candidate: a prior
+from-scratch game project — never fully finished — avoided this class of
+bug entirely by construction, not by tuning a bought physics engine).

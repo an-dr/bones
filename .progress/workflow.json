@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "flow": "DetailedAuto",
-  "phase": "COMMIT",
+  "phase": "FINAL_REVIEW",
   "baseBranch": "main",
   "baseCommit": "fcd9c9dd97e059fd6637665935e107ab1de01ca7",
   "featureBranch": "feature/game-core-physics-fixes",
@@ -11,8 +11,8 @@
     "done": "The user is satisfied that the demo and game-core module cover the game-engine capabilities they care about, and says so explicitly - there is no fixed feature checklist to complete.",
     "outOfScope": "No fully pre-planned feature list up front - increments are added one at a time as the user directs; no unrelated roadmap items (e.g. shutdown sequence, queue budget, web module) unless the user redirects to them explicitly."
   },
-  "currentIncrementId": "cb74ac830168489d976264c702946fcf",
-  "commitBaseline": "7c564be1fc73322d8077f5f6e0328d38c144b23b",
+  "currentIncrementId": null,
+  "commitBaseline": null,
   "increments": [
     {
       "id": "292600afe6d446f4badd1031bb9eebd1",
@@ -31,7 +31,7 @@
     {
       "id": "cb74ac830168489d976264c702946fcf",
       "number": 3,
-      "status": "verified",
+      "status": "completed",
       "scope": "game-core",
       "description": "Clamp commanded velocity against contact normals to stop overlap under sustained input - research confirms the primary mechanism behind visible interpenetration is set_velocity hard-overwriting rapier2d linear velocity every tick via body.set_linvel, which re-drives a body into an obstacle faster than the compliant solver's per-step corrective velocity (normalized_max_corrective_velocity) can push it back out, regardless of stiffness tuning (increment 2). Fix: before tick's physics.step, or immediately after via querying active contacts for each collider-bearing entity, zero or reflect the component of a Dynamic/Frictionless body's linear velocity that points into an active contact's normal (only when actually touching, i.e. has_any_active_contact, reusing increment 1's real-contact check) so continuous held input can push but not tunnel/overlap through a blocked direction while still allowing motion along the free axis (sliding along a wall). Unit test: a body driven continuously into a fixed obstacle settles at (or very near) zero penetration rather than the deeper steady-state overlap from before this increment, while a body driven diagonally against a wall still slides along the open axis. Live-verify: push the robot directly into a red obstacle and hold for several seconds - no visible overlap in a screenshot, and pushing diagonally still lets the robot slide along the obstacle's edge."
     }
@@ -117,8 +117,18 @@
       "at": "2026-07-19T21:50:17.8261728Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-07-19T21:50:41.8030577Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to MR."
+    },
+    {
+      "at": "2026-07-19T21:50:51.2194271Z",
+      "action": "advance",
+      "detail": "Advanced from MR to FINAL_REVIEW."
     }
   ],
   "createdAt": "2026-07-19T20:17:48.8779903Z",
-  "updatedAt": "2026-07-19T21:50:17.8375504Z"
+  "updatedAt": "2026-07-19T21:50:51.2284125Z"
 }
