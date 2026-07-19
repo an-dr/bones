@@ -43,11 +43,15 @@ rendering authority of its own.
   batches never erase the previous frame, and the scene visibly smears.
 - `game-core/load-tilemap` — parses Tiled `.tmx` XML bytes; every rectangle
   object on an object layer named `"Collision"` becomes a static (fixed)
-  `rapier2d` collider. Any other layer (tile layers, other object layers)
-  is ignored — drawing the tilemap itself is a `gfx/*` concern, out of
-  this crate's scope. A map with no `"Collision"` layer loads fine and
-  adds no colliders. Stays its own topic rather than folding into
-  `EntityOp`: a one-shot asset load, not a per-entity operation.
+  collider, drawn as a plain square in a fixed color distinct from
+  `EntityOp::Spawn`'s caller-chosen `square_color` — an invisible tilemap
+  wall reads as a bug ("why can't I move here?"), not an intentional
+  obstacle. Any other layer (tile layers, other object layers) is
+  ignored — drawing the tilemap's own tiles is still a `gfx/*` concern,
+  out of this crate's scope; only its collision geometry gets a visual.
+  A map with no `"Collision"` layer loads fine and adds no colliders.
+  Stays its own topic rather than folding into `EntityOp`: a one-shot
+  asset load, not a per-entity operation.
 
 No logger, same stance as `core/audio`: registered via the generic
 `.module(...)` path, which has no access to `Engine`'s internal logger.

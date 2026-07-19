@@ -319,6 +319,34 @@ fn load_tilemap_inserts_a_fixed_collider_per_collision_rect() {
 }
 
 #[test]
+fn load_tilemap_publishes_a_visible_square_for_its_collider() {
+    // Regression test: a tilemap collider used to be a raw rapier2d body
+    // with no ECS/gfx presence at all — invisible, so it read as a bug
+    // ("invisible wall") rather than an intentional obstacle.
+    let (mut game_core, bus, spy) = ready_game_core();
+    let load = LoadTilemap {
+        tmx_bytes: FIXTURE_TMX,
+    };
+    game_core.handle(&envelope(LoadTilemap::TOPIC, load.encode()));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    bus.dispatch();
+
+    let published = spy.0.lock().unwrap();
+    let rects: Vec<_> = published
+        .iter()
+        .filter(|e| e.topic == gfx::DrawRect::TOPIC)
+        .map(|e| gfx::DrawRect::decode(&e.payload).unwrap())
+        .collect();
+
+    // The fixture's collision rect is x=0,y=0,w=16,h=16 (top-left), so its
+    // center is (8, 8) and its top-left draw position is (0, 0).
+    assert_eq!(rects.len(), 1);
+    assert_eq!((rects[0].x, rects[0].y), (0, 0));
+    assert_eq!((rects[0].w, rects[0].h), (16, 16));
+}
+
+#[test]
 fn a_tilemap_collider_blocks_an_overlapping_dynamic_entity() {
     let mut game_core = GameCore::new();
     let load = LoadTilemap {
@@ -326,18 +354,20 @@ fn a_tilemap_collider_blocks_an_overlapping_dynamic_entity() {
     };
     game_core.handle(&envelope(LoadTilemap::TOPIC, load.encode()));
     // Overlaps the fixture's collider rect centered at (8, 8), half-extent 8.
-    game_core.handle(&entity_op_envelope(spawn_with_collider(8.0, 8.0, 4.0, 4.0)));
+    game_core.handle(&entity_op_envelope(spawn_with_collider_and_id(
+        1, 8.0, 8.0, 4.0, 4.0,
+    )));
 
     for _ in 0..60 {
         game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
     }
 
-    let (_, transform) = game_core
-        .world
-        .query_mut::<&Transform>()
-        .into_iter()
-        .next()
-        .expect("the spawned entity should still exist");
+    // Looked up by id, not the first `Transform` in the world — the
+    // tilemap collider is now its own `Transform`-bearing entity too
+    // (rendered visibly, see `load_tilemap`'s doc comment), so iteration
+    // order is no longer enough to find the spawned entity.
+    let entity = *game_core.entities.get(&1).unwrap();
+    let transform = *game_core.world.get::<&Transform>(entity).unwrap();
     assert!(
         transform.x != 8.0 || transform.y != 8.0,
         "the dynamic entity should have been pushed out of the fixed tilemap collider"

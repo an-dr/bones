@@ -11,8 +11,8 @@
     "done": "A minimal 2D scene simulates entities with collision on a loaded tilemap, rendered through gfx/*, demonstrated via a runnable example extension.",
     "outOfScope": "gfx/* rendering authority, sprite-animation asset pipeline beyond timing state machine, physics beyond 2D collision, any change to renderer ownership of the window surface."
   },
-  "currentIncrementId": "385e1917d09d4da38a8a02c05f5c2b8a",
-  "commitBaseline": "a3df86119f80092c53cf1054923ca82e36f7c2fc",
+  "currentIncrementId": "d858ef6bfbd247cf89ee41aa040efa69",
+  "commitBaseline": "5ff790123484191f8a03afc6360a659e9acea871",
   "increments": [
     {
       "id": "6bb8259e81814fe4bff2d05f094ea2da",
@@ -66,9 +66,16 @@
     {
       "id": "385e1917d09d4da38a8a02c05f5c2b8a",
       "number": 8,
-      "status": "verified",
+      "status": "completed",
       "scope": "fix sprite draw-position offset from collider center",
       "description": "DrawSprite currently uses transform.x/y (the rapier2d collider center) directly as dst_x/dst_y (DrawSprite top-left), while DrawRect already correctly converts center to top-left for squares. Fix publish_gfx so DrawSprite subtracts half frame_w/frame_h the same way, so a sprite entitys visible art lines up with its actual collider extent and contact with obstacles looks correct. Demo: the robot visibly touches and stops against the red squares at the same point its hitbox does, verified live."
+    },
+    {
+      "id": "d858ef6bfbd247cf89ee41aa040efa69",
+      "number": 9,
+      "status": "verified",
+      "scope": "render tilemap colliders visibly",
+      "description": "game-core tracks tilemap-loaded fixed colliders as their own entities (or a lightweight parallel list) carrying a Transform + SquareColor, so publish_gfx draws them as gfx::DrawRect squares alongside spawned entities. Fixes demo legibility: the interior maze walls that were invisible (correct collision, no visual) now render, so what looked like a bug (\"invisible wall\") is visibly a wall. Verified live: the level.tmx interior walls appear as squares matching where movement is actually blocked."
     }
   ],
   "approvals": [],
@@ -282,8 +289,43 @@
       "at": "2026-07-19T16:22:56.3662387Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-07-19T16:23:18.5256315Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to MR."
+    },
+    {
+      "at": "2026-07-19T16:23:27.8273575Z",
+      "action": "advance",
+      "detail": "Advanced from MR to FINAL_REVIEW."
+    },
+    {
+      "at": "2026-07-19T17:50:17.6095632Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 9: render tilemap colliders visibly"
+    },
+    {
+      "at": "2026-07-19T17:50:27.4828855Z",
+      "action": "advance",
+      "detail": "Advanced from SPLIT to BRANCH."
+    },
+    {
+      "at": "2026-07-19T17:50:37.1747892Z",
+      "action": "advance",
+      "detail": "Advanced from BRANCH to BUILD."
+    },
+    {
+      "at": "2026-07-19T17:56:20.8902567Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-07-19T17:56:30.6663867Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-07-19T13:14:27.3797032Z",
-  "updatedAt": "2026-07-19T16:22:56.3744209Z"
+  "updatedAt": "2026-07-19T17:56:30.6759993Z"
 }

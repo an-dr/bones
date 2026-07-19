@@ -21,6 +21,13 @@ use crate::{load_collision_rects, Collider, Physics, SpriteAnimation, SquareColo
 /// same simplification `renderer`'s single global camera already makes.
 const ENTITY_LAYER: u8 = 0;
 
+/// Fixed color for every collider `load_tilemap` creates — visually
+/// distinct from `EntityOp::Spawn`'s caller-chosen `square_color`, so a
+/// tilemap wall reads differently from a spawned obstacle. Discovered as a
+/// real need, not speculative: an invisible tilemap collider reads as a
+/// bug ("invisible wall") rather than an intentional obstacle.
+const TILEMAP_COLLIDER_COLOR: (u8, u8, u8, u8) = (90, 90, 100, 255);
+
 pub struct GameCore {
     world: hecs::World,
     physics: Physics,
@@ -164,7 +171,11 @@ impl GameCore {
 
     /// Ignores an unparseable map rather than failing the module — a
     /// malformed asset from a WASM extension is that extension's mistake,
-    /// not a reason to take down the whole simulation.
+    /// not a reason to take down the whole simulation. Each collision rect
+    /// becomes an ordinary square entity (`Transform` + `SquareColor` +
+    /// `Collider`, fixed rather than dynamic) — not a raw physics body with
+    /// no ECS presence — so `publish_gfx`'s existing square-drawing query
+    /// renders it for free instead of it being an invisible wall.
     fn load_tilemap(&mut self, load: LoadTilemap) {
         let Ok(rects) = load_collision_rects(load.tmx_bytes) else {
             return;
@@ -174,11 +185,24 @@ impl GameCore {
                 .physics
                 .bodies
                 .insert(RigidBodyBuilder::fixed().translation(vector![rect.x, rect.y]));
-            self.physics.colliders.insert_with_parent(
+            let collider = self.physics.colliders.insert_with_parent(
                 ColliderBuilder::cuboid(rect.half_w, rect.half_h),
                 body,
                 &mut self.physics.bodies,
             );
+            self.world.spawn((
+                Transform {
+                    x: rect.x,
+                    y: rect.y,
+                },
+                SquareColor(TILEMAP_COLLIDER_COLOR),
+                Collider {
+                    body,
+                    collider,
+                    half_w: rect.half_w,
+                    half_h: rect.half_h,
+                },
+            ));
         }
     }
 
