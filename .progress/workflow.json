@@ -11,8 +11,8 @@
     "done": "A minimal 2D scene simulates entities with collision on a loaded tilemap, rendered through gfx/*, demonstrated via a runnable example extension.",
     "outOfScope": "gfx/* rendering authority, sprite-animation asset pipeline beyond timing state machine, physics beyond 2D collision, any change to renderer ownership of the window surface."
   },
-  "currentIncrementId": "f01dc2df9a974c1ba0fdd0c82ca1f4c4",
-  "commitBaseline": "0863430ff17db219230251a34715c4276c828f46",
+  "currentIncrementId": "a68d7d4ccf2748c298c5504603d3ac66",
+  "commitBaseline": "20ff38ab3ff6d63ac81d813f4d7700c4186a9fb5",
   "increments": [
     {
       "id": "6bb8259e81814fe4bff2d05f094ea2da",
@@ -52,9 +52,16 @@
     {
       "id": "f01dc2df9a974c1ba0fdd0c82ca1f4c4",
       "number": 6,
-      "status": "verified",
+      "status": "completed",
       "scope": "game-core entity control + expanded demo",
       "description": "SpawnEntity gains an application-assigned entity id; new game-core/set-velocity command lets a caller drive a spawned entitys rapier2d velocity directly (both dynamic and kinematic bodies keep working). game_core_demo gains WASD + gamepad-left-stick movement for one entity and several additional static obstacles on the level tilemap to collide against. Demo: moving the controlled entity into obstacles/other entities visibly blocks it."
+    },
+    {
+      "id": "a68d7d4ccf2748c298c5504603d3ac66",
+      "number": 7,
+      "status": "verified",
+      "scope": "gfx Clear + open-closed entity-op wire API",
+      "description": "game-core publishes gfx::Clear every tick before drawing sprites, fixing the retained-batch smearing and invisible-obstacle bug. game-core/spawn-entity and game-core/set-velocity collapse into one game-core/entity-op topic carrying a tagged EntityOp enum (Spawn, SetVelocity, Despawn), following ui::Spec/Widget precedent so future entity operations extend the enum without a new topic. load-tilemap stays its own topic (one-shot asset load, not a per-entity op). Demo updated to the new API; visually verified clean (no smear) with obstacles visible."
     }
   ],
   "approvals": [],
@@ -213,8 +220,43 @@
       "at": "2026-07-19T15:51:48.0353658Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-07-19T15:52:15.4718024Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to MR."
+    },
+    {
+      "at": "2026-07-19T15:52:28.1906413Z",
+      "action": "advance",
+      "detail": "Advanced from MR to FINAL_REVIEW."
+    },
+    {
+      "at": "2026-07-19T16:01:40.1731663Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 7: gfx Clear + open-closed entity-op wire API"
+    },
+    {
+      "at": "2026-07-19T16:01:49.4440497Z",
+      "action": "advance",
+      "detail": "Advanced from SPLIT to BRANCH."
+    },
+    {
+      "at": "2026-07-19T16:01:59.966156Z",
+      "action": "advance",
+      "detail": "Advanced from BRANCH to BUILD."
+    },
+    {
+      "at": "2026-07-19T16:14:21.9304895Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-07-19T16:14:30.8986879Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-07-19T13:14:27.3797032Z",
-  "updatedAt": "2026-07-19T15:51:48.0444339Z"
+  "updatedAt": "2026-07-19T16:14:30.9075773Z"
 }

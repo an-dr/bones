@@ -60,6 +60,19 @@ impl Physics {
     pub fn body_translation(&self, handle: RigidBodyHandle) -> Option<Vector<Real>> {
         self.bodies.get(handle).map(|body| *body.translation())
     }
+
+    /// Removes a body and every collider attached to it. A no-op if
+    /// `handle` names no body (already removed, or never valid).
+    pub fn remove_body(&mut self, handle: RigidBodyHandle) {
+        self.bodies.remove(
+            handle,
+            &mut self.islands,
+            &mut self.colliders,
+            &mut self.impulse_joints,
+            &mut self.multibody_joints,
+            true,
+        );
+    }
 }
 
 impl Default for Physics {

@@ -59,3 +59,33 @@ fn an_unknown_handle_returns_none() {
 
     assert_eq!(physics_b.body_translation(stray_handle), None);
 }
+
+#[test]
+fn remove_body_takes_the_body_out_of_the_simulation() {
+    let mut physics = Physics::new();
+    let body = physics.bodies.insert(RigidBodyBuilder::fixed());
+    physics.colliders.insert_with_parent(
+        ColliderBuilder::cuboid(1.0, 1.0),
+        body,
+        &mut physics.bodies,
+    );
+
+    physics.remove_body(body);
+
+    assert_eq!(physics.body_translation(body), None);
+    assert_eq!(
+        physics.colliders.len(),
+        0,
+        "the attached collider should be removed too"
+    );
+}
+
+#[test]
+fn removing_an_already_removed_body_is_a_no_op() {
+    let mut physics = Physics::new();
+    let body = physics.bodies.insert(RigidBodyBuilder::fixed());
+    physics.remove_body(body);
+
+    physics.remove_body(body);
+    // Reaching here without panicking is the assertion.
+}

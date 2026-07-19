@@ -1,15 +1,17 @@
-//! Typed `game-core/*` commands shared by extensions and the game-core
-//! module.
+//! Typed `game-core/*` messages shared by extensions and the game-core
+//! module. `EntityOp` is the open/closed extension point for per-entity
+//! operations (spawn, set-velocity, despawn, and future ones) — new ops
+//! extend that enum rather than adding a new bus topic, the same pattern
+//! `ui::Widget` uses for `ui/spec`. `LoadTilemap` stays its own topic: a
+//! one-shot asset load, not a per-entity operation.
 
-mod command;
+mod entity_op;
+mod entity_op_message;
 mod load_tilemap;
-mod set_velocity;
-mod spawn_entity;
 
-pub use command::Command;
+pub use entity_op::{EntityOp, Sprite};
+pub use entity_op_message::EntityOpMessage;
 pub use load_tilemap::LoadTilemap;
-pub use set_velocity::SetVelocity;
-pub use spawn_entity::SpawnEntity;
 
 #[cfg(test)]
 mod tests;

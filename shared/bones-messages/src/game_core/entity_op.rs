@@ -1,0 +1,155 @@
+use crate::{DecodeError, Reader, Writer};
+
+/// The drawable appearance of a spawned entity: either an animated sprite
+/// or a plain filled square at the collider's extent (obstacles, walls —
+/// anything that doesn't need art). Exactly one of these two shapes per
+/// entity; `EntityOp::Spawn` carries `Option<Sprite>` plus a separate
+/// `square_color`, one of which is expected to be meaningful depending on
+/// whether `sprite` is `Some`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Sprite {
+    /// Application-assigned sprite identifier (matches `gfx::LoadSprite`).
+    pub sprite_id: u32,
+    /// Sprite frame width, in source pixels — every frame is laid out at
+    /// `(frame_index * frame_w, 0)` in the source sprite.
+    pub frame_w: u32,
+    /// Sprite frame height, in source pixels.
+    pub frame_h: u32,
+    /// Total frames in the animation loop. `1` draws a static sprite with
+    /// no timer.
+    pub frame_count: u32,
+    /// Seconds each frame is shown before advancing.
+    pub frame_duration: f32,
+}
+
+/// One operation on a `game-core` entity, addressed by a caller-assigned
+/// `entity_id` (its own namespace, distinct from `gfx::LoadSprite`'s
+/// sprite ids and this crate's other ids). Open/closed: a new op extends
+/// this enum — the wire format inside `game-core/entity-op` — rather than
+/// adding a new bus topic, the same pattern `ui::Widget` already uses for
+/// `ui/spec`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum EntityOp {
+    /// Spawns an entity with a world-space transform and either an
+    /// animated `sprite` or a plain filled `square_color` square at the
+    /// collider's extent (`sprite: None`) — obstacles and walls don't need
+    /// art. A nonzero `collider_half_w`/`collider_half_h` also gives it a
+    /// dynamic `rapier2d` box collider (`0.0` spawns a purely visual
+    /// entity, no physics body — meaningless combined with `sprite: None`,
+    /// since a colorless square has nothing to draw at). Spawning with an
+    /// `entity_id` already in use replaces that entity, the same
+    /// replace-on-republish semantics `gfx::DrawSprite` batches already use.
+    Spawn {
+        entity_id: u32,
+        x: f32,
+        y: f32,
+        sprite: Option<Sprite>,
+        square_color: (u8, u8, u8, u8),
+        collider_half_w: f32,
+        collider_half_h: f32,
+    },
+    /// Sets a spawned entity's rapier2d linear velocity directly — the
+    /// mechanism a caller (an extension reading `input/*`) drives movement
+    /// with. A no-op if `entity_id` names an entity with no collider, or
+    /// no entity at all.
+    SetVelocity { entity_id: u32, vx: f32, vy: f32 },
+    /// Removes an entity (and its collider, if any) entirely.
+    Despawn { entity_id: u32 },
+}
+
+const TAG_SPAWN: u8 = 0;
+const TAG_SET_VELOCITY: u8 = 1;
+const TAG_DESPAWN: u8 = 2;
+
+impl EntityOp {
+    pub(super) fn encode_into(&self, writer: Writer) -> Writer {
+        match self {
+            EntityOp::Spawn {
+                entity_id,
+                x,
+                y,
+                sprite,
+                square_color,
+                collider_half_w,
+                collider_half_h,
+            } => {
+                let (r, g, b, a) = *square_color;
+                let writer = writer.u8(TAG_SPAWN).u32(*entity_id).f32(*x).f32(*y);
+                let writer = match sprite {
+                    Some(sprite) => writer
+                        .u8(1)
+                        .u32(sprite.sprite_id)
+                        .u32(sprite.frame_w)
+                        .u32(sprite.frame_h)
+                        .u32(sprite.frame_count)
+                        .f32(sprite.frame_duration),
+                    None => writer.u8(0).u32(0).u32(0).u32(0).u32(0).f32(0.0),
+                };
+                writer
+                    .u8(r)
+                    .u8(g)
+                    .u8(b)
+                    .u8(a)
+                    .f32(*collider_half_w)
+                    .f32(*collider_half_h)
+            }
+            EntityOp::SetVelocity { entity_id, vx, vy } => writer
+                .u8(TAG_SET_VELOCITY)
+                .u32(*entity_id)
+                .f32(*vx)
+                .f32(*vy),
+            EntityOp::Despawn { entity_id } => writer.u8(TAG_DESPAWN).u32(*entity_id),
+        }
+    }
+
+    pub(super) fn decode(reader: &mut Reader) -> Result<Self, DecodeError> {
+        let tag = reader.read_u8()?;
+        match tag {
+            TAG_SPAWN => {
+                let entity_id = reader.read_u32()?;
+                let x = reader.read_f32()?;
+                let y = reader.read_f32()?;
+                let has_sprite = reader.read_u8()? != 0;
+                let sprite_id = reader.read_u32()?;
+                let frame_w = reader.read_u32()?;
+                let frame_h = reader.read_u32()?;
+                let frame_count = reader.read_u32()?;
+                let frame_duration = reader.read_f32()?;
+                let sprite = has_sprite.then_some(Sprite {
+                    sprite_id,
+                    frame_w,
+                    frame_h,
+                    frame_count,
+                    frame_duration,
+                });
+                let square_color = (
+                    reader.read_u8()?,
+                    reader.read_u8()?,
+                    reader.read_u8()?,
+                    reader.read_u8()?,
+                );
+                Ok(EntityOp::Spawn {
+                    entity_id,
+                    x,
+                    y,
+                    sprite,
+                    square_color,
+                    collider_half_w: reader.read_f32()?,
+                    collider_half_h: reader.read_f32()?,
+                })
+            }
+            TAG_SET_VELOCITY => Ok(EntityOp::SetVelocity {
+                entity_id: reader.read_u32()?,
+                vx: reader.read_f32()?,
+                vy: reader.read_f32()?,
+            }),
+            TAG_DESPAWN => Ok(EntityOp::Despawn {
+                entity_id: reader.read_u32()?,
+            }),
+            _ => Err(DecodeError::InvalidTag {
+                message: "game-core entity op",
+                tag,
+            }),
+        }
+    }
+}

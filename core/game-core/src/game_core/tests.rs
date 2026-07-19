@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use super::*;
+use bones_messages::game_core::{EntityOp, EntityOpMessage, LoadTilemap, Sprite};
 use bones_messages::gfx;
 use bones_messages::EncodeMessage;
 use bus::ServiceRegistry;
@@ -44,26 +45,37 @@ fn envelope(topic: &str, payload: Vec<u8>) -> Envelope {
     }
 }
 
-fn spawn_at(x: f32, y: f32) -> SpawnEntity {
-    spawn_with_id(0, x, y)
+fn entity_op_envelope(op: EntityOp) -> Envelope {
+    envelope(EntityOpMessage::TOPIC, EntityOpMessage(op).encode())
 }
 
-fn spawn_with_id(entity_id: u32, x: f32, y: f32) -> SpawnEntity {
-    SpawnEntity {
-        entity_id,
+fn sprite() -> Sprite {
+    Sprite {
         sprite_id: 1,
-        x,
-        y,
         frame_w: 16,
         frame_h: 16,
         frame_count: 4,
         frame_duration: 0.1,
+    }
+}
+
+fn spawn_at(x: f32, y: f32) -> EntityOp {
+    spawn_with_id(0, x, y)
+}
+
+fn spawn_with_id(entity_id: u32, x: f32, y: f32) -> EntityOp {
+    EntityOp::Spawn {
+        entity_id,
+        x,
+        y,
+        sprite: Some(sprite()),
+        square_color: (0, 0, 0, 0),
         collider_half_w: 0.0,
         collider_half_h: 0.0,
     }
 }
 
-fn spawn_with_collider(x: f32, y: f32, half_w: f32, half_h: f32) -> SpawnEntity {
+fn spawn_with_collider(x: f32, y: f32, half_w: f32, half_h: f32) -> EntityOp {
     spawn_with_collider_and_id(0, x, y, half_w, half_h)
 }
 
@@ -73,11 +85,33 @@ fn spawn_with_collider_and_id(
     y: f32,
     half_w: f32,
     half_h: f32,
-) -> SpawnEntity {
-    SpawnEntity {
+) -> EntityOp {
+    EntityOp::Spawn {
+        entity_id,
+        x,
+        y,
+        sprite: Some(sprite()),
+        square_color: (0, 0, 0, 0),
         collider_half_w: half_w,
         collider_half_h: half_h,
-        ..spawn_with_id(entity_id, x, y)
+    }
+}
+
+fn spawn_square_with_collider(
+    entity_id: u32,
+    x: f32,
+    y: f32,
+    half_w: f32,
+    half_h: f32,
+) -> EntityOp {
+    EntityOp::Spawn {
+        entity_id,
+        x,
+        y,
+        sprite: None,
+        square_color: (200, 40, 40, 255),
+        collider_half_w: half_w,
+        collider_half_h: half_h,
     }
 }
 
@@ -115,10 +149,9 @@ fn init_without_a_bus_service_fails() {
 }
 
 #[test]
-fn spawn_entity_adds_a_transform_and_animation() {
+fn spawn_with_a_sprite_adds_a_transform_and_animation() {
     let mut game_core = GameCore::new();
-    let spawn = spawn_at(3.0, 4.0);
-    game_core.handle(&envelope(SpawnEntity::TOPIC, spawn.encode()));
+    game_core.handle(&entity_op_envelope(spawn_at(3.0, 4.0)));
 
     assert_eq!(game_core.world.len(), 1);
     let (_, (transform, animation)) = game_core
@@ -132,10 +165,31 @@ fn spawn_entity_adds_a_transform_and_animation() {
 }
 
 #[test]
+fn spawn_with_no_sprite_adds_a_square_color_instead() {
+    let mut game_core = GameCore::new();
+    game_core.handle(&entity_op_envelope(spawn_square_with_collider(
+        1, 0.0, 0.0, 8.0, 8.0,
+    )));
+
+    let count = game_core
+        .world
+        .query_mut::<&SpriteAnimation>()
+        .into_iter()
+        .count();
+    assert_eq!(count, 0, "a square entity should carry no SpriteAnimation");
+    let (_, color) = game_core
+        .world
+        .query_mut::<&SquareColor>()
+        .into_iter()
+        .next()
+        .expect("the spawned entity should carry a SquareColor");
+    assert_eq!(color.0, (200, 40, 40, 255));
+}
+
+#[test]
 fn spawn_entity_with_a_collider_carries_a_collider_component() {
     let mut game_core = GameCore::new();
-    let spawn = spawn_with_collider(0.0, 0.0, 1.0, 1.0);
-    game_core.handle(&envelope(SpawnEntity::TOPIC, spawn.encode()));
+    game_core.handle(&entity_op_envelope(spawn_with_collider(0.0, 0.0, 1.0, 1.0)));
 
     let count = game_core.world.query_mut::<&Collider>().into_iter().count();
     assert_eq!(count, 1);
@@ -144,8 +198,7 @@ fn spawn_entity_with_a_collider_carries_a_collider_component() {
 #[test]
 fn spawn_entity_without_a_collider_carries_none() {
     let mut game_core = GameCore::new();
-    let spawn = spawn_at(0.0, 0.0);
-    game_core.handle(&envelope(SpawnEntity::TOPIC, spawn.encode()));
+    game_core.handle(&entity_op_envelope(spawn_at(0.0, 0.0)));
 
     let count = game_core.world.query_mut::<&Collider>().into_iter().count();
     assert_eq!(
@@ -155,16 +208,54 @@ fn spawn_entity_without_a_collider_carries_none() {
 }
 
 #[test]
+fn spawning_with_an_id_already_in_use_replaces_the_entity() {
+    let mut game_core = GameCore::new();
+    game_core.handle(&entity_op_envelope(spawn_with_id(1, 0.0, 0.0)));
+    game_core.handle(&entity_op_envelope(spawn_with_id(1, 5.0, 5.0)));
+
+    assert_eq!(
+        game_core.world.len(),
+        1,
+        "the first spawn should have been replaced, not duplicated"
+    );
+    let (_, transform) = game_core
+        .world
+        .query_mut::<&Transform>()
+        .into_iter()
+        .next()
+        .unwrap();
+    assert_eq!(*transform, Transform { x: 5.0, y: 5.0 });
+}
+
+#[test]
+fn despawn_removes_the_entity_and_its_collider() {
+    let mut game_core = GameCore::new();
+    game_core.handle(&entity_op_envelope(spawn_with_collider_and_id(
+        1, 0.0, 0.0, 1.0, 1.0,
+    )));
+
+    game_core.handle(&entity_op_envelope(EntityOp::Despawn { entity_id: 1 }));
+
+    assert_eq!(game_core.world.len(), 0);
+    assert_eq!(game_core.physics.bodies.len(), 0);
+}
+
+#[test]
+fn despawning_an_unknown_entity_id_is_a_no_op() {
+    let mut game_core = GameCore::new();
+    game_core.handle(&entity_op_envelope(EntityOp::Despawn { entity_id: 99 }));
+    // Reaching here without panicking is the assertion.
+}
+
+#[test]
 fn tick_steps_physics_and_syncs_transforms_for_colliding_entities() {
     let mut game_core = GameCore::new();
-    game_core.handle(&envelope(
-        SpawnEntity::TOPIC,
-        spawn_with_collider_and_id(1, 0.0, 0.0, 1.0, 1.0).encode(),
-    ));
-    game_core.handle(&envelope(
-        SpawnEntity::TOPIC,
-        spawn_with_collider_and_id(2, 0.5, 0.0, 1.0, 1.0).encode(),
-    ));
+    game_core.handle(&entity_op_envelope(spawn_with_collider_and_id(
+        1, 0.0, 0.0, 1.0, 1.0,
+    )));
+    game_core.handle(&entity_op_envelope(spawn_with_collider_and_id(
+        2, 0.5, 0.0, 1.0, 1.0,
+    )));
 
     for _ in 0..60 {
         game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
@@ -187,11 +278,9 @@ fn tick_steps_physics_and_syncs_transforms_for_colliding_entities() {
 #[test]
 fn tick_advances_every_entitys_animation() {
     let mut game_core = GameCore::new();
-    let spawn = spawn_at(0.0, 0.0);
-    game_core.handle(&envelope(SpawnEntity::TOPIC, spawn.encode()));
+    game_core.handle(&entity_op_envelope(spawn_at(0.0, 0.0)));
 
-    let tick = Tick { dt: 0.15 };
-    game_core.handle(&envelope(Tick::TOPIC, tick.encode()));
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 0.15 }.encode()));
 
     let (_, animation) = game_core
         .world
@@ -221,13 +310,10 @@ const FIXTURE_TMX: &[u8] = br#"<?xml version="1.0" encoding="UTF-8"?>
 #[test]
 fn load_tilemap_inserts_a_fixed_collider_per_collision_rect() {
     let mut game_core = GameCore::new();
-    let load = bones_messages::game_core::LoadTilemap {
+    let load = LoadTilemap {
         tmx_bytes: FIXTURE_TMX,
     };
-    game_core.handle(&envelope(
-        bones_messages::game_core::LoadTilemap::TOPIC,
-        load.encode(),
-    ));
+    game_core.handle(&envelope(LoadTilemap::TOPIC, load.encode()));
 
     assert_eq!(game_core.physics.bodies.len(), 1);
 }
@@ -235,18 +321,12 @@ fn load_tilemap_inserts_a_fixed_collider_per_collision_rect() {
 #[test]
 fn a_tilemap_collider_blocks_an_overlapping_dynamic_entity() {
     let mut game_core = GameCore::new();
-    let load = bones_messages::game_core::LoadTilemap {
+    let load = LoadTilemap {
         tmx_bytes: FIXTURE_TMX,
     };
-    game_core.handle(&envelope(
-        bones_messages::game_core::LoadTilemap::TOPIC,
-        load.encode(),
-    ));
+    game_core.handle(&envelope(LoadTilemap::TOPIC, load.encode()));
     // Overlaps the fixture's collider rect centered at (8, 8), half-extent 8.
-    game_core.handle(&envelope(
-        SpawnEntity::TOPIC,
-        spawn_with_collider(8.0, 8.0, 4.0, 4.0).encode(),
-    ));
+    game_core.handle(&entity_op_envelope(spawn_with_collider(8.0, 8.0, 4.0, 4.0)));
 
     for _ in 0..60 {
         game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
@@ -265,14 +345,18 @@ fn a_tilemap_collider_blocks_an_overlapping_dynamic_entity() {
 }
 
 #[test]
-fn tick_publishes_a_camera_and_one_draw_sprite_per_entity() {
+fn tick_publishes_a_clear_a_camera_and_one_draw_sprite_per_sprite_entity() {
     let (mut game_core, bus, spy) = ready_game_core();
-    game_core.handle(&envelope(SpawnEntity::TOPIC, spawn_at(3.0, 4.0).encode()));
+    game_core.handle(&entity_op_envelope(spawn_at(3.0, 4.0)));
 
     game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
     bus.dispatch();
 
     let published = spy.0.lock().unwrap();
+    let clears = published
+        .iter()
+        .filter(|e| e.topic == gfx::Clear::TOPIC)
+        .count();
     let cameras = published
         .iter()
         .filter(|e| e.topic == gfx::SetCamera::TOPIC)
@@ -283,9 +367,35 @@ fn tick_publishes_a_camera_and_one_draw_sprite_per_entity() {
         .map(|e| gfx::DrawSprite::decode(&e.payload).unwrap())
         .collect();
 
+    assert_eq!(
+        clears, 1,
+        "every tick should clear before drawing, or old frames smear"
+    );
     assert_eq!(cameras, 1);
     assert_eq!(sprites.len(), 1);
     assert_eq!((sprites[0].dst_x, sprites[0].dst_y), (3, 4));
+}
+
+#[test]
+fn tick_publishes_a_draw_rect_for_a_square_entity() {
+    let (mut game_core, bus, spy) = ready_game_core();
+    game_core.handle(&entity_op_envelope(spawn_square_with_collider(
+        1, 10.0, 10.0, 8.0, 8.0,
+    )));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    bus.dispatch();
+
+    let published = spy.0.lock().unwrap();
+    let rects: Vec<_> = published
+        .iter()
+        .filter(|e| e.topic == gfx::DrawRect::TOPIC)
+        .map(|e| gfx::DrawRect::decode(&e.payload).unwrap())
+        .collect();
+
+    assert_eq!(rects.len(), 1);
+    assert_eq!(rects[0].color, (200, 40, 40, 255));
+    assert_eq!((rects[0].w, rects[0].h), (16, 16));
 }
 
 #[test]
@@ -294,7 +404,7 @@ fn a_module_with_no_bus_service_never_panics_on_tick() {
     // exercising the same silent-no-op path a caller that skips `init`
     // (or an `init` that errors before this module is used) would hit.
     let mut game_core = GameCore::new();
-    game_core.handle(&envelope(SpawnEntity::TOPIC, spawn_at(0.0, 0.0).encode()));
+    game_core.handle(&entity_op_envelope(spawn_at(0.0, 0.0)));
     game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 0.1 }.encode()));
     // Reaching here without panicking is the assertion.
 }
@@ -302,19 +412,14 @@ fn a_module_with_no_bus_service_never_panics_on_tick() {
 #[test]
 fn set_velocity_moves_a_collider_bearing_entity_over_time() {
     let mut game_core = GameCore::new();
-    game_core.handle(&envelope(
-        SpawnEntity::TOPIC,
-        spawn_with_collider_and_id(7, 0.0, 0.0, 1.0, 1.0).encode(),
-    ));
-    game_core.handle(&envelope(
-        bones_messages::game_core::SetVelocity::TOPIC,
-        bones_messages::game_core::SetVelocity {
-            entity_id: 7,
-            vx: 10.0,
-            vy: 0.0,
-        }
-        .encode(),
-    ));
+    game_core.handle(&entity_op_envelope(spawn_with_collider_and_id(
+        7, 0.0, 0.0, 1.0, 1.0,
+    )));
+    game_core.handle(&entity_op_envelope(EntityOp::SetVelocity {
+        entity_id: 7,
+        vx: 10.0,
+        vy: 0.0,
+    }));
 
     for _ in 0..60 {
         game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
@@ -336,42 +441,31 @@ fn set_velocity_moves_a_collider_bearing_entity_over_time() {
 #[test]
 fn set_velocity_for_an_entity_with_no_collider_is_a_no_op() {
     let mut game_core = GameCore::new();
-    game_core.handle(&envelope(
-        SpawnEntity::TOPIC,
-        spawn_with_id(1, 0.0, 0.0).encode(),
-    ));
+    game_core.handle(&entity_op_envelope(spawn_with_id(1, 0.0, 0.0)));
 
-    game_core.handle(&envelope(
-        bones_messages::game_core::SetVelocity::TOPIC,
-        bones_messages::game_core::SetVelocity {
-            entity_id: 1,
-            vx: 10.0,
-            vy: 0.0,
-        }
-        .encode(),
-    ));
+    game_core.handle(&entity_op_envelope(EntityOp::SetVelocity {
+        entity_id: 1,
+        vx: 10.0,
+        vy: 0.0,
+    }));
     // Reaching here without panicking is the assertion.
 }
 
 #[test]
 fn set_velocity_for_an_unknown_entity_id_is_a_no_op() {
     let mut game_core = GameCore::new();
-    game_core.handle(&envelope(
-        bones_messages::game_core::SetVelocity::TOPIC,
-        bones_messages::game_core::SetVelocity {
-            entity_id: 99,
-            vx: 10.0,
-            vy: 0.0,
-        }
-        .encode(),
-    ));
+    game_core.handle(&entity_op_envelope(EntityOp::SetVelocity {
+        entity_id: 99,
+        vx: 10.0,
+        vy: 0.0,
+    }));
     // Reaching here without panicking is the assertion.
 }
 
 #[test]
 fn malformed_and_unknown_payloads_are_silently_ignored() {
     let mut game_core = GameCore::new();
-    game_core.handle(&envelope("game-core/spawn-entity", vec![1, 2, 3]));
+    game_core.handle(&envelope(EntityOpMessage::TOPIC, vec![1, 2, 3]));
     game_core.handle(&envelope("game-core/does-not-exist", vec![]));
     // Reaching here without panicking is the assertion.
 }

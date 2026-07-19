@@ -6,7 +6,7 @@ wit_bindgen::generate!({
 use std::cell::RefCell;
 
 use bones::core::host_api::{log, publish, subscribe, Level};
-use bones_messages::game_core::{LoadTilemap, SetVelocity, SpawnEntity};
+use bones_messages::game_core::{EntityOp, EntityOpMessage, LoadTilemap, Sprite};
 use bones_messages::gfx::LoadSprite;
 use bones_messages::input::{GamepadAxis, KeyDown, KeyUp};
 use bones_messages::{DecodeMessage, EncodeMessage, Message};
@@ -17,6 +17,8 @@ const SPRITE_ID: u32 = 1;
 // robot_william.png is a 256x64 strip of four 64x64 frames.
 const FRAME_SIZE: u32 = 64;
 const CONTROLLED_ENTITY_ID: u32 = 1;
+const OBSTACLE_HALF_EXTENT: f32 = 24.0;
+const OBSTACLE_COLOR: (u8, u8, u8, u8) = (200, 60, 60, 255);
 const MOVE_SPEED: f32 = 120.0;
 // This demo's own dead zone: below this, stick drift (platform reports raw
 // axis values with no dead zone applied) shouldn't move the entity.
@@ -70,20 +72,22 @@ thread_local! {
     static HELD: RefCell<Held> = RefCell::new(Held::default());
 }
 
+fn publish_entity_op(op: EntityOp) {
+    publish(EntityOpMessage::TOPIC, &EntityOpMessage(op).encode());
+}
+
+/// A plain colored square, no sprite — obstacles and walls don't need art
+/// (only the controlled entity uses `robot_william.png`).
 fn spawn_obstacle(entity_id: u32, x: f32, y: f32) {
-    let obstacle = SpawnEntity {
+    publish_entity_op(EntityOp::Spawn {
         entity_id,
-        sprite_id: SPRITE_ID,
         x,
         y,
-        frame_w: FRAME_SIZE,
-        frame_h: FRAME_SIZE,
-        frame_count: 1,
-        frame_duration: 0.0,
-        collider_half_w: FRAME_SIZE as f32 / 2.0,
-        collider_half_h: FRAME_SIZE as f32 / 2.0,
-    };
-    publish(SpawnEntity::TOPIC, &obstacle.encode());
+        sprite: None,
+        square_color: OBSTACLE_COLOR,
+        collider_half_w: OBSTACLE_HALF_EXTENT,
+        collider_half_h: OBSTACLE_HALF_EXTENT,
+    });
 }
 
 struct Component;
@@ -106,23 +110,26 @@ impl Guest for Component {
         };
         publish(LoadTilemap::TOPIC, &load_tilemap.encode());
 
-        // The controlled entity: driven by set-velocity from on_tick, below.
-        let controlled = SpawnEntity {
+        // The controlled entity: driven by set-velocity from on_tick, below
+        // — the only entity in this demo that uses the robot sprite.
+        publish_entity_op(EntityOp::Spawn {
             entity_id: CONTROLLED_ENTITY_ID,
-            sprite_id: SPRITE_ID,
             x: 60.0,
             y: 60.0,
-            frame_w: FRAME_SIZE,
-            frame_h: FRAME_SIZE,
-            frame_count: 4,
-            frame_duration: 0.15,
+            sprite: Some(Sprite {
+                sprite_id: SPRITE_ID,
+                frame_w: FRAME_SIZE,
+                frame_h: FRAME_SIZE,
+                frame_count: 4,
+                frame_duration: 0.15,
+            }),
+            square_color: (0, 0, 0, 0),
             collider_half_w: FRAME_SIZE as f32 / 2.0,
             collider_half_h: FRAME_SIZE as f32 / 2.0,
-        };
-        publish(SpawnEntity::TOPIC, &controlled.encode());
+        });
 
-        // Several stationary obstacles scattered around the interior walls
-        // (level.tmx's cross-shaped Collision layer) — the controlled
+        // Several stationary obstacle squares scattered around the interior
+        // walls (level.tmx's cross-shaped Collision layer) — the controlled
         // entity visibly stops against each one, proving entity-entity
         // collision alongside the tilemap's entity-terrain collision.
         spawn_obstacle(2, 350.0, 60.0);
@@ -135,12 +142,11 @@ impl Guest for Component {
 
     fn on_tick(_dt: f32) {
         let (vx, vy) = HELD.with(|held| held.borrow().velocity());
-        let set = SetVelocity {
+        publish_entity_op(EntityOp::SetVelocity {
             entity_id: CONTROLLED_ENTITY_ID,
             vx,
             vy,
-        };
-        publish(SetVelocity::TOPIC, &set.encode());
+        });
     }
 
     fn on_message(topic: String, _sender: String, payload: Vec<u8>) -> Option<Vec<u8>> {

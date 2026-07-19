@@ -7,14 +7,14 @@
 
 use std::collections::HashMap;
 
-use bones_messages::game_core::{Command, LoadTilemap, SetVelocity, SpawnEntity};
-use bones_messages::gfx::{DrawSprite, SetCamera};
+use bones_messages::game_core::{EntityOp, EntityOpMessage, LoadTilemap};
+use bones_messages::gfx::{Clear, DrawRect, DrawSprite, SetCamera};
 use bones_messages::tick::Tick;
 use bones_messages::{DecodeMessage, EncodeMessage, Message};
 use bus::{Bus, Envelope, Handler, Module, ModuleContext};
 use rapier2d::prelude::{nalgebra, vector, ColliderBuilder, RigidBodyBuilder};
 
-use crate::{load_collision_rects, Collider, Physics, SpriteAnimation, Transform};
+use crate::{load_collision_rects, Collider, Physics, SpriteAnimation, SquareColor, Transform};
 
 /// The `gfx/*` layer game-core draws its entities on. Fixed rather than
 /// configurable: this module owns exactly one concern (the game world),
@@ -25,10 +25,9 @@ pub struct GameCore {
     world: hecs::World,
     physics: Physics,
     bus: Option<Bus>,
-    // Maps the caller's own `SpawnEntity::entity_id` to the `hecs::Entity`
-    // it became — the caller's addressing scheme (`game-core/set-velocity`)
-    // never sees a raw `hecs::Entity`, which is this module's own internal
-    // handle.
+    // Maps the caller's own `EntityOp`-carried `entity_id` to the
+    // `hecs::Entity` it became — the caller's addressing scheme never sees
+    // a raw `hecs::Entity`, which is this module's own internal handle.
     entities: HashMap<u32, hecs::Entity>,
 }
 
@@ -54,49 +53,113 @@ impl GameCore {
         });
     }
 
-    fn spawn_entity(&mut self, spawn: SpawnEntity) {
-        let transform = Transform {
-            x: spawn.x,
-            y: spawn.y,
-        };
-        let animation = SpriteAnimation::new(
-            spawn.sprite_id,
-            spawn.frame_w,
-            spawn.frame_h,
-            spawn.frame_count,
-            spawn.frame_duration,
-        );
+    fn apply_entity_op(&mut self, op: EntityOp) {
+        match op {
+            EntityOp::Spawn {
+                entity_id,
+                x,
+                y,
+                sprite,
+                square_color,
+                collider_half_w,
+                collider_half_h,
+            } => self.spawn_entity(
+                entity_id,
+                x,
+                y,
+                sprite,
+                square_color,
+                collider_half_w,
+                collider_half_h,
+            ),
+            EntityOp::SetVelocity { entity_id, vx, vy } => self.set_velocity(entity_id, vx, vy),
+            EntityOp::Despawn { entity_id } => self.despawn(entity_id),
+        }
+    }
 
-        let entity = if spawn.collider_half_w > 0.0 && spawn.collider_half_h > 0.0 {
+    #[allow(clippy::too_many_arguments)]
+    fn spawn_entity(
+        &mut self,
+        entity_id: u32,
+        x: f32,
+        y: f32,
+        sprite: Option<bones_messages::game_core::Sprite>,
+        square_color: (u8, u8, u8, u8),
+        collider_half_w: f32,
+        collider_half_h: f32,
+    ) {
+        // Replaces any entity already spawned under this id — the same
+        // replace-on-republish semantics `gfx::DrawSprite` batches use.
+        self.despawn(entity_id);
+
+        let transform = Transform { x, y };
+        let animation = sprite.map(|sprite| {
+            SpriteAnimation::new(
+                sprite.sprite_id,
+                sprite.frame_w,
+                sprite.frame_h,
+                sprite.frame_count,
+                sprite.frame_duration,
+            )
+        });
+
+        let mut builder = hecs::EntityBuilder::new();
+        builder.add(transform);
+        match animation {
+            Some(animation) => {
+                builder.add(animation);
+            }
+            None => {
+                builder.add(SquareColor(square_color));
+            }
+        }
+
+        if collider_half_w > 0.0 && collider_half_h > 0.0 {
             let body = self
                 .physics
                 .bodies
-                .insert(RigidBodyBuilder::dynamic().translation(vector![spawn.x, spawn.y]));
+                .insert(RigidBodyBuilder::dynamic().translation(vector![x, y]));
             let collider = self.physics.colliders.insert_with_parent(
-                ColliderBuilder::cuboid(spawn.collider_half_w, spawn.collider_half_h),
+                ColliderBuilder::cuboid(collider_half_w, collider_half_h),
                 body,
                 &mut self.physics.bodies,
             );
-            self.world
-                .spawn((transform, animation, Collider { body, collider }))
-        } else {
-            self.world.spawn((transform, animation))
-        };
-        self.entities.insert(spawn.entity_id, entity);
+            builder.add(Collider {
+                body,
+                collider,
+                half_w: collider_half_w,
+                half_h: collider_half_h,
+            });
+        }
+
+        let entity = self.world.spawn(builder.build());
+        self.entities.insert(entity_id, entity);
     }
 
     /// A no-op if `entity_id` names no entity, or one with no collider —
     /// a purely visual entity has no rapier2d body to set velocity on.
-    fn set_velocity(&mut self, set: SetVelocity) {
-        let Some(&entity) = self.entities.get(&set.entity_id) else {
+    fn set_velocity(&mut self, entity_id: u32, vx: f32, vy: f32) {
+        let Some(&entity) = self.entities.get(&entity_id) else {
             return;
         };
         let Ok(collider) = self.world.get::<&Collider>(entity) else {
             return;
         };
         if let Some(body) = self.physics.bodies.get_mut(collider.body) {
-            body.set_linvel(vector![set.vx, set.vy], true);
+            body.set_linvel(vector![vx, vy], true);
         }
+    }
+
+    /// A no-op if `entity_id` names no entity — despawning twice, or an id
+    /// never spawned, is not an error.
+    fn despawn(&mut self, entity_id: u32) {
+        let Some(entity) = self.entities.remove(&entity_id) else {
+            return;
+        };
+        if let Ok(collider) = self.world.get::<&Collider>(entity) {
+            self.physics.remove_body(collider.body);
+        }
+        let _ = self.world.despawn(entity);
     }
 
     /// Ignores an unparseable map rather than failing the module — a
@@ -136,10 +199,10 @@ impl GameCore {
         self.publish_gfx();
     }
 
-    /// Turns every entity's simulated state into a `gfx::DrawSprite`, plus
-    /// one fixed `gfx::SetCamera` — game-core has no rendering authority of
-    /// its own (ADR-019), it only ever emits `gfx/*` the same as any
-    /// extension would.
+    /// Turns every entity's simulated state into a `gfx::DrawSprite` or
+    /// `gfx::DrawRect`, plus one `gfx::Clear` and a fixed `gfx::SetCamera`
+    /// — game-core has no rendering authority of its own (ADR-019), it
+    /// only ever emits `gfx/*` the same as any extension would.
     ///
     /// Named `publish_gfx`, not `render`: `Module::render(&mut self)` is a
     /// distinct frame-phase hook (design/modules.md) this module doesn't
@@ -150,6 +213,16 @@ impl GameCore {
     /// this name avoids the collision outright rather than relying on
     /// resolution rules.
     fn publish_gfx(&self) {
+        // Without this, every previous frame's pixels stay on screen under
+        // this frame's draws (the renderer only clears when told to) —
+        // discovered as a real visual bug (streaking/smearing), not a
+        // hypothetical.
+        self.publish(Clear {
+            r: 20,
+            g: 20,
+            b: 20,
+            a: 255,
+        });
         self.publish(SetCamera {
             x: 0.0,
             y: 0.0,
@@ -175,6 +248,21 @@ impl GameCore {
                 tint: (255, 255, 255, 255),
             });
         }
+        for (_, (transform, color, collider)) in self
+            .world
+            .query::<(&Transform, &SquareColor, &Collider)>()
+            .iter()
+        {
+            self.publish(DrawRect {
+                x: (transform.x - collider.half_w) as i32,
+                y: (transform.y - collider.half_h) as i32,
+                w: (collider.half_w * 2.0) as u32,
+                h: (collider.half_h * 2.0) as u32,
+                filled: true,
+                color: color.0,
+                layer: ENTITY_LAYER,
+            });
+        }
     }
 }
 
@@ -192,11 +280,16 @@ impl Handler for GameCore {
             }
             return;
         }
-        match Command::decode(&envelope.topic, &envelope.payload) {
-            Ok(Some(Command::SpawnEntity(spawn))) => self.spawn_entity(spawn),
-            Ok(Some(Command::LoadTilemap(load))) => self.load_tilemap(load),
-            Ok(Some(Command::SetVelocity(set))) => self.set_velocity(set),
-            _ => {}
+        if envelope.topic == EntityOpMessage::TOPIC {
+            if let Ok(EntityOpMessage(op)) = EntityOpMessage::decode(&envelope.payload) {
+                self.apply_entity_op(op);
+            }
+            return;
+        }
+        if envelope.topic == LoadTilemap::TOPIC {
+            if let Ok(load) = LoadTilemap::decode(&envelope.payload) {
+                self.load_tilemap(load);
+            }
         }
     }
 }
