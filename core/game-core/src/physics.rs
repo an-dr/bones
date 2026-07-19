@@ -1,9 +1,28 @@
 //! Bundles the rapier2d pipeline state `GameCore` steps each tick
 //! (ADR-019: physics/collision is bought, not hand-rolled).
 
+use std::num::NonZeroUsize;
+
 use rapier2d::crossbeam::channel::{unbounded, Receiver};
 use rapier2d::pipeline::ChannelEventCollector;
 use rapier2d::prelude::*;
+
+/// rapier2d 0.22's default is 30.0. Higher pushes overlapping bodies apart
+/// faster/harder per step — tuned against visible interpenetration under
+/// sustained driving force, not derived from a formula.
+const CONTACT_NATURAL_FREQUENCY: f32 = 120.0;
+
+/// rapier2d 0.22's default is 5.0 (a fairly soft/compliant spring). Lower
+/// is stiffer; paired with the higher frequency above without going low
+/// enough to reintroduce bounce/jitter.
+const CONTACT_DAMPING_RATIO: f32 = 2.0;
+
+/// rapier2d 0.22's default is 4. More iterations converge better at the
+/// higher stiffness above instead of overshooting.
+const NUM_SOLVER_ITERATIONS: usize = 8;
+
+/// rapier2d 0.22's default is 1.
+const NUM_INTERNAL_PGS_ITERATIONS: usize = 2;
 
 pub struct Physics {
     pub bodies: RigidBodySet,
@@ -28,11 +47,26 @@ impl Physics {
     pub fn new() -> Self {
         let (collision_sender, collision_events) = unbounded();
         let (force_sender, _force_events) = unbounded();
+        let mut integration_parameters = IntegrationParameters::default();
+        // Stiffer contacts than rapier2d's defaults (30.0 / 5.0): the
+        // default spring-based contact resolution is compliant enough that
+        // a body driven continuously into an obstacle (this module's usual
+        // case — a player entity holding a direction key against a wall)
+        // visibly interpenetrates rather than fully separating each step.
+        // Raising the natural frequency and lowering the damping ratio
+        // makes the contact push back harder and settle faster; more
+        // solver/stabilization iterations improve convergence at that
+        // higher stiffness instead of overshooting/jittering.
+        integration_parameters.contact_natural_frequency = CONTACT_NATURAL_FREQUENCY;
+        integration_parameters.contact_damping_ratio = CONTACT_DAMPING_RATIO;
+        integration_parameters.num_solver_iterations =
+            NonZeroUsize::new(NUM_SOLVER_ITERATIONS).expect("NUM_SOLVER_ITERATIONS is nonzero");
+        integration_parameters.num_internal_pgs_iterations = NUM_INTERNAL_PGS_ITERATIONS;
         Self {
             bodies: RigidBodySet::new(),
             colliders: ColliderSet::new(),
             gravity: vector![0.0, 0.0],
-            integration_parameters: IntegrationParameters::default(),
+            integration_parameters,
             pipeline: PhysicsPipeline::new(),
             islands: IslandManager::new(),
             broad_phase: DefaultBroadPhase::new(),
@@ -101,6 +135,23 @@ impl Physics {
                 .iter()
                 .any(|manifold| manifold.points.iter().any(|point| point.dist <= 0.0))
         })
+    }
+
+    /// The deepest current penetration between two colliders, in world
+    /// units (a manifold point's negative `dist`, negated so a larger
+    /// number means deeper overlap) — `0.0` if they aren't penetrating (or
+    /// aren't in contact at all). Used to measure how much interpenetration
+    /// the solver leaves under sustained pressure, not exposed for
+    /// gameplay use (see `has_real_contact` for a touch/no-touch check).
+    #[cfg(test)]
+    pub(crate) fn penetration_depth(&self, a: ColliderHandle, b: ColliderHandle) -> f32 {
+        self.narrow_phase
+            .contact_pair(a, b)
+            .into_iter()
+            .flat_map(|pair| pair.manifolds.iter())
+            .flat_map(|manifold| manifold.points.iter())
+            .map(|point| (-point.dist).max(0.0))
+            .fold(0.0, f32::max)
     }
 
     pub fn body_translation(&self, handle: RigidBodyHandle) -> Option<Vector<Real>> {

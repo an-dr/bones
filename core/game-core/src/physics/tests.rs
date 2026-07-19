@@ -35,6 +35,53 @@ fn two_overlapping_dynamic_bodies_separate_after_stepping() {
 }
 
 #[test]
+fn sustained_driving_velocity_settles_to_shallow_penetration() {
+    let mut physics = Physics::new();
+    // A fixed obstacle, half-extent 1.0 (a 2x2 square) at the origin.
+    let obstacle_body = physics.bodies.insert(RigidBodyBuilder::fixed());
+    let obstacle_collider = physics.colliders.insert_with_parent(
+        ColliderBuilder::cuboid(1.0, 1.0),
+        obstacle_body,
+        &mut physics.bodies,
+    );
+
+    // A dynamic body starting just clear of the obstacle, driven directly
+    // into it via a hard-set velocity every tick — the same pattern
+    // game-core's own EntityOp::SetVelocity uses for a held-input-driven
+    // entity, which is what produced the visibly overlapping squares this
+    // increment fixes.
+    let pusher_body = physics
+        .bodies
+        .insert(RigidBodyBuilder::dynamic().translation(vector![2.5, 0.0]));
+    let pusher_collider = physics.colliders.insert_with_parent(
+        ColliderBuilder::cuboid(1.0, 1.0),
+        pusher_body,
+        &mut physics.bodies,
+    );
+
+    for _ in 0..120 {
+        physics
+            .bodies
+            .get_mut(pusher_body)
+            .unwrap()
+            .set_linvel(vector![-5.0, 0.0], true);
+        physics.step(1.0 / 60.0);
+    }
+
+    let depth = physics.penetration_depth(obstacle_collider, pusher_collider);
+    // Half-extents sum to 2.0 (a full overlap would be up to that deep).
+    // Measured: rapier2d's untuned defaults settle around 0.0087 here;
+    // the tuned stiffness (see Physics::new) settles around 0.0012 — a
+    // ~7x reduction. 0.005 draws a clear line between the two without
+    // being so tight that ordinary floating-point/solver variance flakes
+    // the test.
+    assert!(
+        depth < 0.005,
+        "steady-state penetration under continuous driving force should be shallow, got {depth}"
+    );
+}
+
+#[test]
 fn a_fixed_body_never_moves() {
     let mut physics = Physics::new();
     let body = physics

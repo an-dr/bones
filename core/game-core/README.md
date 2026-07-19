@@ -17,6 +17,16 @@ Renders by turning simulated state into `gfx/*` draw-command batches each
 tick, the same as any other module or extension — this crate has no
 rendering authority of its own.
 
+`Physics::new` tunes rapier2d's contact solver stiffer than its defaults
+(higher `contact_natural_frequency`, lower `contact_damping_ratio`, more
+solver/stabilization iterations): rapier2d's default spring-based contact
+resolution is compliant enough that a body driven continuously into an
+obstacle (a player entity holding a direction key against a wall, this
+crate's typical case) visibly interpenetrates rather than fully
+separating each step. The tuned values measurably shrink steady-state
+penetration under sustained driving force (roughly 7x smaller in the
+regression test) without reintroducing bounce/jitter.
+
 - `game-core/entity-op` — one topic carrying a tagged `EntityOp` (`Spawn`,
   `SetVelocity`, `Despawn`), open/closed: a future operation extends this
   enum, not the topic list, the same pattern `ui::Widget` uses for
