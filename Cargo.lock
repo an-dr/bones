@@ -1880,6 +1880,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "physics-rapier2d"
+version = "0.1.0"
+dependencies = [
+ "glam",
+ "physics",
+ "rapier2d",
+]
+
+[[package]]
 name = "pin-project-lite"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"

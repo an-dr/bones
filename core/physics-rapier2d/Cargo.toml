@@ -1,0 +1,9 @@
+[package]
+name = "physics-rapier2d"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+physics = { path = "../physics" }
+glam = "0.30"
+rapier2d = "0.22"
