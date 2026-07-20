@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 1,
+  "flow": "DetailedAuto",
+  "phase": "BRANCH",
+  "baseBranch": "main",
+  "baseCommit": "5ec4b3fe3b5e0c96eab1f0b5b10b00dd1259de0e",
+  "featureBranch": null,
+  "requirements": {
+    "goal": "Split physics out of game-core into its own crate(s) with a backend-agnostic trait, add a retro/arcade physics backend alongside rapier2d, and let entities pick their backend per-spawn so a scene can mix both",
+    "constraints": "No cross-engine collision: rapier2d-backed and retro-backed entities live in two independent, non-interacting simulation worlds (no shared contact/narrow-phase). Preserve existing rapier2d behavior and tuning (contact stiffness, clamp-against-contacts) unchanged. Follow docs/code-style.md (one type per file, submodule+tests.rs pattern, per-crate README) and docs/structure.md dependency rules.",
+    "done": "game-core physics code is split into dedicated crate(s) under core/ behind a PhysicsBackend-shaped trait; a retro backend exists and is selectable; EntityOp::Spawn (or equivalent) lets a caller pick rapier vs retro per entity; GameCore routes spawn/tick/despawn/collision to the correct backend instance; existing tests pass and cover the retro backend; docs (structure.md, a new ADR if warranted) updated",
+    "outOfScope": "Cross-engine collision/momentum transfer between backends. Changing rapier2d tuning/behavior. New gameplay features beyond what the retro backend needs to be usable (no new EntityOp fields beyond backend selection unless required)."
+  },
+  "currentIncrementId": null,
+  "commitBaseline": null,
+  "increments": [
+    {
+      "id": "7b001b861d284abfa51e973a4000167b",
+      "number": 1,
+      "status": "planned",
+      "scope": "core/physics crate",
+      "description": "New core/physics crate: PhysicsBackend trait, opaque BodyHandle/ColliderHandle newtypes, BodyKind, contact-query result types. No implementation yet, no game-core wiring. Crate builds standalone with a README."
+    },
+    {
+      "id": "86392b6f75104f8f810f22200d6dfb1c",
+      "number": 2,
+      "status": "planned",
+      "scope": "core/physics-rapier2d crate",
+      "description": "Port current core/game-core/src/physics.rs verbatim into core/physics-rapier2d, implementing PhysicsBackend. Same tuning constants, same step/collision/contact-normal behavior, only the API surface changes shape to match the trait. Existing physics/tests.rs behavior ported and passing."
+    },
+    {
+      "id": "db895238a4ba4b10b962e8881654fcb1",
+      "number": 3,
+      "status": "planned",
+      "scope": "game-core: single-world rewiring",
+      "description": "game-core depends on core/physics + core/physics-rapier2d only (rapier2d dependency removed from game-core Cargo.toml). Collider/GameCore use PhysicsBackend/opaque handles instead of rapier2d types directly. Still exactly one world (rapier2d), behavior unchanged. All existing game-core tests pass unmodified in behavior."
+    },
+    {
+      "id": "518bd1c4b57d4dad81a604961f6f6c4b",
+      "number": 4,
+      "status": "planned",
+      "scope": "core/physics-retro crate",
+      "description": "New core/physics-retro crate implementing PhysicsBackend: velocity-integrated AABB movement, no mass/impulses/solver, axis-separation contact resolution. Standalone unit tests for movement and collision resolution. Not yet wired into game-core."
+    },
+    {
+      "id": "10006d2be0694b54be7ceb4a124c5261",
+      "number": 5,
+      "status": "planned",
+      "scope": "game-core: multi-world registration and priority resolution",
+      "description": "GameCore owns one PhysicsWorld per backend plus a fixed priority list. EntityOp::Spawn wire format gains a world-membership field (bones-messages). Collider holds one handle pair per world. Per-tick: each world steps fully; for multi-world entities, Transform is read from the highest-priority world and other worlds copies are snapped to match before next tick. New tests cover single-world (unchanged), retro-only, and dual-world priority + snapping behavior."
+    },
+    {
+      "id": "6e90a9a0d1dc4946bef465e55bdf5763",
+      "number": 6,
+      "status": "planned",
+      "scope": "docs",
+      "description": "Update docs/structure.md (game-core row/dependency graph now names core/physics, core/physics-rapier2d, core/physics-retro), each new crates README.md, and roadmap.md if warranted. ADR-021 already recorded in DESIGN."
+    }
+  ],
+  "approvals": [],
+  "history": [
+    {
+      "at": "2026-07-20T16:30:09.5466865Z",
+      "action": "start",
+      "detail": "Started DetailedAuto workflow."
+    },
+    {
+      "at": "2026-07-20T16:30:26.5347908Z",
+      "action": "advance",
+      "detail": "Advanced from START to DESIGN."
+    },
+    {
+      "at": "2026-07-20T16:40:36.4486651Z",
+      "action": "advance",
+      "detail": "Advanced from DESIGN to SPLIT."
+    },
+    {
+      "at": "2026-07-20T16:41:32.9346269Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 1: core/physics crate"
+    },
+    {
+      "at": "2026-07-20T16:41:41.463397Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 2: core/physics-rapier2d crate"
+    },
+    {
+      "at": "2026-07-20T16:41:50.612801Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 3: game-core: single-world rewiring"
+    },
+    {
+      "at": "2026-07-20T16:42:00.1579672Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 4: core/physics-retro crate"
+    },
+    {
+      "at": "2026-07-20T16:42:09.2523866Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 5: game-core: multi-world registration and priority resolution"
+    },
+    {
+      "at": "2026-07-20T16:42:17.7441743Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 6: docs"
+    },
+    {
+      "at": "2026-07-20T16:42:25.7446159Z",
+      "action": "advance",
+      "detail": "Advanced from SPLIT to BRANCH."
+    }
+  ],
+  "createdAt": "2026-07-20T16:30:09.4648214Z",
+  "updatedAt": "2026-07-20T16:42:25.7579244Z"
+}
