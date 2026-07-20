@@ -45,12 +45,20 @@ pwsh build.ps1
 Requires PowerShell 7+ (`pwsh`). Output:
 `target/wasm32-wasip2/release/game_core_demo.wasm`.
 
+The same script also builds the `bones` engine and assembles a runnable
+`dist/` next to this README — `dist/bones(.exe)`, `dist/extensions/
+game_core_demo.wasm`, and a `dist/bones.toml` with `game_core = true` and
+`audio = true` already set (both default off — see `core/app`'s config),
+ready to run directly.
+
 ## Run
 
-Enable `game_core` and `audio` in `bones.toml` (see `core/app`'s config),
-then drop the built `.wasm` into `extensions/` next to the `bones`
-executable. WASD or a connected gamepad's left stick moves the
-controlled entity around the open arena into the stationary obstacles,
-the blue squares (which it can push, unlike the red obstacles they
-don't drift once released), and the boundary walls at the arena's edge.
-Press H to toggle yellow hitbox outlines on every object.
+```sh
+dist/bones
+```
+
+WASD or a connected gamepad's left stick moves the controlled entity
+around the open arena into the stationary obstacles, the blue squares
+(which it can push, unlike the red obstacles they don't drift once
+released), and the boundary walls at the arena's edge. Press H to toggle
+yellow hitbox outlines on every object.

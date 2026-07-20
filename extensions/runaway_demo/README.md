@@ -13,3 +13,7 @@ pwsh build.ps1
 
 Requires PowerShell 7+ (`pwsh`). Output:
 `target/wasm32-wasip2/release/runaway_demo.wasm`.
+
+The same script also builds the `bones` engine and assembles a runnable
+`dist/` next to this README — `dist/bones(.exe)` with `dist/extensions/
+runaway_demo.wasm` already in place, ready to run directly.

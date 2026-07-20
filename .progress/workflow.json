@@ -11,8 +11,8 @@
     "done": "game-core physics code is split into dedicated crate(s) under core/ behind a PhysicsBackend-shaped trait; a retro backend exists and is selectable; EntityOp::Spawn (or equivalent) lets a caller pick rapier vs retro per entity; GameCore routes spawn/tick/despawn/collision to the correct backend instance; existing tests pass and cover the retro backend; docs (structure.md, a new ADR if warranted) updated",
     "outOfScope": "Cross-engine collision/momentum transfer between backends. Changing rapier2d tuning/behavior. New gameplay features beyond what the retro backend needs to be usable (no new EntityOp fields beyond backend selection unless required)."
   },
-  "currentIncrementId": "712594f5f57342afa00f88180d16d6ab",
-  "commitBaseline": "62064a9ed54a4bd846d9f69d1de896756fd1189f",
+  "currentIncrementId": "98d64835cd924ce296661e536875a3cf",
+  "commitBaseline": "915401788804e4ad01c0b009ef4b1d321024b444",
   "increments": [
     {
       "id": "7b001b861d284abfa51e973a4000167b",
@@ -66,9 +66,16 @@
     {
       "id": "712594f5f57342afa00f88180d16d6ab",
       "number": 8,
-      "status": "verified",
+      "status": "completed",
       "scope": "Fold physics-rapier2d/physics-retro/physics crates back into game-core",
       "description": "Delete core/physics, core/physics-rapier2d, core/physics-retro crates. Move PhysicsBackend trait + Rapier2dBackend + RetroBackend + Collider/WorldBody/PhysicsWorldKind/BodyHandle/ColliderHandle/BodyKind into core/game-core/src/physics/. Move SpriteAnimation/SquareColor/Transform into core/game-core/src/graphics/. Move tilemap.rs into core/game-core/src/tiles/. Update game-core Cargo.toml (add rapier2d, remove physics/physics-rapier2d/physics-retro path deps), workspace Cargo.toml (remove the three crates), lib.rs re-exports, docs/structure.md, and every README affected. All existing tests pass unmodified in behavior; ADR-022 already recorded."
+    },
+    {
+      "id": "98d64835cd924ce296661e536875a3cf",
+      "number": 9,
+      "status": "verified",
+      "scope": "Per-demo build+package scripts",
+      "description": "Each extensions/*/build.ps1 also builds core/app in release, assembles dist/<name>/ with the bones executable, that demos .wasm in extensions/, and a bones.toml with the flags that demo needs (game_core_demo: game_core+audio; audio_demo: audio; others: defaults, no file needed or an empty one for consistency). Self-contained per script (some duplication), matching the existing per-demo build.ps1 convention. READMEs updated to describe the packaged output."
     }
   ],
   "approvals": [],
@@ -282,8 +289,43 @@
       "at": "2026-07-20T17:45:20.7620431Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-07-20T17:45:35.918582Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to MR."
+    },
+    {
+      "at": "2026-07-20T17:46:06.4520996Z",
+      "action": "advance",
+      "detail": "Advanced from MR to FINAL_REVIEW."
+    },
+    {
+      "at": "2026-07-20T18:24:03.4175473Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 9: Per-demo build+package scripts"
+    },
+    {
+      "at": "2026-07-20T18:24:11.3145809Z",
+      "action": "advance",
+      "detail": "Advanced from SPLIT to BRANCH."
+    },
+    {
+      "at": "2026-07-20T18:24:19.5169987Z",
+      "action": "advance",
+      "detail": "Advanced from BRANCH to BUILD."
+    },
+    {
+      "at": "2026-07-20T18:32:08.5046608Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-07-20T18:32:15.7949250Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-07-20T16:30:09.4648214Z",
-  "updatedAt": "2026-07-20T17:45:20.7741356Z"
+  "updatedAt": "2026-07-20T18:32:15.8040524Z"
 }
