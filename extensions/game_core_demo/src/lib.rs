@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use bones::core::host_api::{log, publish, subscribe, Level};
 use bones_messages::audio::{LoadSound, PlaySound};
 use bones_messages::game_core::{
-    BodyKind, Collision, EntityOp, EntityOpMessage, LoadTilemap, Sprite,
+    BodyKind, Collision, EntityOp, EntityOpMessage, LoadTilemap, PhysicsWorlds, Sprite,
 };
 use bones_messages::gfx::LoadSprite;
 use bones_messages::input::{GamepadAxis, KeyDown, KeyUp};
@@ -149,7 +149,10 @@ fn synthesize_tone(frequency_hz: f32, cycles: u32, amplitude: f32) -> Vec<u8> {
 }
 
 /// A plain colored square, no sprite — obstacles and walls don't need art
-/// (only the controlled entity uses `robot_william.png`).
+/// (only the controlled entity uses `robot_william.png`). Registered in
+/// the `rapier2d` world only (ADR-021, `PhysicsWorlds::RAPIER2D` — the
+/// default, stated explicitly here since this demo now exercises more
+/// than one world).
 fn spawn_obstacle(entity_id: u32, x: f32, y: f32) {
     publish_entity_op(EntityOp::Spawn {
         entity_id,
@@ -160,13 +163,16 @@ fn spawn_obstacle(entity_id: u32, x: f32, y: f32) {
         collider_half_w: OBSTACLE_HALF_EXTENT,
         collider_half_h: OBSTACLE_HALF_EXTENT,
         body_kind: BodyKind::Dynamic,
+        worlds: PhysicsWorlds::RAPIER2D,
     });
 }
 
 /// A blue square with no inertia: `Frictionless`, so the robot or a red
 /// obstacle can push it around like any other body, but it carries no
 /// momentum of its own — it stops the instant nothing is pushing it,
-/// instead of coasting or drifting.
+/// instead of coasting or drifting. Registered in the `retro` world only
+/// (ADR-021, `PhysicsWorlds::RETRO`) — this demo's example of the
+/// no-mass, no-solver backend.
 fn spawn_mover(entity_id: u32, x: f32, y: f32) {
     publish_entity_op(EntityOp::Spawn {
         entity_id,
@@ -177,6 +183,7 @@ fn spawn_mover(entity_id: u32, x: f32, y: f32) {
         collider_half_w: MOVER_HALF_EXTENT,
         collider_half_h: MOVER_HALF_EXTENT,
         body_kind: BodyKind::Frictionless,
+        worlds: PhysicsWorlds::RETRO,
     });
 }
 
@@ -224,6 +231,13 @@ impl Guest for Component {
 
         // The controlled entity: driven by set-velocity from on_tick, below
         // — the only entity in this demo that uses the robot sprite.
+        // Registered in both physics worlds at once (ADR-021,
+        // `PhysicsWorlds::BOTH`) — this demo's example of a single entity
+        // genuinely simulated by two independent backends simultaneously;
+        // `retro` outranks `rapier2d` in `PhysicsWorldKind::PRIORITY`, so
+        // the robot's drawn position tracks the no-mass, no-solver world
+        // while its rapier2d copy (still pushed by/pushing red obstacles)
+        // is snapped to match every tick.
         publish_entity_op(EntityOp::Spawn {
             entity_id: CONTROLLED_ENTITY_ID,
             x: 60.0,
@@ -239,6 +253,7 @@ impl Guest for Component {
             collider_half_w: FRAME_SIZE as f32 / 2.0,
             collider_half_h: FRAME_SIZE as f32 / 2.0,
             body_kind: BodyKind::Dynamic,
+            worlds: PhysicsWorlds::BOTH,
         });
 
         // Several stationary red obstacle squares — the controlled entity

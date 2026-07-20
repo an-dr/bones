@@ -11,8 +11,8 @@
     "done": "game-core physics code is split into dedicated crate(s) under core/ behind a PhysicsBackend-shaped trait; a retro backend exists and is selectable; EntityOp::Spawn (or equivalent) lets a caller pick rapier vs retro per entity; GameCore routes spawn/tick/despawn/collision to the correct backend instance; existing tests pass and cover the retro backend; docs (structure.md, a new ADR if warranted) updated",
     "outOfScope": "Cross-engine collision/momentum transfer between backends. Changing rapier2d tuning/behavior. New gameplay features beyond what the retro backend needs to be usable (no new EntityOp fields beyond backend selection unless required)."
   },
-  "currentIncrementId": "6e90a9a0d1dc4946bef465e55bdf5763",
-  "commitBaseline": "781da3e9ebe28c4c6ee62fc6f021cf86552f54b9",
+  "currentIncrementId": "67c4fded20db4996bb023146ed3650cd",
+  "commitBaseline": "41857e858bdc61925c3edb0ce4ea3092567745a4",
   "increments": [
     {
       "id": "7b001b861d284abfa51e973a4000167b",
@@ -52,9 +52,16 @@
     {
       "id": "6e90a9a0d1dc4946bef465e55bdf5763",
       "number": 6,
-      "status": "verified",
+      "status": "completed",
       "scope": "docs",
       "description": "Update docs/structure.md (game-core row/dependency graph now names core/physics, core/physics-rapier2d, core/physics-retro), each new crates README.md, and roadmap.md if warranted. ADR-021 already recorded in DESIGN."
+    },
+    {
+      "id": "67c4fded20db4996bb023146ed3650cd",
+      "number": 7,
+      "status": "verified",
+      "scope": "game_core_demo: exercise multi-world physics",
+      "description": "Wire PhysicsWorlds into extensions/game_core_demo: blue Frictionless movers use PhysicsWorlds::RETRO, red Dynamic obstacles use PhysicsWorlds::RAPIER2D (unchanged default, stated explicitly), the WASD/gamepad-controlled robot uses PhysicsWorlds::BOTH. Demo builds and the ADR-021 feature is exercised end to end."
     }
   ],
   "approvals": [],
@@ -198,8 +205,43 @@
       "at": "2026-07-20T17:25:43.3416429Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-07-20T17:26:02.5746228Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to MR."
+    },
+    {
+      "at": "2026-07-20T17:26:59.8603816Z",
+      "action": "advance",
+      "detail": "Advanced from MR to FINAL_REVIEW."
+    },
+    {
+      "at": "2026-07-20T17:28:42.2776844Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 7: game_core_demo: exercise multi-world physics"
+    },
+    {
+      "at": "2026-07-20T17:28:53.9734345Z",
+      "action": "advance",
+      "detail": "Advanced from SPLIT to BRANCH."
+    },
+    {
+      "at": "2026-07-20T17:29:12.3146341Z",
+      "action": "advance",
+      "detail": "Advanced from BRANCH to BUILD."
+    },
+    {
+      "at": "2026-07-20T17:32:01.2939084Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-07-20T17:32:25.4478796Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-07-20T16:30:09.4648214Z",
-  "updatedAt": "2026-07-20T17:25:43.3542208Z"
+  "updatedAt": "2026-07-20T17:32:25.4604148Z"
 }

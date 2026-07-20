@@ -4,15 +4,21 @@ Loads a Tiled `.tmx` level (an open arena — just its outer boundary
 walls on a `"Collision"` object layer, no interior obstacles to path
 around) and a sprite, then spawns a WASD/gamepad-controlled sprite
 entity, four stationary red obstacle squares, and two blue squares with
-no inertia in `init`. Proves `game-core` end to end: `rapier2d` blocks
-the controlled entity against the tilemap's fixed boundary colliders,
-the red obstacles' `Dynamic` colliders (pushable, carries momentum), and
-the blue squares' `Frictionless` colliders (pushable too, but with no
-momentum — they stop the instant nothing is pushing them rather than
-coasting); the controlled entity animates through its sprite's 4 frames
-only while moving, freezing on its current frame at rest; everything
-renders through `gfx/*` — all driven by `game-core`'s own `core/tick`
-subscription, not this extension's.
+no inertia in `init`. Proves `game-core` end to end, including its
+multi-world physics (ADR-021): the red obstacles are `physics-rapier2d`
+only (`PhysicsWorlds::RAPIER2D`, `Dynamic` — pushable, carries momentum),
+the blue squares are `physics-retro` only (`PhysicsWorlds::RETRO`,
+`Frictionless` — pushable too, but with no momentum, stopping the instant
+nothing is pushing them rather than coasting), and the controlled entity
+is registered in **both** worlds at once (`PhysicsWorlds::BOTH`) — its
+drawn position tracks the no-mass, no-solver retro world (higher
+priority), while its rapier2d copy is still fully simulated in parallel
+and kept snapped to match, so it still blocks against the tilemap's fixed
+boundary colliders and gets pushed by/pushes the red obstacles correctly.
+The controlled entity animates through its sprite's 4 frames only while
+moving, freezing on its current frame at rest; everything renders through
+`gfx/*` — all driven by `game-core`'s own `core/tick` subscription, not
+this extension's.
 
 Movement itself is this extension's own logic: it tracks held WASD keys
 and the gamepad left stick via `input/*`, and every tick publishes a
