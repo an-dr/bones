@@ -1,23 +1,23 @@
 {
   "schemaVersion": 1,
   "flow": "DetailedAuto",
-  "phase": "BRANCH",
+  "phase": "COMMIT",
   "baseBranch": "main",
   "baseCommit": "5ec4b3fe3b5e0c96eab1f0b5b10b00dd1259de0e",
-  "featureBranch": null,
+  "featureBranch": "feature/game-core-physics-backends",
   "requirements": {
     "goal": "Split physics out of game-core into its own crate(s) with a backend-agnostic trait, add a retro/arcade physics backend alongside rapier2d, and let entities pick their backend per-spawn so a scene can mix both",
     "constraints": "No cross-engine collision: rapier2d-backed and retro-backed entities live in two independent, non-interacting simulation worlds (no shared contact/narrow-phase). Preserve existing rapier2d behavior and tuning (contact stiffness, clamp-against-contacts) unchanged. Follow docs/code-style.md (one type per file, submodule+tests.rs pattern, per-crate README) and docs/structure.md dependency rules.",
     "done": "game-core physics code is split into dedicated crate(s) under core/ behind a PhysicsBackend-shaped trait; a retro backend exists and is selectable; EntityOp::Spawn (or equivalent) lets a caller pick rapier vs retro per entity; GameCore routes spawn/tick/despawn/collision to the correct backend instance; existing tests pass and cover the retro backend; docs (structure.md, a new ADR if warranted) updated",
     "outOfScope": "Cross-engine collision/momentum transfer between backends. Changing rapier2d tuning/behavior. New gameplay features beyond what the retro backend needs to be usable (no new EntityOp fields beyond backend selection unless required)."
   },
-  "currentIncrementId": null,
-  "commitBaseline": null,
+  "currentIncrementId": "7b001b861d284abfa51e973a4000167b",
+  "commitBaseline": "6d2e625b2e1c888c3deb702836f4889df26a589f",
   "increments": [
     {
       "id": "7b001b861d284abfa51e973a4000167b",
       "number": 1,
-      "status": "planned",
+      "status": "verified",
       "scope": "core/physics crate",
       "description": "New core/physics crate: PhysicsBackend trait, opaque BodyHandle/ColliderHandle newtypes, BodyKind, contact-query result types. No implementation yet, no game-core wiring. Crate builds standalone with a README."
     },
@@ -108,8 +108,23 @@
       "at": "2026-07-20T16:42:25.7446159Z",
       "action": "advance",
       "detail": "Advanced from SPLIT to BRANCH."
+    },
+    {
+      "at": "2026-07-20T16:42:44.3217691Z",
+      "action": "advance",
+      "detail": "Advanced from BRANCH to BUILD."
+    },
+    {
+      "at": "2026-07-20T16:46:20.8917418Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-07-20T16:47:27.7848016Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-07-20T16:30:09.4648214Z",
-  "updatedAt": "2026-07-20T16:42:25.7579244Z"
+  "updatedAt": "2026-07-20T16:47:27.8032847Z"
 }
