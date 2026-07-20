@@ -31,7 +31,7 @@ All feature-flagged and individually optional; embedders may add their own.
 | renderer | Executes gfx batches, presents; provides `draw-target` | bus; `window-surface` service |
 | ui       | egui integration: widget specs → draw data, events back | bus; renderer (direct-wired, not yet the `draw-target` service — see design/modules.md) |
 | audio    | Plays sound effects and music via `audio/*`, backed by `kira` | bus |
-| game-core | ECS/collision/tilemap/sprite-animation simulation via `game-core/*`, publishing `gfx/*`, backed by `hecs`/`rapier2d`/`glam`/`tiled` (ADR-019) | bus; `bus` service (to publish `gfx/*`, since it's injected via the generic `.module(...)` path, not renderer/ui's hardcoded sugar) |
+| game-core | ECS/collision/tilemap/sprite-animation simulation via `game-core/*`, publishing `gfx/*`, backed by `hecs`/`glam`/`tiled` (ADR-019) and `physics`'s backend-agnostic `PhysicsBackend` trait (ADR-021) | bus; `physics`, `physics-rapier2d`, `physics-retro`; `bus` service (to publish `gfx/*`, since it's injected via the generic `.module(...)` path, not renderer/ui's hardcoded sugar) |
 | *web*    | *wry panels, bus ↔ page JSON bridge*            | *bus; `window-surface` service*   |
 
 ## Distributions
@@ -60,11 +60,19 @@ graph TD
         GameCore["game-core"]
         Web["web"]
     end
+    Physics["physics (PhysicsBackend trait)"]
+    PhysicsRapier2d["physics-rapier2d"]
+    PhysicsRetro["physics-retro"]
     Renderer --> Bus
     UI --> Bus
     UI --> Renderer
     Audio --> Bus
     GameCore --> Bus
+    GameCore --> Physics
+    GameCore --> PhysicsRapier2d
+    GameCore --> PhysicsRetro
+    PhysicsRapier2d --> Physics
+    PhysicsRetro --> Physics
     Web --> Bus
     Renderer -. "window-surface" .-> Platform
     GameCore -. "bus service" .-> Bus
@@ -105,6 +113,9 @@ bones/
 │   ├── ui/        #  first-party native modules
 │   ├── audio/     #
 │   ├── game-core/ #
+│   ├── physics/   #  PhysicsBackend trait (ADR-021), backend-agnostic
+│   ├── physics-rapier2d/ #  full rigid-body PhysicsBackend
+│   ├── physics-retro/ #  no-mass, no-solver PhysicsBackend
 │   ├── web/       #  (planned)
 │   └── app/       #  the engine executable (default composition)
 ├── wit/           # contract: the WIT package

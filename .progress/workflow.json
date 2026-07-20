@@ -11,8 +11,8 @@
     "done": "game-core physics code is split into dedicated crate(s) under core/ behind a PhysicsBackend-shaped trait; a retro backend exists and is selectable; EntityOp::Spawn (or equivalent) lets a caller pick rapier vs retro per entity; GameCore routes spawn/tick/despawn/collision to the correct backend instance; existing tests pass and cover the retro backend; docs (structure.md, a new ADR if warranted) updated",
     "outOfScope": "Cross-engine collision/momentum transfer between backends. Changing rapier2d tuning/behavior. New gameplay features beyond what the retro backend needs to be usable (no new EntityOp fields beyond backend selection unless required)."
   },
-  "currentIncrementId": "10006d2be0694b54be7ceb4a124c5261",
-  "commitBaseline": "edc09b5520c42a4d4d97724d2fc93d3a5a853373",
+  "currentIncrementId": "6e90a9a0d1dc4946bef465e55bdf5763",
+  "commitBaseline": "781da3e9ebe28c4c6ee62fc6f021cf86552f54b9",
   "increments": [
     {
       "id": "7b001b861d284abfa51e973a4000167b",
@@ -45,14 +45,14 @@
     {
       "id": "10006d2be0694b54be7ceb4a124c5261",
       "number": 5,
-      "status": "verified",
+      "status": "completed",
       "scope": "game-core: multi-world registration and priority resolution",
       "description": "GameCore owns one PhysicsWorld per backend plus a fixed priority list. EntityOp::Spawn wire format gains a world-membership field (bones-messages). Collider holds one handle pair per world. Per-tick: each world steps fully; for multi-world entities, Transform is read from the highest-priority world and other worlds copies are snapped to match before next tick. New tests cover single-world (unchanged), retro-only, and dual-world priority + snapping behavior."
     },
     {
       "id": "6e90a9a0d1dc4946bef465e55bdf5763",
       "number": 6,
-      "status": "planned",
+      "status": "verified",
       "scope": "docs",
       "description": "Update docs/structure.md (game-core row/dependency graph now names core/physics, core/physics-rapier2d, core/physics-retro), each new crates README.md, and roadmap.md if warranted. ADR-021 already recorded in DESIGN."
     }
@@ -183,8 +183,23 @@
       "at": "2026-07-20T17:22:07.2189569Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-07-20T17:22:22.0501408Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to BUILD."
+    },
+    {
+      "at": "2026-07-20T17:25:34.347987Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-07-20T17:25:43.3416429Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-07-20T16:30:09.4648214Z",
-  "updatedAt": "2026-07-20T17:22:07.2361790Z"
+  "updatedAt": "2026-07-20T17:25:43.3542208Z"
 }
