@@ -11,7 +11,7 @@ logging = { path = "../logging" }
 platform = { path = "../platform" }
 renderer = { path = "../renderer" }
 ui = { path = "../ui" }
-wasmtime = { version = "46.0.1", features = ["component-model"] }
+wasmtime = { version = "47.0.0", features = ["component-model"] }
 
 [dev-dependencies]
 # test-mode: cargo test runs tests on worker threads, not the process's

@@ -11,8 +11,8 @@
     "done": "game-core physics code is split into dedicated crate(s) under core/ behind a PhysicsBackend-shaped trait; a retro backend exists and is selectable; EntityOp::Spawn (or equivalent) lets a caller pick rapier vs retro per entity; GameCore routes spawn/tick/despawn/collision to the correct backend instance; existing tests pass and cover the retro backend; docs (structure.md, a new ADR if warranted) updated",
     "outOfScope": "Cross-engine collision/momentum transfer between backends. Changing rapier2d tuning/behavior. New gameplay features beyond what the retro backend needs to be usable (no new EntityOp fields beyond backend selection unless required)."
   },
-  "currentIncrementId": "98d64835cd924ce296661e536875a3cf",
-  "commitBaseline": "915401788804e4ad01c0b009ef4b1d321024b444",
+  "currentIncrementId": "25ee7ffab7824c278577e648466f2bf0",
+  "commitBaseline": "28a005493ae84929f13a4d89f166e0df6d873963",
   "increments": [
     {
       "id": "7b001b861d284abfa51e973a4000167b",
@@ -73,9 +73,16 @@
     {
       "id": "98d64835cd924ce296661e536875a3cf",
       "number": 9,
-      "status": "verified",
+      "status": "completed",
       "scope": "Per-demo build+package scripts",
       "description": "Each extensions/*/build.ps1 also builds core/app in release, assembles dist/<name>/ with the bones executable, that demos .wasm in extensions/, and a bones.toml with the flags that demo needs (game_core_demo: game_core+audio; audio_demo: audio; others: defaults, no file needed or an empty one for consistency). Self-contained per script (some duplication), matching the existing per-demo build.ps1 convention. READMEs updated to describe the packaged output."
+    },
+    {
+      "id": "25ee7ffab7824c278577e648466f2bf0",
+      "number": 10,
+      "status": "verified",
+      "scope": "Bump wasmtime 46.0.1 -> 47.0.0",
+      "description": "Root Cargo.lock still resolves an old wasm-encoder/io-lifetimes chain (via wasmtime 46.0.1) that fails to compile under the rustc 1.97.1 this session updated to (unstable wasip2 feature gate). Bump wasmtime/wasmtime-wasi to 47.0.0 in core/wasm-extensions, core/contract, core/runner Cargo.toml, run cargo update, fix any breaking API changes wasmtime 47 introduces, verify full workspace build+test clean from a cold target/ (or at minimum touching every wasmtime-dependent crate)."
     }
   ],
   "approvals": [],
@@ -321,11 +328,46 @@
       "detail": "Advanced from BUILD to VERIFY."
     },
     {
-      "at": "2026-07-20T18:32:15.7949250Z",
+      "at": "2026-07-20T18:32:15.794925Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-07-20T18:32:30.0986017Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to MR."
+    },
+    {
+      "at": "2026-07-20T18:32:42.4649385Z",
+      "action": "advance",
+      "detail": "Advanced from MR to FINAL_REVIEW."
+    },
+    {
+      "at": "2026-07-20T19:22:27.0381937Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 10: Bump wasmtime 46.0.1 -> 47.0.0"
+    },
+    {
+      "at": "2026-07-20T19:22:35.0635086Z",
+      "action": "advance",
+      "detail": "Advanced from SPLIT to BRANCH."
+    },
+    {
+      "at": "2026-07-20T19:22:43.4568537Z",
+      "action": "advance",
+      "detail": "Advanced from BRANCH to BUILD."
+    },
+    {
+      "at": "2026-07-20T19:36:15.1886103Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-07-20T19:36:22.9868678Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-07-20T16:30:09.4648214Z",
-  "updatedAt": "2026-07-20T18:32:15.8040524Z"
+  "updatedAt": "2026-07-20T19:36:22.9981977Z"
 }

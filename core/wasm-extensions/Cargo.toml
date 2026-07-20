@@ -8,5 +8,5 @@ bones-messages = { path = "../../shared/bones-messages" }
 bus = { path = "../bus" }
 contract = { path = "../contract" }
 logging = { path = "../logging" }
-wasmtime = { version = "46.0.1", features = ["component-model"] }
-wasmtime-wasi = "46.0.1"
+wasmtime = { version = "47.0.0", features = ["component-model"] }
+wasmtime-wasi = "47.0.0"
