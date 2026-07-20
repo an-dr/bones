@@ -2,10 +2,11 @@ use std::collections::HashMap;
 use std::num::NonZeroUsize;
 
 use glam::Vec2;
-use physics::{BodyHandle, BodyKind, ColliderHandle, PhysicsBackend};
 use rapier2d::crossbeam::channel::{unbounded, Receiver};
 use rapier2d::pipeline::ChannelEventCollector;
 use rapier2d::prelude::*;
+
+use super::{BodyHandle, BodyKind, ColliderHandle, PhysicsBackend};
 
 /// rapier2d 0.22's default is 30.0. Higher pushes overlapping bodies apart
 /// faster/harder per step — tuned against visible interpenetration under

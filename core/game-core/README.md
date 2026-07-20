@@ -8,7 +8,7 @@ from adopting an external engine — see ADR-019's crate-sourcing rationale.
 | Capability | Source |
 | ---------- | ------ |
 | Entity/component store | `hecs` (chosen over `bevy_ecs`: no window/asset/App-plugin coupling, materially smaller dependency footprint standalone) |
-| Physics/collision | `physics`'s backend-agnostic `PhysicsBackend` trait (ADR-021), implemented by `physics-rapier2d` and `physics-retro` |
+| Physics/collision | an internal backend-agnostic `PhysicsBackend` trait (ADR-021, ADR-022), implemented by `physics::Rapier2dBackend` (`rapier2d`) and `physics::RetroBackend` |
 | Math (vectors/transforms) | `glam` |
 | Tilemap data | `tiled` (parsing only — rendering stays `gfx/*`) |
 | Sprite-animation timing | built directly — a frame-index-from-elapsed-time state machine |
@@ -17,20 +17,23 @@ Renders by turning simulated state into `gfx/*` draw-command batches each
 tick, the same as any other module or extension — this crate has no
 rendering authority of its own.
 
-**Physics is multi-world (ADR-021).** `GameCore` owns one `physics-rapier2d`
-world and one `physics-retro` world, and `EntityOp::Spawn`'s `worlds` field
-(`bones_messages::game_core::PhysicsWorlds`) picks which one (or both) a
-spawned entity's body registers in. The two worlds never interact
-directly — no shared collision detection between them. An entity
-registered in both is fully simulated by each, but only one world's
-position is authoritative: `PhysicsWorldKind::PRIORITY` (retro before
-rapier2d) picks which world's position/velocity is read into the drawn
-`Transform` each tick, and every other world's copy of that entity is then
-snapped to match, so no world drifts from what's actually on screen.
+**Physics is multi-world (ADR-021, ADR-022).** `GameCore` owns one
+`physics::Rapier2dBackend` world and one `physics::RetroBackend` world
+(both live in this crate's own `physics/` submodule — see
+`docs/code-style.md`'s file-layout conventions — not a separate crate),
+and `EntityOp::Spawn`'s `worlds` field (`bones_messages::game_core::
+PhysicsWorlds`) picks which one (or both) a spawned entity's body
+registers in. The two worlds never interact directly — no shared
+collision detection between them. An entity registered in both is fully
+simulated by each, but only one world's position is authoritative:
+`physics::PhysicsWorldKind::PRIORITY` (retro before rapier2d) picks which
+world's position/velocity is read into the drawn `Transform` each tick,
+and every other world's copy of that entity is then snapped to match, so
+no world drifts from what's actually on screen.
 
-`Rapier2dBackend::new` (in `physics-rapier2d`) tunes rapier2d's contact
-solver stiffer than its defaults (higher `contact_natural_frequency`,
-lower `contact_damping_ratio`, more solver/stabilization iterations):
+`Rapier2dBackend::new` tunes rapier2d's contact solver stiffer than its
+defaults (higher `contact_natural_frequency`, lower
+`contact_damping_ratio`, more solver/stabilization iterations):
 rapier2d's default spring-based contact resolution is compliant enough
 that a body driven continuously into an obstacle (a player entity holding
 a direction key against a wall, this crate's typical case) visibly
@@ -48,10 +51,10 @@ the component of each non-`Kinematic` collider-bearing entity's velocity
 normal (`PhysicsBackend::contact_normals`) — only the inward part, so
 sliding along a wall's free axis still works. `Kinematic` bodies are
 excluded: they move exactly as commanded by design and are never pushed,
-so there's nothing to clamp. `physics-retro` has no contact-normal
-concept at all (it resolves overlap by directly moving positions during
-its own `step`), so this clamp is a no-op there by construction, not a
-special case.
+so there's nothing to clamp. `RetroBackend` has no contact-normal concept
+at all (it resolves overlap by directly moving positions during its own
+`step`), so this clamp is a no-op there by construction, not a special
+case.
 
 - `game-core/entity-op` — one topic carrying a tagged `EntityOp` (`Spawn`,
   `SetVelocity`, `Despawn`), open/closed: a future operation extends this
@@ -130,7 +133,7 @@ special case.
   speculative-contact prediction margin, not yet overlapping — so a
   `Started` event is confirmed against the actual contact manifold
   (`PhysicsBackend::has_real_contact`) before publishing, filtering out
-  that false-positive case. `physics-retro` has no speculative margin at
+  that false-positive case. `RetroBackend` has no speculative margin at
   all, so every `Started` it reports is already real.
 
 No logger, same stance as `core/audio`: registered via the generic

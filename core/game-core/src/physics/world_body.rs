@@ -1,6 +1,4 @@
-use physics::{BodyHandle, ColliderHandle};
-
-use crate::PhysicsWorldKind;
+use super::{BodyHandle, ColliderHandle, PhysicsWorldKind};
 
 /// Links an entity to its physics body in one world it's registered in —
 /// see `Collider` for the (possibly multi-world) whole.

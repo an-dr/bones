@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use glam::Vec2;
-use physics::{BodyHandle, BodyKind, ColliderHandle, PhysicsBackend};
+
+use super::{BodyHandle, BodyKind, ColliderHandle, PhysicsBackend};
 
 struct Body {
     position: Vec2,

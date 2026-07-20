@@ -5,9 +5,9 @@ walls on a `"Collision"` object layer, no interior obstacles to path
 around) and a sprite, then spawns a WASD/gamepad-controlled sprite
 entity, four stationary red obstacle squares, and two blue squares with
 no inertia in `init`. Proves `game-core` end to end, including its
-multi-world physics (ADR-021): the red obstacles are `physics-rapier2d`
-only (`PhysicsWorlds::RAPIER2D`, `Dynamic` — pushable, carries momentum),
-the blue squares are `physics-retro` only (`PhysicsWorlds::RETRO`,
+multi-world physics (ADR-021, ADR-022): the red obstacles are
+rapier2d-only (`PhysicsWorlds::RAPIER2D`, `Dynamic` — pushable, carries
+momentum), the blue squares are retro-only (`PhysicsWorlds::RETRO`,
 `Frictionless` — pushable too, but with no momentum, stopping the instant
 nothing is pushing them rather than coasting), and the controlled entity
 is registered in **both** worlds at once (`PhysicsWorlds::BOTH`) — its

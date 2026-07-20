@@ -1,6 +1,6 @@
 use glam::Vec2;
 
-use crate::{BodyHandle, BodyKind, ColliderHandle};
+use super::{BodyHandle, BodyKind, ColliderHandle};
 
 /// One simulated physics world, independent of every other `PhysicsBackend`
 /// instance — the seam ADR-021 cuts rapier2d out from behind. `game-core`

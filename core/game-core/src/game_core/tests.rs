@@ -719,9 +719,10 @@ fn continuous_driving_into_an_obstacle_settles_at_shallow_penetration() {
 
     // Half-extents sum to 2.0 (centers 2.0 apart is exactly touching, no
     // overlap); the backend's own tuning is verified in isolation by
-    // physics-rapier2d's `sustained_driving_velocity_settles_to_shallow_
-    // penetration` — this test only checks game-core's contact-clamping
-    // logic doesn't reintroduce visible overlap on top of that.
+    // physics::rapier2d_backend's `sustained_driving_velocity_settles_to_
+    // shallow_penetration` — this test only checks game-core's
+    // contact-clamping logic doesn't reintroduce visible overlap on top
+    // of that.
     let separation = obstacle_transform.x - pusher_transform.x;
     assert!(
         separation > 1.99,

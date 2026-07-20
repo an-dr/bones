@@ -1,5 +1,4 @@
 use glam::Vec2;
-use physics::BodyKind;
 
 use super::*;
 

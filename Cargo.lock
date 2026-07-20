@@ -1026,9 +1026,7 @@ dependencies = [
  "bus",
  "glam",
  "hecs",
- "physics",
- "physics-rapier2d",
- "physics-retro",
+ "rapier2d",
  "tiled",
 ]
 
@@ -1872,30 +1870,6 @@ checksum = "b4c5cc86750666a3ed20bdaf5ca2a0344f9c67674cae0515bec2da16fbaa47db"
 dependencies = [
  "fixedbitset",
  "indexmap",
-]
-
-[[package]]
-name = "physics"
-version = "0.1.0"
-dependencies = [
- "glam",
-]
-
-[[package]]
-name = "physics-rapier2d"
-version = "0.1.0"
-dependencies = [
- "glam",
- "physics",
- "rapier2d",
-]
-
-[[package]]
-name = "physics-retro"
-version = "0.1.0"
-dependencies = [
- "glam",
- "physics",
 ]
 
 [[package]]

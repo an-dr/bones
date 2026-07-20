@@ -1,8 +1,0 @@
-[package]
-name = "physics-retro"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-physics = { path = "../physics" }
-glam = "0.30"

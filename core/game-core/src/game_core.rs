@@ -1,9 +1,10 @@
 //! The `GameCore` native module (design/modules.md, ADR-011, ADR-019): a
 //! 2D entity/component simulation — ECS, collision, tilemap loading,
 //! sprite-animation timing — composed from bought, engine-agnostic crates
-//! (`hecs`, `glam`, `tiled`; physics comes from `physics::PhysicsBackend`,
-//! ADR-021). Renders by turning simulated state into `gfx/*` draw-command
-//! batches, same as any other module — no rendering authority of its own.
+//! (`hecs`, `glam`, `tiled`; physics comes from this crate's own
+//! `physics::PhysicsBackend`, ADR-021/ADR-022). Renders by turning
+//! simulated state into `gfx/*` draw-command batches, same as any other
+//! module — no rendering authority of its own.
 
 use std::collections::HashMap;
 
@@ -15,11 +16,13 @@ use bones_messages::tick::Tick;
 use bones_messages::{DecodeMessage, EncodeMessage, Message};
 use bus::{Bus, Envelope, Handler, Module, ModuleContext};
 use glam::Vec2;
-use physics::{BodyHandle, ColliderHandle, PhysicsBackend};
-use physics_rapier2d::Rapier2dBackend;
-use physics_retro::RetroBackend;
 
-use crate::{load_collision_rects, Collider, PhysicsWorldKind, SpriteAnimation, SquareColor, Transform, WorldBody};
+use crate::graphics::{SpriteAnimation, SquareColor, Transform};
+use crate::physics::{
+    self, BodyHandle, Collider, ColliderHandle, PhysicsBackend, PhysicsWorldKind, Rapier2dBackend,
+    RetroBackend, WorldBody,
+};
+use crate::tiles::load_collision_rects;
 
 /// The `gfx/*` layer game-core draws its entities on. Fixed rather than
 /// configurable: this module owns exactly one concern (the game world),

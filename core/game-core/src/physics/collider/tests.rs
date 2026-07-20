@@ -1,5 +1,4 @@
-use physics::{BodyHandle, ColliderHandle};
-
+use super::super::{BodyHandle, ColliderHandle};
 use super::*;
 
 fn world_body(world: PhysicsWorldKind, id: u64) -> WorldBody {

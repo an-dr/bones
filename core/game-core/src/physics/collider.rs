@@ -1,4 +1,4 @@
-use crate::{PhysicsWorldKind, WorldBody};
+use super::{PhysicsWorldKind, WorldBody};
 
 /// Links an entity to its physics body in every world it's registered in
 /// (ADR-021: an entity may be in more than one) — the `hecs` component
