@@ -6,7 +6,8 @@ edition = "2021"
 [dependencies]
 bus = { path = "../bus" }
 bones-messages = { path = "../../shared/bones-messages" }
+physics = { path = "../physics" }
+physics-rapier2d = { path = "../physics-rapier2d" }
 hecs = "0.10"
-rapier2d = "0.22"
 glam = "0.30"
 tiled = "0.16"

@@ -189,6 +189,10 @@ impl PhysicsBackend for Rapier2dBackend {
         );
     }
 
+    fn body_count(&self) -> usize {
+        self.bodies.len()
+    }
+
     fn set_velocity(&mut self, body: BodyHandle, velocity: Vec2) {
         let Some(&handle) = self.body_handles.get(&body.0) else {
             return;

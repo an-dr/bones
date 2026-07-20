@@ -35,6 +35,10 @@ impl PhysicsBackend for FakeBackend {
         self.kinds.remove(&body.0);
     }
 
+    fn body_count(&self) -> usize {
+        self.positions.len()
+    }
+
     fn set_velocity(&mut self, body: BodyHandle, velocity: Vec2) {
         if let Some(v) = self.velocities.get_mut(&body.0) {
             *v = velocity;

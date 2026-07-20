@@ -1,23 +1,24 @@
 //! The `GameCore` native module (design/modules.md, ADR-011, ADR-019): a
 //! 2D entity/component simulation — ECS, collision, tilemap loading,
 //! sprite-animation timing — composed from bought, engine-agnostic crates
-//! (`hecs`, `rapier2d`, `glam`, `tiled`; see ADR-019's crate-sourcing
-//! rationale). Renders by turning simulated state into `gfx/*` draw-command
+//! (`hecs`, `glam`, `tiled`; physics comes from `physics::PhysicsBackend`,
+//! ADR-021). Renders by turning simulated state into `gfx/*` draw-command
 //! batches, same as any other module — no rendering authority of its own.
 
 use std::collections::HashMap;
 
-use bones_messages::game_core::{BodyKind, Collision, EntityOp, EntityOpMessage, LoadTilemap};
+use bones_messages::game_core::{
+    BodyKind as WireBodyKind, Collision, EntityOp, EntityOpMessage, LoadTilemap,
+};
 use bones_messages::gfx::{Clear, DrawRect, DrawSprite, SetCamera};
 use bones_messages::tick::Tick;
 use bones_messages::{DecodeMessage, EncodeMessage, Message};
 use bus::{Bus, Envelope, Handler, Module, ModuleContext};
-use rapier2d::prelude::{
-    nalgebra, vector, ActiveEvents, ColliderBuilder, ColliderHandle, Real, RigidBodyBuilder,
-    RigidBodyHandle, Vector,
-};
+use glam::Vec2;
+use physics::{BodyHandle, ColliderHandle, PhysicsBackend};
+use physics_rapier2d::Rapier2dBackend;
 
-use crate::{load_collision_rects, Collider, Physics, SpriteAnimation, SquareColor, Transform};
+use crate::{load_collision_rects, Collider, SpriteAnimation, SquareColor, Transform};
 
 /// The `gfx/*` layer game-core draws its entities on. Fixed rather than
 /// configurable: this module owns exactly one concern (the game world),
@@ -37,12 +38,6 @@ const TILEMAP_COLLIDER_COLOR: (u8, u8, u8, u8) = (90, 90, 100, 255);
 /// requiring an exact `0.0`.
 const MOVING_SPEED_THRESHOLD_SQUARED: f32 = 0.01;
 
-/// Linear damping for `BodyKind::Frictionless` bodies: high enough that
-/// velocity decays to rest within a fraction of a tick once nothing is
-/// pushing the body, so it never visibly coasts or drifts after contact
-/// ends.
-const FRICTIONLESS_LINEAR_DAMPING: f32 = 50.0;
-
 /// Color for `EntityOp::SetDebugHitboxes`'s outline — distinct from every
 /// other color this module draws (sprite tint, obstacle/tilemap
 /// `square_color`), so it reads unambiguously as a debug overlay.
@@ -50,16 +45,17 @@ const DEBUG_HITBOX_COLOR: (u8, u8, u8, u8) = (255, 255, 0, 255);
 
 pub struct GameCore {
     world: hecs::World,
-    physics: Physics,
+    physics: Rapier2dBackend,
     bus: Option<Bus>,
     // Maps the caller's own `EntityOp`-carried `entity_id` to the
     // `hecs::Entity` it became — the caller's addressing scheme never sees
     // a raw `hecs::Entity`, which is this module's own internal handle.
     entities: HashMap<u32, hecs::Entity>,
     // The inverse of `entities`, restricted to `EntityOp::Spawn`-created
-    // colliders (tilemap colliders never appear here) — lets a rapier2d
-    // `CollisionEvent`'s `ColliderHandle` pair translate back into the
-    // caller-assigned `entity_id` pair a `game-core/collision` event names.
+    // colliders (tilemap colliders never appear here) — lets a
+    // `PhysicsBackend` collision event's `ColliderHandle` pair translate
+    // back into the caller-assigned `entity_id` pair a `game-core/collision`
+    // event names.
     entity_ids_by_collider: HashMap<ColliderHandle, u32>,
     // Global toggle for `EntityOp::SetDebugHitboxes` — not per-entity, so
     // it lives here rather than as a component.
@@ -70,7 +66,7 @@ impl GameCore {
     pub fn new() -> Self {
         Self {
             world: hecs::World::new(),
-            physics: Physics::new(),
+            physics: Rapier2dBackend::new(),
             bus: None,
             entities: HashMap::new(),
             entity_ids_by_collider: HashMap::new(),
@@ -139,7 +135,7 @@ impl GameCore {
         square_color: (u8, u8, u8, u8),
         collider_half_w: f32,
         collider_half_h: f32,
-        body_kind: BodyKind,
+        body_kind: WireBodyKind,
     ) {
         // Replaces any entity already spawned under this id — the same
         // replace-on-republish semantics `gfx::DrawSprite` batches use.
@@ -168,22 +164,15 @@ impl GameCore {
         }
 
         if collider_half_w > 0.0 && collider_half_h > 0.0 {
-            let rigid_body = match body_kind {
-                BodyKind::Dynamic => RigidBodyBuilder::dynamic(),
-                BodyKind::Kinematic => RigidBodyBuilder::kinematic_velocity_based(),
-                BodyKind::Frictionless => RigidBodyBuilder::dynamic()
-                    .linear_damping(FRICTIONLESS_LINEAR_DAMPING)
-                    .lock_rotations(),
+            let kind = match body_kind {
+                WireBodyKind::Dynamic => physics::BodyKind::Dynamic,
+                WireBodyKind::Kinematic => physics::BodyKind::Kinematic,
+                WireBodyKind::Frictionless => physics::BodyKind::Frictionless,
             };
-            let body = self
-                .physics
-                .bodies
-                .insert(rigid_body.translation(vector![x, y]));
-            let collider = self.physics.colliders.insert_with_parent(
-                ColliderBuilder::cuboid(collider_half_w, collider_half_h)
-                    .active_events(ActiveEvents::COLLISION_EVENTS),
-                body,
-                &mut self.physics.bodies,
+            let (body, collider) = self.physics.spawn_body(
+                Vec2::new(x, y),
+                Vec2::new(collider_half_w, collider_half_h),
+                kind,
             );
             builder.add(Collider {
                 body,
@@ -199,7 +188,7 @@ impl GameCore {
     }
 
     /// A no-op if `entity_id` names no entity, or one with no collider —
-    /// a purely visual entity has no rapier2d body to set velocity on.
+    /// a purely visual entity has no physics body to set velocity on.
     fn set_velocity(&mut self, entity_id: u32, vx: f32, vy: f32) {
         let Some(&entity) = self.entities.get(&entity_id) else {
             return;
@@ -207,9 +196,7 @@ impl GameCore {
         let Ok(collider) = self.world.get::<&Collider>(entity) else {
             return;
         };
-        if let Some(body) = self.physics.bodies.get_mut(collider.body) {
-            body.set_linvel(vector![vx, vy], true);
-        }
+        self.physics.set_velocity(collider.body, Vec2::new(vx, vy));
     }
 
     /// A no-op if `entity_id` names no entity — despawning twice, or an id
@@ -237,14 +224,10 @@ impl GameCore {
             return;
         };
         for rect in rects {
-            let body = self
-                .physics
-                .bodies
-                .insert(RigidBodyBuilder::fixed().translation(vector![rect.x, rect.y]));
-            let collider = self.physics.colliders.insert_with_parent(
-                ColliderBuilder::cuboid(rect.half_w, rect.half_h),
-                body,
-                &mut self.physics.bodies,
+            let (body, collider) = self.physics.spawn_body(
+                Vec2::new(rect.x, rect.y),
+                Vec2::new(rect.half_w, rect.half_h),
+                physics::BodyKind::Fixed,
             );
             self.world.spawn((
                 Transform {
@@ -274,9 +257,9 @@ impl GameCore {
             .query_mut::<(&mut SpriteAnimation, Option<&Collider>)>()
         {
             let moving = collider
-                .and_then(|collider| self.physics.bodies.get(collider.body))
-                .is_some_and(|body| {
-                    body.linvel().magnitude_squared() > MOVING_SPEED_THRESHOLD_SQUARED
+                .and_then(|collider| self.physics.velocity(collider.body))
+                .is_some_and(|velocity| {
+                    velocity.length_squared() > MOVING_SPEED_THRESHOLD_SQUARED
                 });
             if moving {
                 animation.advance(dt);
@@ -309,22 +292,21 @@ impl GameCore {
     /// design (the "platform/mover" contract) and are never pushed, so
     /// there's nothing to clamp.
     fn clamp_velocities_against_contacts(&mut self) {
-        let clamped: Vec<(RigidBodyHandle, Vector<Real>)> = self
+        let clamped: Vec<(BodyHandle, Vec2)> = self
             .world
             .query::<&Collider>()
             .iter()
             .filter_map(|(_, collider)| {
-                let body = self.physics.bodies.get(collider.body)?;
-                if body.is_kinematic() {
+                if self.physics.is_kinematic(collider.body) {
                     return None;
                 }
-                let velocity = *body.linvel();
-                if velocity == vector![0.0, 0.0] {
+                let velocity = self.physics.velocity(collider.body)?;
+                if velocity == Vec2::ZERO {
                     return None;
                 }
                 let mut clamped_velocity = velocity;
                 for normal in self.physics.contact_normals(collider.collider) {
-                    let inward = clamped_velocity.dot(&normal);
+                    let inward = clamped_velocity.dot(normal);
                     if inward > 0.0 {
                         clamped_velocity -= normal * inward;
                     }
@@ -333,9 +315,7 @@ impl GameCore {
             })
             .collect();
         for (body, velocity) in clamped {
-            if let Some(body) = self.physics.bodies.get_mut(body) {
-                body.set_linvel(velocity, true);
-            }
+            self.physics.set_velocity(body, velocity);
         }
     }
 

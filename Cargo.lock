@@ -1026,7 +1026,8 @@ dependencies = [
  "bus",
  "glam",
  "hecs",
- "rapier2d",
+ "physics",
+ "physics-rapier2d",
  "tiled",
 ]
 

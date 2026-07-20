@@ -282,7 +282,7 @@ fn despawn_removes_the_entity_and_its_collider() {
     game_core.handle(&entity_op_envelope(EntityOp::Despawn { entity_id: 1 }));
 
     assert_eq!(game_core.world.len(), 0);
-    assert_eq!(game_core.physics.bodies.len(), 0);
+    assert_eq!(game_core.physics.body_count(), 0);
 }
 
 #[test]
@@ -403,7 +403,7 @@ fn load_tilemap_inserts_a_fixed_collider_per_collision_rect() {
     };
     game_core.handle(&envelope(LoadTilemap::TOPIC, load.encode()));
 
-    assert_eq!(game_core.physics.bodies.len(), 1);
+    assert_eq!(game_core.physics.body_count(), 1);
 }
 
 #[test]
@@ -687,17 +687,20 @@ fn continuous_driving_into_an_obstacle_settles_at_shallow_penetration() {
     }
 
     let obstacle_entity = *game_core.entities.get(&1).unwrap();
-    let obstacle_collider = *game_core.world.get::<&Collider>(obstacle_entity).unwrap();
+    let obstacle_transform = *game_core.world.get::<&Transform>(obstacle_entity).unwrap();
     let pusher_entity = *game_core.entities.get(&2).unwrap();
-    let pusher_collider = *game_core.world.get::<&Collider>(pusher_entity).unwrap();
+    let pusher_transform = *game_core.world.get::<&Transform>(pusher_entity).unwrap();
 
-    let depth = game_core
-        .physics
-        .penetration_depth(obstacle_collider.collider, pusher_collider.collider);
+    // Half-extents sum to 2.0 (centers 2.0 apart is exactly touching, no
+    // overlap); the backend's own tuning is verified in isolation by
+    // physics-rapier2d's `sustained_driving_velocity_settles_to_shallow_
+    // penetration` — this test only checks game-core's contact-clamping
+    // logic doesn't reintroduce visible overlap on top of that.
+    let separation = obstacle_transform.x - pusher_transform.x;
     assert!(
-        depth < 0.01,
+        separation > 1.99,
         "continuous held-input-style driving into an obstacle should settle at shallow \
-         penetration instead of visibly overlapping, got {depth}"
+         penetration instead of visibly overlapping, got center separation {separation}"
     );
 }
 

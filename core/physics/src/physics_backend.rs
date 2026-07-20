@@ -26,6 +26,9 @@ pub trait PhysicsBackend {
     /// different `PhysicsBackend` instance).
     fn remove_body(&mut self, body: BodyHandle);
 
+    /// How many bodies currently exist in this world.
+    fn body_count(&self) -> usize;
+
     /// Directly sets a body's linear velocity — the mechanism a caller
     /// (an extension reading `input/*`) drives movement with. A no-op if
     /// `body` names no body in this world.
