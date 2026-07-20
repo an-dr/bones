@@ -38,3 +38,9 @@ it (see `extensions/hello/README.md` to build the reference extension).
 
 Start at [docs/index.md](docs/index.md) — map of the architecture,
 detailed designs, decisions (ADRs), and worked examples.
+
+## Demos
+
+Game:
+
+![demo](docs/README/demo.gif)
