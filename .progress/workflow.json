@@ -11,8 +11,8 @@
     "done": "game-core physics code is split into dedicated crate(s) under core/ behind a PhysicsBackend-shaped trait; a retro backend exists and is selectable; EntityOp::Spawn (or equivalent) lets a caller pick rapier vs retro per entity; GameCore routes spawn/tick/despawn/collision to the correct backend instance; existing tests pass and cover the retro backend; docs (structure.md, a new ADR if warranted) updated",
     "outOfScope": "Cross-engine collision/momentum transfer between backends. Changing rapier2d tuning/behavior. New gameplay features beyond what the retro backend needs to be usable (no new EntityOp fields beyond backend selection unless required)."
   },
-  "currentIncrementId": "db895238a4ba4b10b962e8881654fcb1",
-  "commitBaseline": "c3594a15b01c181a6457926e23391fb56a280536",
+  "currentIncrementId": "518bd1c4b57d4dad81a604961f6f6c4b",
+  "commitBaseline": "5c07c951a74f8acfa7457cb4a48182a4501586f7",
   "increments": [
     {
       "id": "7b001b861d284abfa51e973a4000167b",
@@ -31,14 +31,14 @@
     {
       "id": "db895238a4ba4b10b962e8881654fcb1",
       "number": 3,
-      "status": "verified",
+      "status": "completed",
       "scope": "game-core: single-world rewiring",
       "description": "game-core depends on core/physics + core/physics-rapier2d only (rapier2d dependency removed from game-core Cargo.toml). Collider/GameCore use PhysicsBackend/opaque handles instead of rapier2d types directly. Still exactly one world (rapier2d), behavior unchanged. All existing game-core tests pass unmodified in behavior."
     },
     {
       "id": "518bd1c4b57d4dad81a604961f6f6c4b",
       "number": 4,
-      "status": "planned",
+      "status": "verified",
       "scope": "core/physics-retro crate",
       "description": "New core/physics-retro crate implementing PhysicsBackend: velocity-integrated AABB movement, no mass/impulses/solver, axis-separation contact resolution. Standalone unit tests for movement and collision resolution. Not yet wired into game-core."
     },
@@ -153,8 +153,23 @@
       "at": "2026-07-20T17:03:30.6963205Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-07-20T17:03:56.6030977Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to BUILD."
+    },
+    {
+      "at": "2026-07-20T17:07:03.0794774Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-07-20T17:07:10.1816029Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-07-20T16:30:09.4648214Z",
-  "updatedAt": "2026-07-20T17:03:30.7080758Z"
+  "updatedAt": "2026-07-20T17:07:10.1937417Z"
 }

@@ -1,4 +1,4 @@
 [workspace]
 resolver = "2"
-members = ["core/logging", "core/bus", "core/runner", "core/contract", "core/app", "core/platform", "core/renderer", "core/ui", "core/audio", "core/wasm-extensions", "core/game-core", "core/physics", "core/physics-rapier2d"]
+members = ["core/logging", "core/bus", "core/runner", "core/contract", "core/app", "core/platform", "core/renderer", "core/ui", "core/audio", "core/wasm-extensions", "core/game-core", "core/physics", "core/physics-rapier2d", "core/physics-retro"]
 exclude = ["shared/bones-messages"]
