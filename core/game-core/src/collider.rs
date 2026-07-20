@@ -1,20 +1,40 @@
-use physics::{BodyHandle, ColliderHandle};
+use crate::{PhysicsWorldKind, WorldBody};
 
-/// Links an entity to its physics body — the `hecs` component side of the
-/// physics integration (ADR-021: backend-agnostic, addressed through
-/// `physics::PhysicsBackend`'s opaque handles rather than a specific
-/// engine's types). Position after each step is read back from `body`
-/// into the entity's `Transform`. `half_w`/`half_h` duplicate the box
-/// collider's own extent (rather than querying the backend for its shape
-/// at render time) — a `SquareColor` entity needs its size to draw, and
-/// this is the cheap place to keep it.
+/// Links an entity to its physics body in every world it's registered in
+/// (ADR-021: an entity may be in more than one) — the `hecs` component
+/// side of the physics integration, addressed through
+/// `physics::PhysicsBackend`'s opaque handles rather than any specific
+/// engine's types. `half_w`/`half_h` duplicate the box collider's own
+/// extent (rather than querying a backend for its shape at render time) —
+/// a `SquareColor` entity needs its size to draw, and this is the cheap
+/// place to keep it, shared across every world since a spawn request
+/// carries one extent for all of them.
 // No `Eq`: `half_w`/`half_h` are `f32`.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Collider {
-    pub body: BodyHandle,
-    pub collider: ColliderHandle,
+    // Never empty: `GameCore::spawn_entity` only attaches a `Collider` at
+    // all when the requested worlds produced at least one body.
+    pub bodies: Vec<WorldBody>,
     pub half_w: f32,
     pub half_h: f32,
+}
+
+impl Collider {
+    /// The body registered in `world`, if this entity is registered there
+    /// at all.
+    pub fn in_world(&self, world: PhysicsWorldKind) -> Option<&WorldBody> {
+        self.bodies.iter().find(|wb| wb.world == world)
+    }
+
+    /// The highest-priority world (`PhysicsWorldKind::PRIORITY`) this
+    /// entity is registered in — the world its drawn/exposed `Transform`
+    /// is read from every tick. Never `None`: `bodies` is never empty.
+    pub fn primary(&self) -> &WorldBody {
+        PhysicsWorldKind::PRIORITY
+            .iter()
+            .find_map(|world| self.in_world(*world))
+            .expect("Collider::bodies is never empty")
+    }
 }
 
 #[cfg(test)]

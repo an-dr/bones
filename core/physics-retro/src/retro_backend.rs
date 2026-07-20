@@ -182,14 +182,17 @@ impl PhysicsBackend for RetroBackend {
         std::mem::take(&mut self.collision_starts)
     }
 
-    /// Whether `a`/`b` are overlapping right now — this backend has no
-    /// speculative-contact margin (unlike rapier2d), so "touching" and
-    /// "real contact" are the same question here.
+    /// Whether `a`/`b` were overlapping as of the most recent `step` —
+    /// this backend has no speculative-contact margin (unlike rapier2d),
+    /// so every pair `drain_collision_starts` reports already was a real,
+    /// geometric overlap. Deliberately reads the `touching` set computed
+    /// during `step`, not a fresh overlap check against the *current*
+    /// (post-separation) positions: `step` immediately and exactly
+    /// separates overlapping pushable bodies in the same call, so by the
+    /// time a caller asks, the bodies are typically no longer overlapping
+    /// even though the contact that just started was completely real.
     fn has_real_contact(&self, a: ColliderHandle, b: ColliderHandle) -> bool {
-        let (Some(body_a), Some(body_b)) = (self.bodies.get(&a.0), self.bodies.get(&b.0)) else {
-            return false;
-        };
-        Self::overlap(body_a, body_b).is_some()
+        self.touching.contains(&(a.0.min(b.0), a.0.max(b.0)))
     }
 
     /// This backend resolves contacts by directly moving positions apart

@@ -1,5 +1,7 @@
 use crate::{DecodeError, Reader, Writer};
 
+use super::PhysicsWorlds;
+
 /// The rapier2d rigid-body type a spawned entity's collider gets, when it
 /// has one at all (`collider_half_w`/`collider_half_h` both `> 0.0`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -70,6 +72,11 @@ pub enum EntityOp {
         collider_half_w: f32,
         collider_half_h: f32,
         body_kind: BodyKind,
+        /// Which physics world(s) (ADR-021) this entity's body registers
+        /// in, when it has a body at all. `PhysicsWorlds::default()`
+        /// (rapier2d only) matches every caller's behavior before this
+        /// field existed.
+        worlds: PhysicsWorlds,
     },
     /// Sets a spawned entity's rapier2d linear velocity directly — the
     /// mechanism a caller (an extension reading `input/*`) drives movement
@@ -114,6 +121,7 @@ impl EntityOp {
                 collider_half_w,
                 collider_half_h,
                 body_kind,
+                worlds,
             } => {
                 let (r, g, b, a) = *square_color;
                 let writer = writer.u8(TAG_SPAWN).u32(*entity_id).f32(*x).f32(*y);
@@ -139,6 +147,7 @@ impl EntityOp {
                         BodyKind::Kinematic => 1,
                         BodyKind::Frictionless => 2,
                     })
+                    .u8(worlds.to_bits())
             }
             EntityOp::SetVelocity { entity_id, vx, vy } => writer
                 .u8(TAG_SET_VELOCITY)
@@ -195,6 +204,7 @@ impl EntityOp {
                     2 => BodyKind::Frictionless,
                     _ => BodyKind::Dynamic,
                 };
+                let worlds = PhysicsWorlds::from_bits(reader.read_u8()?);
                 Ok(EntityOp::Spawn {
                     entity_id,
                     x,
@@ -204,6 +214,7 @@ impl EntityOp {
                     collider_half_w,
                     collider_half_h,
                     body_kind,
+                    worlds,
                 })
             }
             TAG_SET_VELOCITY => Ok(EntityOp::SetVelocity {

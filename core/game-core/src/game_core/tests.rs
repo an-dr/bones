@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use super::*;
 use bones_messages::game_core::{
-    BodyKind, Collision, EntityOp, EntityOpMessage, LoadTilemap, Sprite,
+    BodyKind, Collision, EntityOp, EntityOpMessage, LoadTilemap, PhysicsWorlds, Sprite,
 };
 use bones_messages::gfx;
 use bones_messages::EncodeMessage;
@@ -77,6 +77,7 @@ fn spawn_with_id(entity_id: u32, x: f32, y: f32) -> EntityOp {
         collider_half_w: 0.0,
         collider_half_h: 0.0,
         body_kind: BodyKind::Dynamic,
+        worlds: PhysicsWorlds::default(),
     }
 }
 
@@ -100,6 +101,28 @@ fn spawn_with_collider_and_id(
         collider_half_w: half_w,
         collider_half_h: half_h,
         body_kind: BodyKind::Dynamic,
+        worlds: PhysicsWorlds::default(),
+    }
+}
+
+fn spawn_with_collider_in_worlds(
+    entity_id: u32,
+    x: f32,
+    y: f32,
+    half_w: f32,
+    half_h: f32,
+    worlds: PhysicsWorlds,
+) -> EntityOp {
+    EntityOp::Spawn {
+        entity_id,
+        x,
+        y,
+        sprite: Some(sprite()),
+        square_color: (0, 0, 0, 0),
+        collider_half_w: half_w,
+        collider_half_h: half_h,
+        body_kind: BodyKind::Dynamic,
+        worlds,
     }
 }
 
@@ -119,6 +142,7 @@ fn spawn_kinematic_with_collider(
         collider_half_w: half_w,
         collider_half_h: half_h,
         body_kind: BodyKind::Kinematic,
+        worlds: PhysicsWorlds::default(),
     }
 }
 
@@ -138,6 +162,7 @@ fn spawn_frictionless_with_collider(
         collider_half_w: half_w,
         collider_half_h: half_h,
         body_kind: BodyKind::Frictionless,
+        worlds: PhysicsWorlds::default(),
     }
 }
 
@@ -157,6 +182,7 @@ fn spawn_square_with_collider(
         collider_half_w: half_w,
         collider_half_h: half_h,
         body_kind: BodyKind::Dynamic,
+        worlds: PhysicsWorlds::default(),
     }
 }
 
@@ -282,7 +308,7 @@ fn despawn_removes_the_entity_and_its_collider() {
     game_core.handle(&entity_op_envelope(EntityOp::Despawn { entity_id: 1 }));
 
     assert_eq!(game_core.world.len(), 0);
-    assert_eq!(game_core.physics.body_count(), 0);
+    assert_eq!(game_core.rapier2d.body_count(), 0);
 }
 
 #[test]
@@ -403,7 +429,7 @@ fn load_tilemap_inserts_a_fixed_collider_per_collision_rect() {
     };
     game_core.handle(&envelope(LoadTilemap::TOPIC, load.encode()));
 
-    assert_eq!(game_core.physics.body_count(), 1);
+    assert_eq!(game_core.rapier2d.body_count(), 1);
 }
 
 #[test]
@@ -1022,4 +1048,145 @@ fn set_color_for_an_unknown_entity_id_is_a_no_op() {
         color: (0, 255, 0, 255),
     }));
     // Reaching here without panicking is the assertion.
+}
+
+#[test]
+fn a_retro_only_entity_registers_no_rapier2d_body() {
+    let mut game_core = GameCore::new();
+    game_core.handle(&entity_op_envelope(spawn_with_collider_in_worlds(
+        1,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        PhysicsWorlds::RETRO,
+    )));
+
+    assert_eq!(game_core.rapier2d.body_count(), 0);
+    assert_eq!(game_core.retro.body_count(), 1);
+}
+
+#[test]
+fn a_retro_only_entity_moves_via_the_retro_backend() {
+    let mut game_core = GameCore::new();
+    game_core.handle(&entity_op_envelope(spawn_with_collider_in_worlds(
+        1,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        PhysicsWorlds::RETRO,
+    )));
+    game_core.handle(&entity_op_envelope(EntityOp::SetVelocity {
+        entity_id: 1,
+        vx: 10.0,
+        vy: 0.0,
+    }));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 }.encode()));
+
+    let entity = *game_core.entities.get(&1).unwrap();
+    let transform = *game_core.world.get::<&Transform>(entity).unwrap();
+    assert_eq!(transform, Transform { x: 10.0, y: 0.0 });
+}
+
+#[test]
+fn a_dual_world_entitys_transform_is_read_from_the_higher_priority_retro_world() {
+    let mut game_core = GameCore::new();
+    game_core.handle(&entity_op_envelope(spawn_with_collider_in_worlds(
+        1,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        PhysicsWorlds::BOTH,
+    )));
+    game_core.handle(&entity_op_envelope(EntityOp::SetVelocity {
+        entity_id: 1,
+        vx: 10.0,
+        vy: 0.0,
+    }));
+
+    // One tick: retro moves exactly `velocity * dt` (10.0 for dt=1.0);
+    // rapier2d's dynamic body under the same commanded velocity integrates
+    // through its own solver and would not land on exactly the same value
+    // — if the drawn transform came from rapier2d instead of retro, this
+    // would not match `10.0` exactly.
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 }.encode()));
+
+    let entity = *game_core.entities.get(&1).unwrap();
+    let transform = *game_core.world.get::<&Transform>(entity).unwrap();
+    assert_eq!(
+        transform,
+        Transform { x: 10.0, y: 0.0 },
+        "the drawn transform should match retro's exact velocity*dt integration, \
+         proving it was read from retro (the higher-priority world), not rapier2d"
+    );
+}
+
+#[test]
+fn a_dual_world_entitys_lower_priority_rapier2d_copy_is_snapped_to_the_retro_position() {
+    let mut game_core = GameCore::new();
+    game_core.handle(&entity_op_envelope(spawn_with_collider_in_worlds(
+        1,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        PhysicsWorlds::BOTH,
+    )));
+    game_core.handle(&entity_op_envelope(EntityOp::SetVelocity {
+        entity_id: 1,
+        vx: 10.0,
+        vy: 0.0,
+    }));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 }.encode()));
+
+    let entity = *game_core.entities.get(&1).unwrap();
+    let collider = game_core.world.get::<&Collider>(entity).unwrap();
+    let rapier2d_body = collider.in_world(PhysicsWorldKind::Rapier2d).unwrap().body;
+    let retro_body = collider.in_world(PhysicsWorldKind::Retro).unwrap().body;
+    drop(collider);
+
+    assert_eq!(
+        game_core.rapier2d.body_translation(rapier2d_body),
+        game_core.retro.body_translation(retro_body),
+        "the lower-priority rapier2d copy should have been snapped to retro's position"
+    );
+}
+
+#[test]
+fn two_overlapping_retro_only_entities_publish_a_collision_event() {
+    let (mut game_core, bus, spy) = ready_game_core();
+    game_core.handle(&entity_op_envelope(spawn_with_collider_in_worlds(
+        1,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        PhysicsWorlds::RETRO,
+    )));
+    game_core.handle(&entity_op_envelope(spawn_with_collider_in_worlds(
+        2,
+        0.5,
+        0.0,
+        1.0,
+        1.0,
+        PhysicsWorlds::RETRO,
+    )));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    bus.dispatch();
+
+    let published = spy.0.lock().unwrap();
+    let collisions: Vec<_> = published
+        .iter()
+        .filter(|e| e.topic == Collision::TOPIC)
+        .map(|e| Collision::decode(&e.payload).unwrap())
+        .collect();
+
+    assert_eq!(collisions.len(), 1, "got {collisions:?}");
+    let ids = [collisions[0].entity_id_a, collisions[0].entity_id_b];
+    assert!(ids.contains(&1) && ids.contains(&2), "got {ids:?}");
 }

@@ -11,8 +11,8 @@
     "done": "game-core physics code is split into dedicated crate(s) under core/ behind a PhysicsBackend-shaped trait; a retro backend exists and is selectable; EntityOp::Spawn (or equivalent) lets a caller pick rapier vs retro per entity; GameCore routes spawn/tick/despawn/collision to the correct backend instance; existing tests pass and cover the retro backend; docs (structure.md, a new ADR if warranted) updated",
     "outOfScope": "Cross-engine collision/momentum transfer between backends. Changing rapier2d tuning/behavior. New gameplay features beyond what the retro backend needs to be usable (no new EntityOp fields beyond backend selection unless required)."
   },
-  "currentIncrementId": "518bd1c4b57d4dad81a604961f6f6c4b",
-  "commitBaseline": "5c07c951a74f8acfa7457cb4a48182a4501586f7",
+  "currentIncrementId": "10006d2be0694b54be7ceb4a124c5261",
+  "commitBaseline": "edc09b5520c42a4d4d97724d2fc93d3a5a853373",
   "increments": [
     {
       "id": "7b001b861d284abfa51e973a4000167b",
@@ -38,14 +38,14 @@
     {
       "id": "518bd1c4b57d4dad81a604961f6f6c4b",
       "number": 4,
-      "status": "verified",
+      "status": "completed",
       "scope": "core/physics-retro crate",
       "description": "New core/physics-retro crate implementing PhysicsBackend: velocity-integrated AABB movement, no mass/impulses/solver, axis-separation contact resolution. Standalone unit tests for movement and collision resolution. Not yet wired into game-core."
     },
     {
       "id": "10006d2be0694b54be7ceb4a124c5261",
       "number": 5,
-      "status": "planned",
+      "status": "verified",
       "scope": "game-core: multi-world registration and priority resolution",
       "description": "GameCore owns one PhysicsWorld per backend plus a fixed priority list. EntityOp::Spawn wire format gains a world-membership field (bones-messages). Collider holds one handle pair per world. Per-tick: each world steps fully; for multi-world entities, Transform is read from the highest-priority world and other worlds copies are snapped to match before next tick. New tests cover single-world (unchanged), retro-only, and dual-world priority + snapping behavior."
     },
@@ -168,8 +168,23 @@
       "at": "2026-07-20T17:07:10.1816029Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-07-20T17:07:26.3875078Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to BUILD."
+    },
+    {
+      "at": "2026-07-20T17:21:55.4666512Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-07-20T17:22:07.2189569Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-07-20T16:30:09.4648214Z",
-  "updatedAt": "2026-07-20T17:07:10.1937417Z"
+  "updatedAt": "2026-07-20T17:22:07.2361790Z"
 }

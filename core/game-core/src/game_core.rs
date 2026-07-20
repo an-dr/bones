@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 
 use bones_messages::game_core::{
-    BodyKind as WireBodyKind, Collision, EntityOp, EntityOpMessage, LoadTilemap,
+    BodyKind as WireBodyKind, Collision, EntityOp, EntityOpMessage, LoadTilemap, PhysicsWorlds,
 };
 use bones_messages::gfx::{Clear, DrawRect, DrawSprite, SetCamera};
 use bones_messages::tick::Tick;
@@ -17,8 +17,9 @@ use bus::{Bus, Envelope, Handler, Module, ModuleContext};
 use glam::Vec2;
 use physics::{BodyHandle, ColliderHandle, PhysicsBackend};
 use physics_rapier2d::Rapier2dBackend;
+use physics_retro::RetroBackend;
 
-use crate::{load_collision_rects, Collider, SpriteAnimation, SquareColor, Transform};
+use crate::{load_collision_rects, Collider, PhysicsWorldKind, SpriteAnimation, SquareColor, Transform, WorldBody};
 
 /// The `gfx/*` layer game-core draws its entities on. Fixed rather than
 /// configurable: this module owns exactly one concern (the game world),
@@ -45,7 +46,8 @@ const DEBUG_HITBOX_COLOR: (u8, u8, u8, u8) = (255, 255, 0, 255);
 
 pub struct GameCore {
     world: hecs::World,
-    physics: Rapier2dBackend,
+    rapier2d: Rapier2dBackend,
+    retro: RetroBackend,
     bus: Option<Bus>,
     // Maps the caller's own `EntityOp`-carried `entity_id` to the
     // `hecs::Entity` it became — the caller's addressing scheme never sees
@@ -53,10 +55,13 @@ pub struct GameCore {
     entities: HashMap<u32, hecs::Entity>,
     // The inverse of `entities`, restricted to `EntityOp::Spawn`-created
     // colliders (tilemap colliders never appear here) — lets a
-    // `PhysicsBackend` collision event's `ColliderHandle` pair translate
-    // back into the caller-assigned `entity_id` pair a `game-core/collision`
-    // event names.
-    entity_ids_by_collider: HashMap<ColliderHandle, u32>,
+    // `PhysicsBackend` collision event's `(world, ColliderHandle)` pair
+    // translate back into the caller-assigned `entity_id` pair a
+    // `game-core/collision` event names. Keyed by world too: each backend
+    // instance mints its own `ColliderHandle`s independently, so the same
+    // numeric handle can exist in both worlds at once, naming two
+    // different entities (or the same one, in the multi-world case).
+    entity_ids_by_collider: HashMap<(PhysicsWorldKind, ColliderHandle), u32>,
     // Global toggle for `EntityOp::SetDebugHitboxes` — not per-entity, so
     // it lives here rather than as a component.
     debug_hitboxes: bool,
@@ -66,11 +71,26 @@ impl GameCore {
     pub fn new() -> Self {
         Self {
             world: hecs::World::new(),
-            physics: Rapier2dBackend::new(),
+            rapier2d: Rapier2dBackend::new(),
+            retro: RetroBackend::new(),
             bus: None,
             entities: HashMap::new(),
             entity_ids_by_collider: HashMap::new(),
             debug_hitboxes: false,
+        }
+    }
+
+    fn backend_mut(&mut self, world: PhysicsWorldKind) -> &mut dyn PhysicsBackend {
+        match world {
+            PhysicsWorldKind::Rapier2d => &mut self.rapier2d,
+            PhysicsWorldKind::Retro => &mut self.retro,
+        }
+    }
+
+    fn backend(&self, world: PhysicsWorldKind) -> &dyn PhysicsBackend {
+        match world {
+            PhysicsWorldKind::Rapier2d => &self.rapier2d,
+            PhysicsWorldKind::Retro => &self.retro,
         }
     }
 
@@ -97,6 +117,7 @@ impl GameCore {
                 collider_half_w,
                 collider_half_h,
                 body_kind,
+                worlds,
             } => self.spawn_entity(
                 entity_id,
                 x,
@@ -106,6 +127,7 @@ impl GameCore {
                 collider_half_w,
                 collider_half_h,
                 body_kind,
+                worlds,
             ),
             EntityOp::SetVelocity { entity_id, vx, vy } => self.set_velocity(entity_id, vx, vy),
             EntityOp::Despawn { entity_id } => self.despawn(entity_id),
@@ -136,6 +158,7 @@ impl GameCore {
         collider_half_w: f32,
         collider_half_h: f32,
         body_kind: WireBodyKind,
+        worlds: PhysicsWorlds,
     ) {
         // Replaces any entity already spawned under this id — the same
         // replace-on-republish semantics `gfx::DrawSprite` batches use.
@@ -169,18 +192,34 @@ impl GameCore {
                 WireBodyKind::Kinematic => physics::BodyKind::Kinematic,
                 WireBodyKind::Frictionless => physics::BodyKind::Frictionless,
             };
-            let (body, collider) = self.physics.spawn_body(
-                Vec2::new(x, y),
-                Vec2::new(collider_half_w, collider_half_h),
-                kind,
-            );
-            builder.add(Collider {
-                body,
-                collider,
-                half_w: collider_half_w,
-                half_h: collider_half_h,
-            });
-            self.entity_ids_by_collider.insert(collider, entity_id);
+            let mut bodies = Vec::new();
+            for world in [
+                (PhysicsWorldKind::Rapier2d, worlds.rapier2d),
+                (PhysicsWorldKind::Retro, worlds.retro),
+            ]
+            .into_iter()
+            .filter_map(|(world, present)| present.then_some(world))
+            {
+                let (body, collider) = self.backend_mut(world).spawn_body(
+                    Vec2::new(x, y),
+                    Vec2::new(collider_half_w, collider_half_h),
+                    kind,
+                );
+                self.entity_ids_by_collider
+                    .insert((world, collider), entity_id);
+                bodies.push(WorldBody {
+                    world,
+                    body,
+                    collider,
+                });
+            }
+            if !bodies.is_empty() {
+                builder.add(Collider {
+                    bodies,
+                    half_w: collider_half_w,
+                    half_h: collider_half_h,
+                });
+            }
         }
 
         let entity = self.world.spawn(builder.build());
@@ -188,7 +227,11 @@ impl GameCore {
     }
 
     /// A no-op if `entity_id` names no entity, or one with no collider —
-    /// a purely visual entity has no physics body to set velocity on.
+    /// a purely visual entity has no physics body to set velocity on. Sets
+    /// velocity in every world the entity is registered in, not just its
+    /// primary one — a lower-priority world's copy still needs to move so
+    /// its own same-world collisions stay meaningful, even though its
+    /// position is overwritten by the priority snap each tick regardless.
     fn set_velocity(&mut self, entity_id: u32, vx: f32, vy: f32) {
         let Some(&entity) = self.entities.get(&entity_id) else {
             return;
@@ -196,7 +239,12 @@ impl GameCore {
         let Ok(collider) = self.world.get::<&Collider>(entity) else {
             return;
         };
-        self.physics.set_velocity(collider.body, Vec2::new(vx, vy));
+        let bodies = collider.bodies.clone();
+        drop(collider);
+        for world_body in bodies {
+            self.backend_mut(world_body.world)
+                .set_velocity(world_body.body, Vec2::new(vx, vy));
+        }
     }
 
     /// A no-op if `entity_id` names no entity — despawning twice, or an id
@@ -205,9 +253,16 @@ impl GameCore {
         let Some(entity) = self.entities.remove(&entity_id) else {
             return;
         };
-        if let Ok(collider) = self.world.get::<&Collider>(entity) {
-            self.entity_ids_by_collider.remove(&collider.collider);
-            self.physics.remove_body(collider.body);
+        let bodies = self
+            .world
+            .get::<&Collider>(entity)
+            .map(|collider| collider.bodies.clone())
+            .unwrap_or_default();
+        for world_body in bodies {
+            self.entity_ids_by_collider
+                .remove(&(world_body.world, world_body.collider));
+            self.backend_mut(world_body.world)
+                .remove_body(world_body.body);
         }
         let _ = self.world.despawn(entity);
     }
@@ -224,7 +279,7 @@ impl GameCore {
             return;
         };
         for rect in rects {
-            let (body, collider) = self.physics.spawn_body(
+            let (body, collider) = self.rapier2d.spawn_body(
                 Vec2::new(rect.x, rect.y),
                 Vec2::new(rect.half_w, rect.half_h),
                 physics::BodyKind::Fixed,
@@ -236,8 +291,11 @@ impl GameCore {
                 },
                 SquareColor(TILEMAP_COLLIDER_COLOR),
                 Collider {
-                    body,
-                    collider,
+                    bodies: vec![WorldBody {
+                        world: PhysicsWorldKind::Rapier2d,
+                        body,
+                        collider,
+                    }],
                     half_w: rect.half_w,
                     half_h: rect.half_h,
                 },
@@ -246,28 +304,54 @@ impl GameCore {
     }
 
     fn tick(&mut self, dt: f32) {
-        self.physics.step(dt);
+        self.rapier2d.step(dt);
+        self.retro.step(dt);
         self.clamp_velocities_against_contacts();
+        self.resolve_multi_world_positions();
 
         // Animation only advances while actually moving — an entity with
         // no collider (nothing driving it) or one at rest freezes on its
-        // current frame instead of animating in place.
-        for (_, (animation, collider)) in self
+        // current frame instead of animating in place. Reads the primary
+        // world's velocity: after `resolve_multi_world_positions`, every
+        // world an entity is in was snapped to the same velocity anyway
+        // (single-world entities have exactly one to read regardless).
+        // Collected into a plain map first (rather than read inline inside
+        // `query_mut`) since `self.backend` needs to borrow all of `self`
+        // while `query_mut` already holds `self.world` mutably borrowed.
+        let moving: HashMap<hecs::Entity, bool> = self
             .world
-            .query_mut::<(&mut SpriteAnimation, Option<&Collider>)>()
-        {
-            let moving = collider
-                .and_then(|collider| self.physics.velocity(collider.body))
-                .is_some_and(|velocity| {
-                    velocity.length_squared() > MOVING_SPEED_THRESHOLD_SQUARED
-                });
-            if moving {
+            .query::<Option<&Collider>>()
+            .iter()
+            .map(|(entity, collider)| {
+                let moving = collider
+                    .and_then(|collider| {
+                        let primary = collider.primary();
+                        self.backend(primary.world).velocity(primary.body)
+                    })
+                    .is_some_and(|velocity| {
+                        velocity.length_squared() > MOVING_SPEED_THRESHOLD_SQUARED
+                    });
+                (entity, moving)
+            })
+            .collect();
+        for (entity, animation) in self.world.query_mut::<&mut SpriteAnimation>() {
+            if moving.get(&entity).copied().unwrap_or(false) {
                 animation.advance(dt);
             }
         }
 
-        for (_, (transform, collider)) in self.world.query_mut::<(&mut Transform, &Collider)>() {
-            if let Some(translation) = self.physics.body_translation(collider.body) {
+        let translations: HashMap<hecs::Entity, Vec2> = self
+            .world
+            .query::<&Collider>()
+            .iter()
+            .filter_map(|(entity, collider)| {
+                let primary = collider.primary();
+                let translation = self.backend(primary.world).body_translation(primary.body)?;
+                Some((entity, translation))
+            })
+            .collect();
+        for (entity, transform) in self.world.query_mut::<&mut Transform>() {
+            if let Some(translation) = translations.get(&entity) {
                 transform.x = translation.x;
                 transform.y = translation.y;
             }
@@ -275,6 +359,42 @@ impl GameCore {
 
         self.publish_collisions();
         self.publish_gfx();
+    }
+
+    /// For every entity registered in more than one physics world
+    /// (ADR-021), reads its authoritative position/velocity from the
+    /// highest-priority world it's in (`PhysicsWorldKind::PRIORITY`) and
+    /// snaps every other world's copy of that same entity to match, so no
+    /// world's simulation of a shared entity drifts from what's actually
+    /// drawn. A single-world entity is untouched — nothing to resolve.
+    fn resolve_multi_world_positions(&mut self) {
+        let snaps: Vec<(PhysicsWorldKind, BodyHandle, Vec2, Vec2)> = self
+            .world
+            .query::<&Collider>()
+            .iter()
+            .filter(|(_, collider)| collider.bodies.len() > 1)
+            .filter_map(|(_, collider)| {
+                let primary = collider.primary();
+                let position = self.backend(primary.world).body_translation(primary.body)?;
+                let velocity = self
+                    .backend(primary.world)
+                    .velocity(primary.body)
+                    .unwrap_or(Vec2::ZERO);
+                Some(
+                    collider
+                        .bodies
+                        .iter()
+                        .filter(|wb| wb.world != primary.world)
+                        .map(move |wb| (wb.world, wb.body, position, velocity))
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .flatten()
+            .collect();
+        for (world, body, position, velocity) in snaps {
+            self.backend_mut(world)
+                .set_body_state(body, position, velocity);
+        }
     }
 
     /// Stops a body's commanded velocity from re-driving it into whatever
@@ -292,55 +412,70 @@ impl GameCore {
     /// design (the "platform/mover" contract) and are never pushed, so
     /// there's nothing to clamp.
     fn clamp_velocities_against_contacts(&mut self) {
-        let clamped: Vec<(BodyHandle, Vec2)> = self
+        let clamped: Vec<(PhysicsWorldKind, BodyHandle, Vec2)> = self
             .world
             .query::<&Collider>()
             .iter()
-            .filter_map(|(_, collider)| {
-                if self.physics.is_kinematic(collider.body) {
+            .flat_map(|(_, collider)| collider.bodies.iter())
+            .filter_map(|world_body| {
+                let backend = self.backend(world_body.world);
+                if backend.is_kinematic(world_body.body) {
                     return None;
                 }
-                let velocity = self.physics.velocity(collider.body)?;
+                let velocity = backend.velocity(world_body.body)?;
                 if velocity == Vec2::ZERO {
                     return None;
                 }
                 let mut clamped_velocity = velocity;
-                for normal in self.physics.contact_normals(collider.collider) {
+                for normal in backend.contact_normals(world_body.collider) {
                     let inward = clamped_velocity.dot(normal);
                     if inward > 0.0 {
                         clamped_velocity -= normal * inward;
                     }
                 }
-                (clamped_velocity != velocity).then_some((collider.body, clamped_velocity))
+                (clamped_velocity != velocity)
+                    .then_some((world_body.world, world_body.body, clamped_velocity))
             })
             .collect();
-        for (body, velocity) in clamped {
-            self.physics.set_velocity(body, velocity);
+        for (world, body, velocity) in clamped {
+            self.backend_mut(world).set_velocity(body, velocity);
         }
     }
 
-    /// Translates every rapier2d contact-start this tick's `step` produced
-    /// into a `game-core/collision` event, by `ColliderHandle`. A pair
+    /// Translates every contact-start this tick's `step` produced, in
+    /// every world, into a `game-core/collision` event, by `ColliderHandle`
+    /// — worlds never interact directly (ADR-021: two non-overlapping
+    /// worlds), so each is drained and resolved independently. A pair
     /// where either side isn't in `entity_ids_by_collider` (a tilemap
     /// collider, or a collider whose entity was already despawned this
     /// tick) is silently skipped rather than published with a missing id.
-    /// `CollisionEvent::Started` alone isn't proof of a real touch — rapier2d
-    /// uses speculative contacts, so a pair can appear "Started" while still
-    /// a hair's width apart (the mechanism behind real-world phantom "hit"
-    /// reports with no visible contact). `has_real_contact` filters those
-    /// out by checking the actual contact manifold, not just the event.
+    /// `CollisionEvent::Started` alone isn't proof of a real touch —
+    /// rapier2d uses speculative contacts, so a pair can appear "Started"
+    /// while still a hair's width apart (the mechanism behind real-world
+    /// phantom "hit" reports with no visible contact). `has_real_contact`
+    /// filters those out by checking the actual contact manifold, not just
+    /// the event.
     fn publish_collisions(&mut self) {
-        for (collider_a, collider_b) in self.physics.drain_collision_starts() {
-            if !self.physics.has_real_contact(collider_a, collider_b) {
-                continue;
-            }
-            let entity_id_a = self.entity_ids_by_collider.get(&collider_a).copied();
-            let entity_id_b = self.entity_ids_by_collider.get(&collider_b).copied();
-            if let (Some(entity_id_a), Some(entity_id_b)) = (entity_id_a, entity_id_b) {
-                self.publish(Collision {
-                    entity_id_a,
-                    entity_id_b,
-                });
+        for world in PhysicsWorldKind::PRIORITY {
+            let starts = self.backend_mut(world).drain_collision_starts();
+            for (collider_a, collider_b) in starts {
+                if !self.backend(world).has_real_contact(collider_a, collider_b) {
+                    continue;
+                }
+                let entity_id_a = self
+                    .entity_ids_by_collider
+                    .get(&(world, collider_a))
+                    .copied();
+                let entity_id_b = self
+                    .entity_ids_by_collider
+                    .get(&(world, collider_b))
+                    .copied();
+                if let (Some(entity_id_a), Some(entity_id_b)) = (entity_id_a, entity_id_b) {
+                    self.publish(Collision {
+                        entity_id_a,
+                        entity_id_b,
+                    });
+                }
             }
         }
     }

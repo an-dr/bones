@@ -1028,6 +1028,7 @@ dependencies = [
  "hecs",
  "physics",
  "physics-rapier2d",
+ "physics-retro",
  "tiled",
 ]
 

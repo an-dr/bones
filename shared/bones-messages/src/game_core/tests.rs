@@ -17,6 +17,7 @@ fn spawn_with_sprite() -> EntityOp {
         collider_half_w: 8.0,
         collider_half_h: 8.0,
         body_kind: BodyKind::Dynamic,
+        worlds: PhysicsWorlds::default(),
     }
 }
 
@@ -30,6 +31,7 @@ fn spawn_square() -> EntityOp {
         collider_half_w: 8.0,
         collider_half_h: 8.0,
         body_kind: BodyKind::Kinematic,
+        worlds: PhysicsWorlds::default(),
     }
 }
 
@@ -64,6 +66,47 @@ fn spawn_with_frictionless_body_kind_round_trips() {
         collider_half_w: 8.0,
         collider_half_h: 8.0,
         body_kind: BodyKind::Frictionless,
+        worlds: PhysicsWorlds::default(),
+    };
+    let message = EntityOpMessage(op);
+    assert_eq!(
+        EntityOpMessage::decode(&message.encode()),
+        Ok(EntityOpMessage(op))
+    );
+}
+
+#[test]
+fn spawn_registered_in_both_physics_worlds_round_trips() {
+    let op = EntityOp::Spawn {
+        entity_id: 5,
+        x: 1.0,
+        y: 2.0,
+        sprite: None,
+        square_color: (10, 20, 30, 255),
+        collider_half_w: 4.0,
+        collider_half_h: 4.0,
+        body_kind: BodyKind::Dynamic,
+        worlds: PhysicsWorlds::BOTH,
+    };
+    let message = EntityOpMessage(op);
+    assert_eq!(
+        EntityOpMessage::decode(&message.encode()),
+        Ok(EntityOpMessage(op))
+    );
+}
+
+#[test]
+fn spawn_registered_in_retro_only_round_trips() {
+    let op = EntityOp::Spawn {
+        entity_id: 6,
+        x: 0.0,
+        y: 0.0,
+        sprite: None,
+        square_color: (0, 0, 0, 255),
+        collider_half_w: 2.0,
+        collider_half_h: 2.0,
+        body_kind: BodyKind::Dynamic,
+        worlds: PhysicsWorlds::RETRO,
     };
     let message = EntityOpMessage(op);
     assert_eq!(

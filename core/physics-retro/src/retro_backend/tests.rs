@@ -152,7 +152,7 @@ fn drain_collision_starts_reports_a_new_contact_once() {
 }
 
 #[test]
-fn has_real_contact_is_true_only_while_overlapping() {
+fn has_real_contact_is_false_for_a_pair_that_never_touched() {
     let mut backend = RetroBackend::new();
     let (_, collider_a) =
         backend.spawn_body(Vec2::new(0.0, 0.0), Vec2::new(1.0, 1.0), BodyKind::Dynamic);
@@ -160,6 +160,25 @@ fn has_real_contact_is_true_only_while_overlapping() {
         backend.spawn_body(Vec2::new(5.0, 0.0), Vec2::new(1.0, 1.0), BodyKind::Dynamic);
 
     assert!(!backend.has_real_contact(collider_a, collider_b));
+}
+
+#[test]
+fn has_real_contact_is_true_right_after_a_step_that_found_real_overlap() {
+    // Regression: `step` immediately separates overlapping pushable bodies
+    // in the same call, so by the time a caller can ask, a fresh geometric
+    // overlap check against the *current* (already-separated) positions
+    // would wrongly read false for a contact that was completely real —
+    // `has_real_contact` must reflect what `step` actually found, not the
+    // post-separation position.
+    let mut backend = RetroBackend::new();
+    let (_, collider_a) =
+        backend.spawn_body(Vec2::new(0.0, 0.0), Vec2::new(1.0, 1.0), BodyKind::Dynamic);
+    let (_, collider_b) =
+        backend.spawn_body(Vec2::new(0.5, 0.0), Vec2::new(1.0, 1.0), BodyKind::Dynamic);
+
+    backend.step(1.0 / 60.0);
+
+    assert!(backend.has_real_contact(collider_a, collider_b));
 }
 
 #[test]

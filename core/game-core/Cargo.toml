@@ -8,6 +8,7 @@ bus = { path = "../bus" }
 bones-messages = { path = "../../shared/bones-messages" }
 physics = { path = "../physics" }
 physics-rapier2d = { path = "../physics-rapier2d" }
+physics-retro = { path = "../physics-retro" }
 hecs = "0.10"
 glam = "0.30"
 tiled = "0.16"
