@@ -12,7 +12,7 @@ use bones_messages::game_core::{
     BodyKind as WireBodyKind, Collision, EntityOp, EntityOpMessage, LoadTilemap, PhysicsWorlds,
     Shape as WireShape,
 };
-use bones_messages::gfx::{Clear, DrawRect, DrawSprite, DrawTriangle, SetCamera};
+use bones_messages::gfx::{Clear, DrawRect, DrawSprite, DrawTriangle, LoadSprite, SetCamera};
 use bones_messages::tick::Tick;
 use bones_messages::{DecodeMessage, EncodeMessage, Message};
 use bus::{Bus, Envelope, Handler, Module, ModuleContext};
@@ -23,12 +23,20 @@ use crate::physics::{
     self, BodyHandle, Collider, ColliderHandle, PhysicsBackend, PhysicsWorldKind, Rapier2dBackend,
     RetroBackend, Shape, WorldBody,
 };
-use crate::tiles::load_collision_rects;
+use crate::tiles::{load_collision_rects, load_tile_draws, TileDraw};
 
-/// The `gfx/*` layer game-core draws its entities on. Fixed rather than
-/// configurable: this module owns exactly one concern (the game world),
-/// same simplification `renderer`'s single global camera already makes.
-const ENTITY_LAYER: u8 = 0;
+/// The `gfx/*` layer game-core draws its entities on.
+const ENTITY_LAYER: u8 = 1;
+
+/// The `gfx/*` layer `load_tilemap`'s own `"Ground"` tile draws publish
+/// on — deliberately `0`, one below `ENTITY_LAYER`, so the ground always
+/// renders underneath every entity regardless of publish order (both
+/// come from this same module, same tick, so publish order alone
+/// wouldn't otherwise guarantee it). This is also the layer number a
+/// caller with its *own* background content (no `"Ground"` layer, or a
+/// caller not using `load_tilemap` at all) should use, for the same
+/// reason.
+const BACKGROUND_LAYER: u8 = 0;
 
 /// Fixed color for every collider `load_tilemap` creates — visually
 /// distinct from `EntityOp::Spawn`'s caller-chosen `square_color`, so a
@@ -71,6 +79,14 @@ pub struct GameCore {
     debug_hitboxes: bool,
     // Global toggle for `EntityOp::SetPaused` — see `tick`'s early return.
     paused: bool,
+    // Resolved once per `load_tilemap` call (not re-parsed every tick) and
+    // replayed as `gfx::DrawSprite` every `publish_gfx` — the same
+    // "publish every tick regardless" contract every other `gfx/*` output
+    // here follows, just sourced from a one-time parse instead of live
+    // simulation state, since a loaded tilemap's ground never changes.
+    // Replaced wholesale by a later `load_tilemap` call, the same
+    // replace-on-reload semantics collision rects already have.
+    tile_draws: Vec<TileDraw>,
 }
 
 impl GameCore {
@@ -83,6 +99,7 @@ impl GameCore {
             entities: HashMap::new(),
             entity_ids_by_collider: HashMap::new(),
             debug_hitboxes: false,
+            tile_draws: Vec::new(),
             paused: false,
         }
     }
@@ -291,6 +308,14 @@ impl GameCore {
     /// `Collider`, fixed rather than dynamic) — not a raw physics body with
     /// no ECS presence — so `publish_gfx`'s existing square-drawing query
     /// renders it for free instead of it being an invisible wall.
+    ///
+    /// A `"Ground"` tile layer resolves the same way collision does:
+    /// parsed once here (`tiles::load_tile_draws`), cached in
+    /// `self.tile_draws`, and replayed as `gfx::DrawSprite` every
+    /// `publish_gfx` tick rather than re-parsed. Each `TilesetImage` the
+    /// caller supplied gets one `gfx::LoadSprite` registered under its own
+    /// `sprite_id`; a `.tmx` tileset with no matching image name is parsed
+    /// (so its tiles don't break the rest of the layer) but never drawn.
     fn load_tilemap(&mut self, load: LoadTilemap) {
         let Ok(rects) = load_collision_rects(load.tmx_bytes) else {
             return;
@@ -318,6 +343,22 @@ impl GameCore {
                     shape: Shape::Rect,
                 },
             ));
+        }
+
+        for image in &load.tileset_images {
+            self.publish(LoadSprite {
+                id: image.sprite_id,
+                png_bytes: image.png_bytes,
+            });
+        }
+        let sprite_id_for_tileset = |name: &str| {
+            load.tileset_images
+                .iter()
+                .find(|image| image.name == name)
+                .map(|image| image.sprite_id)
+        };
+        if let Ok(draws) = load_tile_draws(load.tmx_bytes, sprite_id_for_tileset) {
+            self.tile_draws = draws;
         }
     }
 
@@ -538,6 +579,27 @@ impl GameCore {
             y: 0.0,
             zoom: 1.0,
         });
+        // Ground tiles first, on BACKGROUND_LAYER — resolved once by
+        // `load_tilemap`, replayed unchanged every tick (see
+        // `tile_draws`'s own field doc comment).
+        for draw in &self.tile_draws {
+            self.publish(DrawSprite {
+                id: draw.sprite_id,
+                dst_x: draw.dst_x,
+                dst_y: draw.dst_y,
+                dst_w: draw.size,
+                dst_h: draw.size,
+                src_x: draw.src_x,
+                src_y: draw.src_y,
+                src_w: draw.size,
+                src_h: draw.size,
+                layer: BACKGROUND_LAYER,
+                angle: 0.0,
+                flip_h: false,
+                flip_v: false,
+                tint: (255, 255, 255, 255),
+            });
+        }
         for (_, (transform, animation)) in
             self.world.query::<(&Transform, &SpriteAnimation)>().iter()
         {

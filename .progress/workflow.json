@@ -11,8 +11,8 @@
     "done": "Robot hitbox is visibly narrower than its sprite frame; HUD shows live life and score, score increments on purple-box collision, life decrements on red-triangle collision; Esc opens/closes an in-game menu with Settings and Exit entries; Settings lets the user pick big-box color (warm/non-red presets) and small-box color (cold presets) with changes applying live; Exit cleanly closes the running app; new engine surface (exit request, triangle shape) has tests and updated docs (ADR if it's a lasting architectural call).",
     "outOfScope": "The full roadmap shutdown sequence (per-extension shutdown() lifecycle, Stopped event, close-request pub/sub event) - only a minimal-but-clean extension-exit path; retro-world collider support for triangles unless DESIGN finds it's actually needed (obstacles are RAPIER2D-only today); the old PROGRESS.md's leftover solver-stiffness/velocity-clamp tuning items (unrelated, already-stale prior workflow); a real color-picker widget type (stick to preset buttons)."
   },
-  "currentIncrementId": "12014a398ce24aa0b5004e64fcfdd682",
-  "commitBaseline": "69dee6b86f4b1b83fc12c92559be4d07353ecaa6",
+  "currentIncrementId": "59148f6fd1cb4519bbfde248d6c673c9",
+  "commitBaseline": "a2169b2071a2d90ec52a45cf1a7da7a10f9120cb",
   "increments": [
     {
       "id": "33c280ba03264f269efe614b7eb478eb",
@@ -45,9 +45,16 @@
     {
       "id": "12014a398ce24aa0b5004e64fcfdd682",
       "number": 5,
-      "status": "verified",
+      "status": "completed",
       "scope": "game-core + game_core_demo: pause capability",
       "description": "EntityOp::SetPaused { paused: bool } (same global-toggle shape as the existing SetDebugHitboxes), skipping physics stepping/contact-clamp/multi-world-resolution/collision-publishing entirely in GameCore::tick while set (still redraws every frame from last-known Transform state, so nothing goes stale/blank). game_core_demo's toggle_menu publishes SetPaused(true) on opening the menu and SetPaused(false) on closing it - the only place menu transitions to/from Closed. Fixes residual box motion (inertia/solver settling) continuing to play out in the background while the pause menu is open, since previously only the robot's own commanded velocity was zeroed, not game-core's own physics stepping for every other entity. Unit tests: a moving/settling entity's Transform does not change across a paused tick; publish_gfx still runs (a Clear/DrawRect/etc. is still published) while paused; unpausing resumes movement."
+    },
+    {
+      "id": "59148f6fd1cb4519bbfde248d6c673c9",
+      "number": 6,
+      "status": "verified",
+      "scope": "game-core + game_core_demo: real Tiled ground-tile rendering",
+      "description": "Adds Writer::blob/Reader::read_blob (u32-length-prefixed byte blob, str's counterpart for non-UTF-8/oversized fields) to the shared codec; extends LoadTilemap with tileset_images: Vec<TilesetImage> (name/sprite_id/png_bytes) so a caller can supply tileset art alongside the .tmx. game-core's tiles module gains load_tile_draws (tiled crate, embedded tilesets only) parsing a 'Ground' tile layer into caller-sprite-id-resolved TileDraw records, cached once per load_tilemap call and replayed as gfx::DrawSprite every publish_gfx tick at the new BACKGROUND_LAYER (0, one below ENTITY_LAYER which moves to 1). game_core_demo's level.tmx is expanded with a 64px margin on every side (walls and every entity spawn shifted by the same fixed offset) and its Ground layer painted with real grass/brick tile data instead of the extension hand-computing tile placement - tileset_bricks.png is a new asset cropped from the user's wall tileset (a genuinely tileable brick-coursing region), tileset_grass.png is the user's grass tileset embedded as-is. Also fixes a real bug found live: a background published once at init from the same sender as the per-tick HUD/menu draws was getting wiped out every tick (one retained batch per sender, full replace not a merge) - moving background ownership into game-core (same sender as its own entities) sidesteps this entirely."
     }
   ],
   "approvals": [
@@ -101,18 +108,25 @@
       "approvedAt": "2026-07-22T22:01:31.1727759Z"
     },
     {
-      "gate": "split",
-      "phase": "SPLIT",
-      "incrementId": null,
-      "note": "User confirmed via chat: game-core pause capability is the right fix for residual box motion while the menu is open.",
-      "approvedAt": "2026-07-22T22:16:30.6993005Z"
-    },
-    {
       "gate": "verify",
       "phase": "VERIFY",
       "incrementId": "12014a398ce24aa0b5004e64fcfdd682",
       "note": "Self-verified: full workspace test suite (150 tests incl. 3 new pause tests) + clippy clean, wasm32-wasip2 build clean, code-review skill run (0 critical/high findings). Packaged app runs error-free. User is actively directing follow-on work; deferring formal per-increment sign-off to their own check as established.",
       "approvedAt": "2026-07-22T22:22:09.5527368Z"
+    },
+    {
+      "gate": "split",
+      "phase": "SPLIT",
+      "incrementId": null,
+      "note": "User directed this work directly via chat (wall size + real tile system using a 3rd-party lib), confirmed the game-core + tiled-crate architecture via AskUserQuestion.",
+      "approvedAt": "2026-07-22T23:00:28.5163114Z"
+    },
+    {
+      "gate": "verify",
+      "phase": "VERIFY",
+      "incrementId": "59148f6fd1cb4519bbfde248d6c673c9",
+      "note": "Full workspace test run passed (cargo test --workspace, all green). Visual verification performed directly by user in the running app; clippy skipped at user's request.",
+      "approvedAt": "2026-07-22T23:11:39.9525866Z"
     }
   ],
   "history": [
@@ -330,8 +344,48 @@
       "at": "2026-07-22T22:22:17.5831043Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-07-22T22:59:54.0647731Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to MR."
+    },
+    {
+      "at": "2026-07-22T23:00:18.7467979Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 6: game-core + game_core_demo: real Tiled ground-tile rendering"
+    },
+    {
+      "at": "2026-07-22T23:00:28.5211229Z",
+      "action": "approve",
+      "detail": "Approved split during SPLIT."
+    },
+    {
+      "at": "2026-07-22T23:00:29.41407Z",
+      "action": "advance",
+      "detail": "Advanced from SPLIT to BRANCH."
+    },
+    {
+      "at": "2026-07-22T23:00:30.4158828Z",
+      "action": "advance",
+      "detail": "Advanced from BRANCH to BUILD."
+    },
+    {
+      "at": "2026-07-22T23:11:34.1037091Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-07-22T23:11:39.9557244Z",
+      "action": "approve",
+      "detail": "Approved verify during VERIFY."
+    },
+    {
+      "at": "2026-07-22T23:11:45.5453583Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-07-22T16:47:43.8462272Z",
-  "updatedAt": "2026-07-22T22:22:17.5890566Z"
+  "updatedAt": "2026-07-22T23:11:45.5508992Z"
 }

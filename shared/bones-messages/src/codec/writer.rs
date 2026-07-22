@@ -52,6 +52,16 @@ impl Writer {
         self.u16(len).bytes(v.as_bytes())
     }
 
+    /// Appends a `u32`-length-prefixed byte blob — `str`'s counterpart for
+    /// arbitrary (non-UTF-8) bytes: a message with more than one
+    /// variable-length byte field, where `read_rest` can't tell them apart,
+    /// or a single field too large for `str`'s `u16::MAX` limit (e.g. an
+    /// embedded image). Panics if `v` is longer than `u32::MAX` bytes.
+    pub fn blob(self, v: &[u8]) -> Self {
+        let len: u32 = v.len().try_into().expect("blob exceeds u32::MAX bytes");
+        self.u32(len).bytes(v)
+    }
+
     /// Returns the completed payload.
     pub fn finish(self) -> Vec<u8> {
         self.0

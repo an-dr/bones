@@ -454,6 +454,7 @@ fn load_tilemap_inserts_a_fixed_collider_per_collision_rect() {
     let mut game_core = GameCore::new();
     let load = LoadTilemap {
         tmx_bytes: FIXTURE_TMX,
+        tileset_images: Vec::new(),
     };
     game_core.handle(&envelope(LoadTilemap::TOPIC, load.encode()));
 
@@ -468,6 +469,7 @@ fn load_tilemap_publishes_a_visible_square_for_its_collider() {
     let (mut game_core, bus, spy) = ready_game_core();
     let load = LoadTilemap {
         tmx_bytes: FIXTURE_TMX,
+        tileset_images: Vec::new(),
     };
     game_core.handle(&envelope(LoadTilemap::TOPIC, load.encode()));
 
@@ -493,6 +495,7 @@ fn a_tilemap_collider_blocks_an_overlapping_dynamic_entity() {
     let mut game_core = GameCore::new();
     let load = LoadTilemap {
         tmx_bytes: FIXTURE_TMX,
+        tileset_images: Vec::new(),
     };
     game_core.handle(&envelope(LoadTilemap::TOPIC, load.encode()));
     // Overlaps the fixture's collider rect centered at (8, 8), half-extent 8.
@@ -1127,6 +1130,7 @@ fn a_tilemap_collider_never_publishes_a_collision_event() {
     let (mut game_core, bus, spy) = ready_game_core();
     let load = LoadTilemap {
         tmx_bytes: FIXTURE_TMX,
+        tileset_images: Vec::new(),
     };
     game_core.handle(&envelope(LoadTilemap::TOPIC, load.encode()));
     // Overlaps the fixture's collider rect centered at (8, 8), half-extent 8.

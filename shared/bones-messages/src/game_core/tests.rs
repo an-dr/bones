@@ -241,6 +241,27 @@ fn truncated_payload_is_rejected() {
 fn load_tilemap_round_trips() {
     let load = LoadTilemap {
         tmx_bytes: b"<map></map>",
+        tileset_images: Vec::new(),
+    };
+    assert_eq!(LoadTilemap::decode(&load.encode()), Ok(load));
+}
+
+#[test]
+fn load_tilemap_with_tileset_images_round_trips() {
+    let load = LoadTilemap {
+        tmx_bytes: b"<map></map>",
+        tileset_images: vec![
+            TilesetImage {
+                name: "grass",
+                sprite_id: 2,
+                png_bytes: b"not-really-a-png",
+            },
+            TilesetImage {
+                name: "bricks",
+                sprite_id: 3,
+                png_bytes: b"also-not-really-a-png",
+            },
+        ],
     };
     assert_eq!(LoadTilemap::decode(&load.encode()), Ok(load));
 }

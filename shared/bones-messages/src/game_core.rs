@@ -10,12 +10,14 @@ mod entity_op;
 mod entity_op_message;
 mod load_tilemap;
 mod physics_worlds;
+mod tileset_image;
 
 pub use collision::Collision;
 pub use entity_op::{BodyKind, EntityOp, Shape, Sprite};
 pub use entity_op_message::EntityOpMessage;
 pub use load_tilemap::LoadTilemap;
 pub use physics_worlds::PhysicsWorlds;
+pub use tileset_image::TilesetImage;
 
 #[cfg(test)]
 mod tests;

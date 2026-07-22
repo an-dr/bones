@@ -10,7 +10,7 @@ from adopting an external engine — see ADR-019's crate-sourcing rationale.
 | Entity/component store | `hecs` (chosen over `bevy_ecs`: no window/asset/App-plugin coupling, materially smaller dependency footprint standalone) |
 | Physics/collision | an internal backend-agnostic `PhysicsBackend` trait (ADR-021, ADR-022), implemented by `physics::Rapier2dBackend` (`rapier2d`) and `physics::RetroBackend` |
 | Math (vectors/transforms) | `glam` |
-| Tilemap data | `tiled` (parsing only — rendering stays `gfx/*`) |
+| Tilemap data | `tiled` (collision geometry and `"Ground"` tile-layer parsing; all drawing still goes out through `gfx/*`, same as every other entity) |
 | Sprite-animation timing | built directly — a frame-index-from-elapsed-time state machine |
 
 Renders by turning simulated state into `gfx/*` draw-command batches each
@@ -117,21 +117,37 @@ case.
   to that same position/velocity before the next tick. A sprite entity's
   animation only advances while its primary world's velocity is above a
   small threshold — an entity with no collider, or one at rest, freezes on
-  its current frame instead of animating in place. Then `gfx::Clear` +
-  `gfx::SetCamera` + one `gfx::DrawSprite`/`gfx::DrawRect` per entity are
-  published. The `Clear` matters: without it, the renderer's retained
-  batches never erase the previous frame, and the scene visibly smears.
-- `game-core/load-tilemap` — parses Tiled `.tmx` XML bytes; every rectangle
-  object on an object layer named `"Collision"` becomes a static (fixed)
-  collider, drawn as a plain square in a fixed color distinct from
-  `EntityOp::Spawn`'s caller-chosen `square_color` — an invisible tilemap
-  wall reads as a bug ("why can't I move here?"), not an intentional
-  obstacle. Any other layer (tile layers, other object layers) is
-  ignored — drawing the tilemap's own tiles is still a `gfx/*` concern,
-  out of this crate's scope; only its collision geometry gets a visual.
-  A map with no `"Collision"` layer loads fine and adds no colliders.
-  Stays its own topic rather than folding into `EntityOp`: a one-shot
-  asset load, not a per-entity operation.
+  its current frame instead of animating in place. Ground tiles (see
+  `game-core/load-tilemap` below) publish first, on layer `0`; then
+  `gfx::Clear` + `gfx::SetCamera` + one `gfx::DrawSprite`/`gfx::DrawRect`
+  per entity, all on layer `1`. The `Clear` matters: without it, the
+  renderer's retained batches never erase the previous frame, and the
+  scene visibly smears. A caller publishing its *own* layer-`0` background
+  (not from a `"Ground"` layer — this module's own tile draws already
+  cover that case) must republish it every tick if it ever publishes any
+  other `gfx/*` content itself: the renderer keeps exactly one retained
+  batch per sender, a full replace on every publish rather than a merge,
+  so a background published only once from a sender that *also* publishes
+  something else every tick gets wiped out by that same sender's next
+  publish (`core/renderer`'s own doc comment explains the per-sender
+  retained-batch mechanics this follows from).
+- `game-core/load-tilemap` — parses Tiled `.tmx` XML bytes (embedded
+  tilesets only — an externally-referenced `.tsx` or tileset image isn't
+  resolved, `tiles::load_tile_draws`'s own doc comment explains why).
+  Every rectangle object on an object layer named `"Collision"` becomes a
+  static (fixed) collider, drawn as a plain square in a fixed color
+  distinct from `EntityOp::Spawn`'s caller-chosen `square_color` — an
+  invisible tilemap wall reads as a bug ("why can't I move here?"), not an
+  intentional obstacle. A tile layer named `"Ground"` is parsed once here
+  and replayed as `gfx::DrawSprite` every tick after (`tick`'s own
+  documentation above), one per non-empty cell, resolved through
+  `LoadTilemap::tileset_images` — a `.tmx` tileset with no matching image
+  name there is parsed (its collision geometry, if any, still works) but
+  never drawn. Any other layer is ignored. A map with no `"Collision"`
+  layer, no `"Ground"` layer, or neither, loads fine and simply
+  contributes nothing for the part it's missing. Stays its own topic
+  rather than folding into `EntityOp`: a one-shot asset load, not a
+  per-entity operation.
 - `game-core/collision` — published whenever two `EntityOp::Spawn`-created
   colliders in the *same* physics world actually touch (worlds never
   interact, ADR-021 — a rapier2d-only entity and a retro-only entity can

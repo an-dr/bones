@@ -10,6 +10,7 @@ use bones::core::host_api::{log, publish, request_exit, subscribe, Level};
 use bones_messages::audio::{LoadSound, PlaySound};
 use bones_messages::game_core::{
     BodyKind, Collision, EntityOp, EntityOpMessage, LoadTilemap, PhysicsWorlds, Shape, Sprite,
+    TilesetImage,
 };
 use bones_messages::gfx::{DrawRect, DrawText, LoadSprite};
 use bones_messages::input::{GamepadAxis, KeyDown, KeyUp, MouseDown};
@@ -20,6 +21,22 @@ const SPRITE_PNG: &[u8] = include_bytes!("assets/robot_william.png");
 const SPRITE_ID: u32 = 1;
 // robot_william.png is a 256x64 strip of four 64x64 frames.
 const FRAME_SIZE: u32 = 64;
+
+// Ground tile art: "Pixel Art Top Down - Basic" (itch.io/Unity Asset
+// Store), the user's own asset pack from a sibling project - not
+// originated in this repo, license terms not verified here. Tile
+// placement itself lives in level.tmx's "Ground" layer (real Tiled data,
+// parsed and rendered by game-core via the `tiled` crate) — this
+// extension only supplies the tileset images and the sprite ids to
+// register them under, matched to the .tmx's embedded `<tileset name=...>`
+// by name.
+const TILESET_GRASS_PNG: &[u8] = include_bytes!("assets/tileset_grass.png");
+const TILESET_BRICKS_PNG: &[u8] = include_bytes!("assets/tileset_bricks.png");
+const GRASS_SPRITE_ID: u32 = 2;
+const BRICK_SPRITE_ID: u32 = 3;
+const GRASS_TILESET_NAME: &str = "grass";
+const BRICK_TILESET_NAME: &str = "bricks";
+
 const CONTROLLED_ENTITY_ID: u32 = 1;
 // Narrower than the sprite frame (64px) — the robot's actual body/screen
 // width, not its full drawn frame including empty margin either side.
@@ -37,6 +54,13 @@ const HAZARD_HALF_EXTENT: f32 = 20.0;
 const HAZARD_COLOR: (u8, u8, u8, u8) = (200, 60, 60, 255);
 const BIG_BOX_IDS: [u32; 4] = [2, 3, 4, 5];
 const SMALL_BOX_IDS: [u32; 2] = [6, 7];
+// level.tmx's walled interior sits at this offset from the map's own
+// origin (a 64px grass margin surrounds it on every side) — every spawn
+// coordinate below is the original design's coordinate (when the wall
+// sat directly at the map edge) plus this same offset, so the whole
+// layout shifted as one fixed unit rather than being redesigned.
+const LEVEL_ORIGIN_X: f32 = 64.0;
+const LEVEL_ORIGIN_Y: f32 = 64.0;
 const MOVE_SPEED: f32 = 120.0;
 // This demo's own dead zone: below this, stick drift (platform reports raw
 // axis values with no dead zone applied) shouldn't move the entity.
@@ -656,8 +680,25 @@ impl Guest for Component {
         };
         publish(LoadSprite::TOPIC, &load_sprite.encode());
 
+        // Tile placement (grass outside the wall, bricks inside) lives in
+        // level.tmx's own "Ground" layer, real Tiled data — game-core
+        // parses and renders it (see its own doc comment on load_tilemap)
+        // via the `tiled` crate, matching each embedded `<tileset name=...>`
+        // to the image bytes supplied here by name.
         let load_tilemap = LoadTilemap {
             tmx_bytes: LEVEL_TMX,
+            tileset_images: vec![
+                TilesetImage {
+                    name: GRASS_TILESET_NAME,
+                    sprite_id: GRASS_SPRITE_ID,
+                    png_bytes: TILESET_GRASS_PNG,
+                },
+                TilesetImage {
+                    name: BRICK_TILESET_NAME,
+                    sprite_id: BRICK_SPRITE_ID,
+                    png_bytes: TILESET_BRICKS_PNG,
+                },
+            ],
         };
         publish(LoadTilemap::TOPIC, &load_tilemap.encode());
 
@@ -696,8 +737,8 @@ impl Guest for Component {
         // tick.
         publish_entity_op(EntityOp::Spawn {
             entity_id: CONTROLLED_ENTITY_ID,
-            x: 60.0,
-            y: 60.0,
+            x: LEVEL_ORIGIN_X + 60.0,
+            y: LEVEL_ORIGIN_Y + 60.0,
             sprite: Some(Sprite {
                 sprite_id: SPRITE_ID,
                 frame_w: FRAME_SIZE,
@@ -719,22 +760,22 @@ impl Guest for Component {
         // the tilemap's entity-terrain collision. A hit between two of
         // these flashes white briefly and plays a sound; the robot hitting
         // one scores a point (see on_message's Collision handling).
-        spawn_big_box(2, 350.0, 60.0);
-        spawn_big_box(3, 350.0, 160.0);
-        spawn_big_box(4, 350.0, 260.0);
-        spawn_big_box(5, 120.0, 260.0);
+        spawn_big_box(2, LEVEL_ORIGIN_X + 350.0, LEVEL_ORIGIN_Y + 60.0);
+        spawn_big_box(3, LEVEL_ORIGIN_X + 350.0, LEVEL_ORIGIN_Y + 160.0);
+        spawn_big_box(4, LEVEL_ORIGIN_X + 350.0, LEVEL_ORIGIN_Y + 260.0);
+        spawn_big_box(5, LEVEL_ORIGIN_X + 120.0, LEVEL_ORIGIN_Y + 260.0);
 
         // Two blue Frictionless squares: pushable, but carry no momentum —
         // pushing the robot into one moves it, but it stops the instant
         // contact ends, unlike the purple Dynamic big boxes above.
-        spawn_small_box(6, 220.0, 60.0);
-        spawn_small_box(7, 220.0, 260.0);
+        spawn_small_box(6, LEVEL_ORIGIN_X + 220.0, LEVEL_ORIGIN_Y + 60.0);
+        spawn_small_box(7, LEVEL_ORIGIN_X + 220.0, LEVEL_ORIGIN_Y + 260.0);
 
         // Two stationary red hazard triangles — the robot loses life on
         // contact (see on_message's Collision handling). Positioned clear
         // of every other spawn above.
-        spawn_hazard(8, 60.0, 160.0);
-        spawn_hazard(9, 400.0, 200.0);
+        spawn_hazard(8, LEVEL_ORIGIN_X + 60.0, LEVEL_ORIGIN_Y + 160.0);
+        spawn_hazard(9, LEVEL_ORIGIN_X + 400.0, LEVEL_ORIGIN_Y + 200.0);
 
         STATE.with(|state| {
             let mut state = state.borrow_mut();
