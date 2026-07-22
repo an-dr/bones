@@ -5,6 +5,7 @@
 //! it.
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -151,6 +152,7 @@ impl Engine {
         let bus = bus::Bus::new();
         let registry = Registry::new();
         let wasm_engine = wasm_extensions::host::new_engine()?;
+        let exit_requested = Arc::new(AtomicBool::new(false));
 
         let mut platform = match window {
             Some((title, width, height)) => {
@@ -252,7 +254,15 @@ impl Engine {
                     );
                     continue;
                 }
-                match attach_extension(&wasm_engine, &bus, &registry, &self.logger, &path, &name) {
+                match attach_extension(
+                    &wasm_engine,
+                    &bus,
+                    &registry,
+                    &self.logger,
+                    &path,
+                    &name,
+                    &exit_requested,
+                ) {
                     Ok((ep, shared, topics)) => {
                         self.logger.info(
                             "engine",
@@ -288,6 +298,7 @@ impl Engine {
             registry,
             self.logger.clone(),
             tracked,
+            exit_requested.clone(),
         );
 
         if let Some(platform) = &mut platform {
@@ -301,6 +312,7 @@ impl Engine {
             ui,
             modules,
             supervisor,
+            exit_requested,
         })
     }
 
@@ -320,6 +332,7 @@ impl Engine {
             ui,
             modules,
             mut supervisor,
+            exit_requested,
         } = self.build()?;
 
         let mut last = std::time::Instant::now() - period;
@@ -340,6 +353,13 @@ impl Engine {
                 if platform.quit_requested() {
                     break;
                 }
+            }
+            // Same minimal-shutdown-slice stance as quit_requested() above,
+            // just extension-triggered instead of OS-triggered: an
+            // extension's own `request-exit` host-api call, not the full
+            // shutdown sequence.
+            if exit_requested.load(Ordering::Relaxed) {
+                break;
             }
 
             supervisor.check();

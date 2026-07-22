@@ -4,6 +4,9 @@
 //! Build the extension first: pwsh extensions/hello/build.ps1
 //! Then: cargo run -p wasm-extensions --example hello_extension
 
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
+
 use bones_messages::tick::Tick;
 use bones_messages::{EncodeMessage, Message};
 use bus::{Bus, Envelope, Registry};
@@ -37,6 +40,7 @@ fn main() -> wasmtime::Result<()> {
         bus.clone(),
         Registry::new(),
         Logger::default(),
+        Arc::new(AtomicBool::new(false)),
     )?;
     let topics = hello.requested_topics();
     let ep = bus.register("hello", hello);

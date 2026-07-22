@@ -17,6 +17,11 @@ interface host-api {
     subscribe: func(topic: string);
     publish: func(topic: string, payload: list<u8>);
     send: func(endpoint: string, payload: list<u8>) -> result<list<u8>, send-error>;
+    // A clean, one-way request to close the running app — not the full
+    // shutdown sequence (design/platform.md: no shutdown() call back to
+    // extensions, no close-request event other extensions can react to).
+    // The host obeys after this call returns; there is no confirmation.
+    request-exit: func();
 }
 
 world extension {

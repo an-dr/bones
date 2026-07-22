@@ -6,14 +6,14 @@ wit_bindgen::generate!({
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use bones::core::host_api::{log, publish, subscribe, Level};
+use bones::core::host_api::{log, publish, request_exit, subscribe, Level};
 use bones_messages::audio::{LoadSound, PlaySound};
 use bones_messages::game_core::{
     BodyKind, Collision, EntityOp, EntityOpMessage, LoadTilemap, PhysicsWorlds, Shape, Sprite,
 };
 use bones_messages::gfx::LoadSprite;
 use bones_messages::input::{GamepadAxis, KeyDown, KeyUp};
-use bones_messages::ui::{Spec, Widget};
+use bones_messages::ui::{Clicked, Spec, Widget};
 use bones_messages::{DecodeMessage, EncodeMessage, Message};
 
 const LEVEL_TMX: &[u8] = include_bytes!("assets/level.tmx");
@@ -36,6 +36,8 @@ const SMALL_BOX_HALF_EXTENT: f32 = 16.0;
 const SMALL_BOX_COLOR: (u8, u8, u8, u8) = (60, 120, 220, 255);
 const HAZARD_HALF_EXTENT: f32 = 20.0;
 const HAZARD_COLOR: (u8, u8, u8, u8) = (200, 60, 60, 255);
+const BIG_BOX_IDS: [u32; 4] = [2, 3, 4, 5];
+const SMALL_BOX_IDS: [u32; 2] = [6, 7];
 const MOVE_SPEED: f32 = 120.0;
 // This demo's own dead zone: below this, stick drift (platform reports raw
 // axis values with no dead zone applied) shouldn't move the entity.
@@ -90,6 +92,50 @@ fn deadzone(value: f32) -> f32 {
     }
 }
 
+/// The in-game pause menu Esc opens/closes. `Settings` has its own Back
+/// button to return to `Main` — Esc always toggles `Closed` <-> whatever
+/// it currently is, not step-by-step through `Settings` first.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+enum MenuState {
+    #[default]
+    Closed,
+    Main,
+    Settings,
+}
+
+const BUTTON_SETTINGS: u32 = 1;
+const BUTTON_EXIT: u32 = 2;
+const BUTTON_BACK: u32 = 3;
+// Presets start well clear of the fixed ids above; big-box and small-box
+// ranges are spaced far enough apart (10 ids each) that neither preset
+// list could ever grow into the other's range unnoticed.
+const BUTTON_BIG_BOX_PRESET_BASE: u32 = 10;
+const BUTTON_SMALL_BOX_PRESET_BASE: u32 = 20;
+
+type Preset = (&'static str, (u8, u8, u8, u8));
+
+// Warm, excluding red: red is the hazard triangles' color, so a big box
+// staying warm-but-not-red never reads as a hazard.
+const BIG_BOX_PRESETS: [Preset; 3] = [
+    ("Orange", (255, 140, 0, 255)),
+    ("Yellow", (230, 200, 30, 255)),
+    ("Pink", (230, 60, 140, 255)),
+];
+// Cold.
+const SMALL_BOX_PRESETS: [Preset; 3] = [
+    ("Cyan", (40, 200, 200, 255)),
+    ("Teal", (30, 150, 120, 255)),
+    ("Indigo", (90, 60, 200, 255)),
+];
+
+/// `id`'s preset color within `presets`, addressed starting at `base` (one
+/// button id per preset, in array order) — `None` if `id` doesn't fall in
+/// that range at all.
+fn preset_color(id: u32, base: u32, presets: &[Preset]) -> Option<(u8, u8, u8, u8)> {
+    let index = id.checked_sub(base)? as usize;
+    presets.get(index).map(|&(_, color)| color)
+}
+
 // `State` stays with `Component` rather than splitting further: it's purely
 // this extension's own thread-local store, never constructed or named
 // outside this file, never meaningful on its own.
@@ -102,8 +148,8 @@ struct State {
     footstep_cooldown: f32,
     // Big box/hazard entity_id -> seconds remaining before its flash
     // reverts (never the controlled sprite, which has no SquareColor to
-    // flash). Reverts to `BIG_BOX_COLOR` or `HAZARD_COLOR` depending on
-    // which kind of entity it names — see `revert_color`.
+    // flash). Reverts to the live `big_box_color` or `HAZARD_COLOR`
+    // depending on which kind of entity it names — see `revert_color`.
     flashing: HashMap<u32, f32>,
     // Local mirror of game-core's own EntityOp::SetDebugHitboxes toggle —
     // tracked here (rather than reading it back) so pressing H can flip
@@ -112,6 +158,14 @@ struct State {
     score: u32,
     // Starts at FULL_LIFE (see init); never below zero.
     life: u32,
+    menu: MenuState,
+    // Live current color for every big/small box, changed by a Settings
+    // preset click and applied to every existing entity of that kind at
+    // once. Starts at BIG_BOX_COLOR/SMALL_BOX_COLOR (see init) — not
+    // derivable from Default, so those two constants stay the source of
+    // truth for the initial appearance.
+    big_box_color: (u8, u8, u8, u8),
+    small_box_color: (u8, u8, u8, u8),
 }
 
 const FULL_LIFE: u32 = 3;
@@ -226,27 +280,108 @@ fn spawn_hazard(entity_id: u32, x: f32, y: f32) {
     });
 }
 
-/// Publishes this tick's HUD panel (ADR-005: a full `ui/spec` every frame
-/// the extension wants it visible, no retained state to fall back on) —
-/// two plain labels, no interaction, so `on_message` never needs to
-/// handle `ui/clicked`/`ui/changed` for it. `ui/spec` carries no window-
-/// position field, so this panel's placement is whatever egui's own
-/// default window layout picks; the demo does not attempt to steer it
-/// clear of the play area.
-fn publish_hud(score: u32, life: u32) {
+/// Publishes this tick's single UI panel (ADR-005: a full `ui/spec` every
+/// frame the extension wants it visible, no retained state to fall back
+/// on) — one window, not two: `ui`'s `pending` map is keyed by sender, so
+/// a second `ui/spec` from this same extension in the same tick would
+/// silently replace the first rather than stack with it. Always shows the
+/// score/life labels; the menu/settings widgets append below them only
+/// while `menu` isn't `Closed`. `ui/spec` carries no window-position
+/// field, so this panel's placement is whatever egui's own default window
+/// layout picks; the demo does not attempt to steer it clear of the play
+/// area.
+fn publish_ui(score: u32, life: u32, menu: MenuState) {
     let score_text = format!("Score: {score}");
     let life_text = format!("Life: {life}");
+    let mut widgets = vec![
+        Widget::Label { text: &score_text },
+        Widget::Label { text: &life_text },
+    ];
+    match menu {
+        MenuState::Closed => {}
+        MenuState::Main => {
+            widgets.push(Widget::Label {
+                text: "-- Paused (Esc to resume) --",
+            });
+            widgets.push(Widget::Button {
+                id: BUTTON_SETTINGS,
+                label: "Settings",
+            });
+            widgets.push(Widget::Button {
+                id: BUTTON_EXIT,
+                label: "Exit",
+            });
+        }
+        MenuState::Settings => {
+            widgets.push(Widget::Label {
+                text: "-- Settings --",
+            });
+            widgets.push(Widget::Label {
+                text: "Big box color:",
+            });
+            for (index, &(name, _)) in BIG_BOX_PRESETS.iter().enumerate() {
+                widgets.push(Widget::Button {
+                    id: BUTTON_BIG_BOX_PRESET_BASE + index as u32,
+                    label: name,
+                });
+            }
+            widgets.push(Widget::Label {
+                text: "Small box color:",
+            });
+            for (index, &(name, _)) in SMALL_BOX_PRESETS.iter().enumerate() {
+                widgets.push(Widget::Button {
+                    id: BUTTON_SMALL_BOX_PRESET_BASE + index as u32,
+                    label: name,
+                });
+            }
+            widgets.push(Widget::Button {
+                id: BUTTON_BACK,
+                label: "Back",
+            });
+        }
+    }
     publish(
         Spec::TOPIC,
         &Spec {
             title: "HUD",
-            widgets: vec![
-                Widget::Label { text: &score_text },
-                Widget::Label { text: &life_text },
-            ],
+            widgets,
         }
         .encode(),
     );
+}
+
+/// Esc toggles `Closed` <-> whatever the menu currently is — `Settings`
+/// has its own Back button to step down to `Main` instead, so Esc only
+/// ever fully opens or fully closes.
+fn toggle_menu() {
+    STATE.with(|state| {
+        let mut state = state.borrow_mut();
+        state.menu = if state.menu == MenuState::Closed {
+            MenuState::Main
+        } else {
+            MenuState::Closed
+        };
+    });
+}
+
+fn on_button_clicked(id: u32) {
+    if id == BUTTON_SETTINGS {
+        STATE.with(|state| state.borrow_mut().menu = MenuState::Settings);
+    } else if id == BUTTON_EXIT {
+        request_exit();
+    } else if id == BUTTON_BACK {
+        STATE.with(|state| state.borrow_mut().menu = MenuState::Main);
+    } else if let Some(color) = preset_color(id, BUTTON_BIG_BOX_PRESET_BASE, &BIG_BOX_PRESETS) {
+        STATE.with(|state| state.borrow_mut().big_box_color = color);
+        for entity_id in BIG_BOX_IDS {
+            publish_entity_op(EntityOp::SetColor { entity_id, color });
+        }
+    } else if let Some(color) = preset_color(id, BUTTON_SMALL_BOX_PRESET_BASE, &SMALL_BOX_PRESETS) {
+        STATE.with(|state| state.borrow_mut().small_box_color = color);
+        for entity_id in SMALL_BOX_IDS {
+            publish_entity_op(EntityOp::SetColor { entity_id, color });
+        }
+    }
 }
 
 struct Component;
@@ -257,6 +392,7 @@ impl Guest for Component {
         subscribe(KeyUp::TOPIC);
         subscribe(GamepadAxis::TOPIC);
         subscribe(Collision::TOPIC);
+        subscribe(Clicked::TOPIC);
         subscribe("core/tick");
 
         let load_sprite = LoadSprite {
@@ -345,16 +481,31 @@ impl Guest for Component {
         spawn_hazard(8, 60.0, 160.0);
         spawn_hazard(9, 400.0, 200.0);
 
-        STATE.with(|state| state.borrow_mut().life = FULL_LIFE);
+        STATE.with(|state| {
+            let mut state = state.borrow_mut();
+            state.life = FULL_LIFE;
+            state.big_box_color = BIG_BOX_COLOR;
+            state.small_box_color = SMALL_BOX_COLOR;
+        });
 
         log(
             Level::Info,
-            "init: tilemap + sprite loaded; WASD/gamepad-left-stick moves the entity into big/small boxes and hazards; H toggles hitbox outlines",
+            "init: tilemap + sprite loaded; WASD/gamepad-left-stick moves the entity into big/small boxes and hazards; H toggles hitbox outlines, Esc opens the menu",
         );
     }
 
     fn on_tick(dt: f32) {
-        let (vx, vy) = STATE.with(|state| state.borrow().held.velocity());
+        // Held input is ignored entirely while the menu is open — the
+        // robot stops rather than keeps moving under the last commanded
+        // velocity while the player is looking at a menu.
+        let (vx, vy) = STATE.with(|state| {
+            let state = state.borrow();
+            if state.menu == MenuState::Closed {
+                state.held.velocity()
+            } else {
+                (0.0, 0.0)
+            }
+        });
         publish_entity_op(EntityOp::SetVelocity {
             entity_id: CONTROLLED_ENTITY_ID,
             vx,
@@ -386,7 +537,11 @@ impl Guest for Component {
             }
 
             // Hit-flash countdown: revert any big box/hazard whose flash
-            // timer has expired back to its normal color.
+            // timer has expired back to its normal color. Reads the *live*
+            // big-box color (a Settings preset click may have changed it
+            // since the flash started), not the original BIG_BOX_COLOR
+            // constant.
+            let big_box_color = state.big_box_color;
             state.flashing.retain(|&entity_id, remaining| {
                 *remaining -= dt;
                 if *remaining > 0.0 {
@@ -394,28 +549,28 @@ impl Guest for Component {
                 } else {
                     publish_entity_op(EntityOp::SetColor {
                         entity_id,
-                        color: revert_color(entity_id),
+                        color: revert_color(entity_id, big_box_color),
                     });
                     false
                 }
             });
         });
 
-        let (score, life) = STATE.with(|state| {
+        let (score, life, menu) = STATE.with(|state| {
             let state = state.borrow();
-            (state.score, state.life)
+            (state.score, state.life, state.menu)
         });
-        publish_hud(score, life);
+        publish_ui(score, life, menu);
     }
 
     fn on_message(topic: String, _sender: String, payload: Vec<u8>) -> Option<Vec<u8>> {
         match topic.as_str() {
             KeyDown::TOPIC => {
                 if let Ok(message) = KeyDown::decode(&payload) {
-                    if message.key == "H" {
-                        toggle_debug_hitboxes();
-                    } else {
-                        set_key_held(message.key, true);
+                    match message.key {
+                        "H" => toggle_debug_hitboxes(),
+                        "Escape" => toggle_menu(),
+                        _ => set_key_held(message.key, true),
                     }
                 }
             }
@@ -441,6 +596,11 @@ impl Guest for Component {
                     on_collision(message);
                 }
             }
+            Clicked::TOPIC => {
+                if let Ok(message) = Clicked::decode(&payload) {
+                    on_button_clicked(message.id);
+                }
+            }
             _ => {}
         }
         None
@@ -459,12 +619,14 @@ fn is_hazard(entity_id: u32) -> bool {
 
 /// The color a flashed entity reverts to once its flash timer expires —
 /// only ever called with a big-box or hazard id (the only entities
-/// `on_collision` ever flashes).
-fn revert_color(entity_id: u32) -> (u8, u8, u8, u8) {
+/// `on_collision` ever flashes). `big_box_color` is the *current* live
+/// color (a Settings preset click may have changed it since the flash
+/// started), not necessarily the original `BIG_BOX_COLOR` constant.
+fn revert_color(entity_id: u32, big_box_color: (u8, u8, u8, u8)) -> (u8, u8, u8, u8) {
     if is_hazard(entity_id) {
         HAZARD_COLOR
     } else {
-        BIG_BOX_COLOR
+        big_box_color
     }
 }
 

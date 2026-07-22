@@ -11,8 +11,8 @@
     "done": "Robot hitbox is visibly narrower than its sprite frame; HUD shows live life and score, score increments on purple-box collision, life decrements on red-triangle collision; Esc opens/closes an in-game menu with Settings and Exit entries; Settings lets the user pick big-box color (warm/non-red presets) and small-box color (cold presets) with changes applying live; Exit cleanly closes the running app; new engine surface (exit request, triangle shape) has tests and updated docs (ADR if it's a lasting architectural call).",
     "outOfScope": "The full roadmap shutdown sequence (per-extension shutdown() lifecycle, Stopped event, close-request pub/sub event) - only a minimal-but-clean extension-exit path; retro-world collider support for triangles unless DESIGN finds it's actually needed (obstacles are RAPIER2D-only today); the old PROGRESS.md's leftover solver-stiffness/velocity-clamp tuning items (unrelated, already-stale prior workflow); a real color-picker widget type (stick to preset buttons)."
   },
-  "currentIncrementId": "3484bd16a8ca4f8fb3a8e81ea35ee1bc",
-  "commitBaseline": "8e7940b19a1d04f58a3d1874f4e2234380b91d25",
+  "currentIncrementId": "da6095937f94452fa98f49a3fb94ef5a",
+  "commitBaseline": "d80fab8d192e38ebaed1c37af0639e393383b022",
   "increments": [
     {
       "id": "33c280ba03264f269efe614b7eb478eb",
@@ -24,14 +24,14 @@
     {
       "id": "3484bd16a8ca4f8fb3a8e81ea35ee1bc",
       "number": 2,
-      "status": "verified",
+      "status": "completed",
       "scope": "game_core_demo: HUD",
       "description": "Publishes a ui/spec Spec every tick with Label widgets showing current life and score, always visible, positioned so it doesn't overlap the play area."
     },
     {
       "id": "da6095937f94452fa98f49a3fb94ef5a",
       "number": 3,
-      "status": "planned",
+      "status": "verified",
       "scope": "core + game_core_demo: pause menu, settings, exit",
       "description": "wit/core.wit gains request-exit: func(); core/wasm-extensions/src/host.rs implements it against a shared Arc<AtomicBool>, threaded through loading.rs/supervisor.rs Host::load call sites; core/runner/src/engine/builder.rs's run loop checks it alongside platform.quit_requested() to break cleanly. game_core_demo then uses it: Esc toggles a menu state (Closed/Main/Settings) in extension state; while open, robot velocity is forced to zero regardless of held input; Main shows Button widgets Settings/Exit; Settings shows preset-color Buttons for big-box (warm, non-red) and small-box (cold) colors, applied live via EntityOp::SetColor to every existing entity of that kind, plus a Back button; Exit calls the new request-exit host-api function. Unit/integration test: calling request-exit from a test extension causes Engine::run to return. Docs: design/platform.md shutdown section gets a short note distinguishing this from the still-open full shutdown sequence."
     }
@@ -71,6 +71,13 @@
       "incrementId": "3484bd16a8ca4f8fb3a8e81ea35ee1bc",
       "note": "Self-verified: extension builds and clippy-checks clean for wasm32-wasip2. HUD uses the already-tested ui::Spec/Widget wire format (bones-messages tests already cover Spec/Widget round-tripping) - no new engine surface, so no new engine-level tests needed. User asked to defer individual per-increment verification and check all 3 increments together at the end.",
       "approvedAt": "2026-07-22T21:31:16.8777524Z"
+    },
+    {
+      "gate": "verify",
+      "phase": "VERIFY",
+      "incrementId": "da6095937f94452fa98f49a3fb94ef5a",
+      "note": "Self-verified: full workspace test suite (145 tests incl. new request_exit_sets_the_shared_flag) + clippy clean, wasm32-wasip2 build clean, code-review skill run (0 critical/high findings, 1 improvement note about an untested live-behavior edge case - Esc reaching the extension while Settings buttons are shown). Packaged app launches, subscribes to ui/clicked as expected, and runs error-free. User explicitly asked to defer individual per-increment verification and check all 3 increments together at the end.",
+      "approvedAt": "2026-07-22T21:46:43.451687Z"
     }
   ],
   "history": [
@@ -183,8 +190,28 @@
       "at": "2026-07-22T21:31:17.7672496Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-07-22T21:46:08.9560536Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to BUILD."
+    },
+    {
+      "at": "2026-07-22T21:46:42.6990744Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-07-22T21:46:43.4545253Z",
+      "action": "approve",
+      "detail": "Approved verify during VERIFY."
+    },
+    {
+      "at": "2026-07-22T21:46:44.3172193Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-07-22T16:47:43.8462272Z",
-  "updatedAt": "2026-07-22T21:31:17.7734578Z"
+  "updatedAt": "2026-07-22T21:46:44.3224724Z"
 }

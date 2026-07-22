@@ -6,7 +6,7 @@
 //! `init` (messaging.md).
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use bones_messages::tick::Tick;
@@ -80,6 +80,10 @@ struct State {
     wasi: wasmtime_wasi::WasiCtx,
     table: wasmtime_wasi::ResourceTable,
     requested_topics: Vec<String>,
+    /// Shared with whoever runs the engine's own loop (`runner::Engine::run`)
+    /// — set here, read there. Not `Host`'s to act on: closing the app is
+    /// the run loop's job, this only signals the request.
+    exit_requested: Arc<AtomicBool>,
 }
 
 impl HostApiImports for State {
@@ -111,6 +115,10 @@ impl HostApiImports for State {
             .call(&self.name, &endpoint, &payload)
             .map_err(map_send_error)
     }
+
+    fn request_exit(&mut self) {
+        self.exit_requested.store(true, Ordering::Relaxed);
+    }
 }
 
 // wasm32-wasip2 components always import some WASI Preview 2 interfaces
@@ -140,13 +148,14 @@ pub struct Host {
 }
 
 impl Host {
-    /// Loads `wasm_path`, links the `log`/`subscribe`/`publish`/`send`
-    /// imports, and calls `init` once — under the same time budget as any
-    /// other call, so a hanging `init` faults instead of blocking `load`
-    /// forever. `name` is this extension's bus endpoint id — the `sender`
-    /// on envelopes it publishes and the name `send` (ADR-010) reaches it
-    /// by; `bus` is what `publish` reaches, `registry` is what `send`
-    /// reaches.
+    /// Loads `wasm_path`, links the `log`/`subscribe`/`publish`/`send`/
+    /// `request-exit` imports, and calls `init` once — under the same time
+    /// budget as any other call, so a hanging `init` faults instead of
+    /// blocking `load` forever. `name` is this extension's bus endpoint id
+    /// — the `sender` on envelopes it publishes and the name `send`
+    /// (ADR-010) reaches it by; `bus` is what `publish` reaches, `registry`
+    /// is what `send` reaches, `exit_requested` is what `request-exit` sets
+    /// (the caller's own clone is how it later reads that request).
     pub fn load(
         engine: &Engine,
         wasm_path: &str,
@@ -154,6 +163,7 @@ impl Host {
         bus: Bus,
         registry: Registry,
         logger: Logger,
+        exit_requested: Arc<AtomicBool>,
     ) -> wasmtime::Result<Self> {
         let component = Component::from_file(engine, wasm_path)?;
         let mut linker = Linker::new(engine);
@@ -170,6 +180,7 @@ impl Host {
                 wasi: wasmtime_wasi::WasiCtxBuilder::new().build(),
                 table: wasmtime_wasi::ResourceTable::new(),
                 requested_topics: Vec::new(),
+                exit_requested,
             },
         );
         // Epoch interruption traps immediately on any check once enabled

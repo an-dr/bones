@@ -6,6 +6,7 @@
 mod shared_host;
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
@@ -20,7 +21,9 @@ pub(crate) const ENGINE_SENDER: &str = "engine";
 
 /// Loads `path` as an extension named `name`, registers it on `bus`
 /// (pub/sub) and `registry` (direct send, ADR-010), and subscribes it to
-/// whatever topics it requested via `subscribe` during `init`.
+/// whatever topics it requested via `subscribe` during `init`. `exit_requested`
+/// is shared with every extension this way — any one of them calling
+/// `request-exit` sets the same flag the caller's own run loop reads.
 pub(crate) fn attach_extension(
     wasm_engine: &wasmtime::Engine,
     bus: &Bus,
@@ -28,6 +31,7 @@ pub(crate) fn attach_extension(
     logger: &Logger,
     path: &Path,
     name: &str,
+    exit_requested: &Arc<AtomicBool>,
 ) -> wasmtime::Result<(Endpoint, SharedHost, Vec<String>)> {
     let mut extension = Host::load(
         wasm_engine,
@@ -36,6 +40,7 @@ pub(crate) fn attach_extension(
         bus.clone(),
         registry.clone(),
         logger.clone(),
+        exit_requested.clone(),
     )?;
     let topics = extension.requested_topics();
     let shared = SharedHost(Arc::new(Mutex::new(extension)));
