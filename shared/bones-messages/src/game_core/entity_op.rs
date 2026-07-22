@@ -120,6 +120,17 @@ pub enum EntityOp {
     /// visible sprite/square lines up with what it actually collides as.
     /// Not addressed by `entity_id`: applies to the whole simulation.
     SetDebugHitboxes { enabled: bool },
+    /// Globally freezes the simulation while `paused` is `true`: neither
+    /// physics world steps, no contact-clamping or multi-world position
+    /// resolution runs, and no `game-core/collision` event can fire — every
+    /// entity holds exactly the position/velocity it had on the last
+    /// unpaused tick, including one still settling from a recent push, not
+    /// just entities a caller happens to be driving with `SetVelocity`.
+    /// `gfx/*` is still published every tick regardless, so the frame stays
+    /// visible (frozen) rather than going stale or blank. Not addressed by
+    /// `entity_id`: applies to the whole simulation, the same as
+    /// `SetDebugHitboxes`.
+    SetPaused { paused: bool },
 }
 
 const TAG_SPAWN: u8 = 0;
@@ -127,6 +138,7 @@ const TAG_SET_VELOCITY: u8 = 1;
 const TAG_DESPAWN: u8 = 2;
 const TAG_SET_COLOR: u8 = 3;
 const TAG_SET_DEBUG_HITBOXES: u8 = 4;
+const TAG_SET_PAUSED: u8 = 5;
 
 impl EntityOp {
     pub(super) fn encode_into(&self, writer: Writer) -> Writer {
@@ -192,6 +204,9 @@ impl EntityOp {
             EntityOp::SetDebugHitboxes { enabled } => writer
                 .u8(TAG_SET_DEBUG_HITBOXES)
                 .u8(if *enabled { 1 } else { 0 }),
+            EntityOp::SetPaused { paused } => {
+                writer.u8(TAG_SET_PAUSED).u8(if *paused { 1 } else { 0 })
+            }
         }
     }
 
@@ -266,6 +281,9 @@ impl EntityOp {
             }
             TAG_SET_DEBUG_HITBOXES => Ok(EntityOp::SetDebugHitboxes {
                 enabled: reader.read_u8()? != 0,
+            }),
+            TAG_SET_PAUSED => Ok(EntityOp::SetPaused {
+                paused: reader.read_u8()? != 0,
             }),
             _ => Err(DecodeError::InvalidTag {
                 message: "game-core entity op",

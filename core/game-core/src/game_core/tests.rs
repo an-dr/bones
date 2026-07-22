@@ -708,6 +708,88 @@ fn disabling_debug_hitboxes_stops_the_outline() {
 }
 
 #[test]
+fn pausing_freezes_a_moving_entity_in_place() {
+    let mut game_core = GameCore::new();
+    game_core.handle(&entity_op_envelope(spawn_with_collider_and_id(
+        1, 0.0, 0.0, 1.0, 1.0,
+    )));
+    game_core.handle(&entity_op_envelope(EntityOp::SetVelocity {
+        entity_id: 1,
+        vx: 10.0,
+        vy: 0.0,
+    }));
+    game_core.handle(&entity_op_envelope(EntityOp::SetPaused { paused: true }));
+
+    for _ in 0..60 {
+        game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    }
+
+    let (_, transform) = game_core
+        .world
+        .query_mut::<&Transform>()
+        .into_iter()
+        .next()
+        .expect("the spawned entity should still exist");
+    assert_eq!(
+        *transform,
+        Transform { x: 0.0, y: 0.0 },
+        "a paused tick must not step physics at all, even for an entity under commanded velocity"
+    );
+}
+
+#[test]
+fn a_paused_tick_still_publishes_gfx() {
+    let (mut game_core, bus, spy) = ready_game_core();
+    game_core.handle(&entity_op_envelope(EntityOp::SetPaused { paused: true }));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    bus.dispatch();
+
+    let published = spy.0.lock().unwrap();
+    let clears = published
+        .iter()
+        .filter(|e| e.topic == gfx::Clear::TOPIC)
+        .count();
+    assert_eq!(
+        clears, 1,
+        "a paused tick should still redraw the frame, not go stale or blank"
+    );
+}
+
+#[test]
+fn unpausing_resumes_movement() {
+    let mut game_core = GameCore::new();
+    game_core.handle(&entity_op_envelope(spawn_with_collider_and_id(
+        1, 0.0, 0.0, 1.0, 1.0,
+    )));
+    game_core.handle(&entity_op_envelope(EntityOp::SetVelocity {
+        entity_id: 1,
+        vx: 10.0,
+        vy: 0.0,
+    }));
+    game_core.handle(&entity_op_envelope(EntityOp::SetPaused { paused: true }));
+    for _ in 0..30 {
+        game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    }
+    game_core.handle(&entity_op_envelope(EntityOp::SetPaused { paused: false }));
+    for _ in 0..30 {
+        game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    }
+
+    let (_, transform) = game_core
+        .world
+        .query_mut::<&Transform>()
+        .into_iter()
+        .next()
+        .expect("the spawned entity should still exist");
+    assert!(
+        transform.x > 0.0,
+        "unpausing should let physics step again, got x={}",
+        transform.x
+    );
+}
+
+#[test]
 fn a_module_with_no_bus_service_never_panics_on_tick() {
     // `GameCore::new()` directly, bypassing `init` — `bus` stays `None`,
     // exercising the same silent-no-op path a caller that skips `init`

@@ -69,6 +69,8 @@ pub struct GameCore {
     // Global toggle for `EntityOp::SetDebugHitboxes` — not per-entity, so
     // it lives here rather than as a component.
     debug_hitboxes: bool,
+    // Global toggle for `EntityOp::SetPaused` — see `tick`'s early return.
+    paused: bool,
 }
 
 impl GameCore {
@@ -81,6 +83,7 @@ impl GameCore {
             entities: HashMap::new(),
             entity_ids_by_collider: HashMap::new(),
             debug_hitboxes: false,
+            paused: false,
         }
     }
 
@@ -139,6 +142,7 @@ impl GameCore {
             EntityOp::Despawn { entity_id } => self.despawn(entity_id),
             EntityOp::SetColor { entity_id, color } => self.set_color(entity_id, color),
             EntityOp::SetDebugHitboxes { enabled } => self.debug_hitboxes = enabled,
+            EntityOp::SetPaused { paused } => self.paused = paused,
         }
     }
 
@@ -317,7 +321,18 @@ impl GameCore {
         }
     }
 
+    /// Runs one simulation step, then publishes the resulting frame. While
+    /// `paused` (`EntityOp::SetPaused`), skips straight to `publish_gfx`:
+    /// neither physics world steps, nothing settles or keeps drifting under
+    /// residual velocity, and no `game-core/collision` can fire — every
+    /// entity holds exactly its last-unpaused state. `publish_gfx` still
+    /// runs regardless, so the frame stays visible (frozen) instead of
+    /// going stale or blank.
     fn tick(&mut self, dt: f32) {
+        if self.paused {
+            self.publish_gfx();
+            return;
+        }
         self.rapier2d.step(dt);
         self.retro.step(dt);
         self.clamp_velocities_against_contacts();

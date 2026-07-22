@@ -101,6 +101,13 @@ case.
     entities, plain squares, and tilemap colliders alike — on top of
     each entity's normal draw. A debug aid for checking a visible
     sprite/square actually lines up with what it collides as.
+  - `SetPaused { paused }` — not addressed by `entity_id`: a global
+    freeze (default off). While `true`, `core/tick` skips physics
+    entirely — neither world steps, nothing settles or keeps drifting
+    under residual velocity, and no `game-core/collision` can fire —
+    every entity holds exactly its last-unpaused state. `gfx/*` still
+    publishes every tick regardless, so the frame stays visible (frozen)
+    rather than going stale or blank.
 - Every `core/tick`: both physics worlds step once each, in full,
   independently. A collider-bearing entity's `Transform` is then
   overwritten from its primary world's post-step position (retro before

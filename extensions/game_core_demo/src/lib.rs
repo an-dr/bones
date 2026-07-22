@@ -598,16 +598,25 @@ fn on_mouse_down(x: f32, y: f32) {
 
 /// Esc toggles `Closed` <-> whatever the menu currently is — `Settings`
 /// has its own Back button to step down to `Main` instead, so Esc only
-/// ever fully opens or fully closes.
+/// ever fully opens or fully closes. The only place `menu` transitions
+/// to/from `Closed`, so it's the only place that needs to publish
+/// `SetPaused` — every other menu transition (`Main` <-> `Settings`)
+/// leaves the game already paused. Pausing here (not just zeroing the
+/// robot's own commanded velocity, which on_tick already does) stops
+/// every entity, including one still settling from a recent push, on
+/// exactly the frame Esc was pressed instead of letting it keep drifting
+/// in the background while the menu is up.
 fn toggle_menu() {
-    STATE.with(|state| {
+    let paused = STATE.with(|state| {
         let mut state = state.borrow_mut();
         state.menu = if state.menu == MenuState::Closed {
             MenuState::Main
         } else {
             MenuState::Closed
         };
+        state.menu != MenuState::Closed
     });
+    publish_entity_op(EntityOp::SetPaused { paused });
 }
 
 fn on_button_clicked(id: u32) {
