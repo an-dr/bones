@@ -1,14 +1,14 @@
-use super::{PhysicsWorldKind, WorldBody};
+use super::{PhysicsWorldKind, Shape, WorldBody};
 
 /// Links an entity to its physics body in every world it's registered in
 /// (ADR-021: an entity may be in more than one) — the `hecs` component
 /// side of the physics integration, addressed through
 /// `physics::PhysicsBackend`'s opaque handles rather than any specific
-/// engine's types. `half_w`/`half_h` duplicate the box collider's own
-/// extent (rather than querying a backend for its shape at render time) —
-/// a `SquareColor` entity needs its size to draw, and this is the cheap
-/// place to keep it, shared across every world since a spawn request
-/// carries one extent for all of them.
+/// engine's types. `half_w`/`half_h`/`shape` duplicate the collider's own
+/// extent/shape (rather than querying a backend for it at render time) —
+/// a `SquareColor` entity needs its size and shape to draw, and this is
+/// the cheap place to keep it, shared across every world since a spawn
+/// request carries one extent/shape for all of them.
 // No `Eq`: `half_w`/`half_h` are `f32`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Collider {
@@ -17,6 +17,7 @@ pub struct Collider {
     pub bodies: Vec<WorldBody>,
     pub half_w: f32,
     pub half_h: f32,
+    pub shape: Shape,
 }
 
 impl Collider {

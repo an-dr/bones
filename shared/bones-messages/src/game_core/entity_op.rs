@@ -24,6 +24,22 @@ pub enum BodyKind {
     Frictionless,
 }
 
+/// The collider/visual shape a spawned entity's `square_color` draws and
+/// collides as (meaningless for a `sprite` entity, which is always drawn
+/// as its sprite frame regardless). `Rect` is every caller's behavior from
+/// before this field existed — an axis-aligned box at the collider's
+/// `half_w`/`half_h` extent. `Triangle` is an isoceles triangle inscribed
+/// in that same extent (apex centered on top, base along the bottom),
+/// collided against as a real triangle in the rapier2d world; the retro
+/// world has no non-rectangular collision concept, so it approximates a
+/// `Triangle` collider as its own `half_w`/`half_h` AABB bounding box.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Shape {
+    #[default]
+    Rect,
+    Triangle,
+}
+
 /// The drawable appearance of a spawned entity: either an animated sprite
 /// or a plain filled square at the collider's extent (obstacles, walls —
 /// anything that doesn't need art). Exactly one of these two shapes per
@@ -69,6 +85,9 @@ pub enum EntityOp {
         y: f32,
         sprite: Option<Sprite>,
         square_color: (u8, u8, u8, u8),
+        /// Only meaningful for a `square_color` entity (`sprite: None`) —
+        /// see `Shape`.
+        shape: Shape,
         collider_half_w: f32,
         collider_half_h: f32,
         body_kind: BodyKind,
@@ -118,6 +137,7 @@ impl EntityOp {
                 y,
                 sprite,
                 square_color,
+                shape,
                 collider_half_w,
                 collider_half_h,
                 body_kind,
@@ -140,6 +160,10 @@ impl EntityOp {
                     .u8(g)
                     .u8(b)
                     .u8(a)
+                    .u8(match shape {
+                        Shape::Rect => 0,
+                        Shape::Triangle => 1,
+                    })
                     .f32(*collider_half_w)
                     .f32(*collider_half_h)
                     .u8(match body_kind {
@@ -197,6 +221,10 @@ impl EntityOp {
                     reader.read_u8()?,
                     reader.read_u8()?,
                 );
+                let shape = match reader.read_u8()? {
+                    1 => Shape::Triangle,
+                    _ => Shape::Rect,
+                };
                 let collider_half_w = reader.read_f32()?;
                 let collider_half_h = reader.read_f32()?;
                 let body_kind = match reader.read_u8()? {
@@ -211,6 +239,7 @@ impl EntityOp {
                     y,
                     sprite,
                     square_color,
+                    shape,
                     collider_half_w,
                     collider_half_h,
                     body_kind,

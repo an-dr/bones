@@ -1,7 +1,8 @@
 use crate::{DecodeError, DecodeMessage, Message};
 
 use super::{
-    Clear, DrawCircle, DrawLine, DrawRect, DrawSprite, DrawText, LoadSprite, SetCamera,
+    Clear, DrawCircle, DrawLine, DrawRect, DrawSprite, DrawText, DrawTriangle, LoadSprite,
+    SetCamera,
 };
 
 /// Any currently supported `gfx/*` command, decoded by exact topic.
@@ -16,6 +17,7 @@ pub enum Command<'a> {
     DrawLine(DrawLine),
     DrawCircle(DrawCircle),
     DrawText(DrawText<'a>),
+    DrawTriangle(DrawTriangle),
 }
 
 impl<'a> Command<'a> {
@@ -39,6 +41,9 @@ impl<'a> Command<'a> {
                 DrawCircle::decode(payload).map(|value| Some(Self::DrawCircle(value)))
             }
             DrawText::TOPIC => DrawText::decode(payload).map(|value| Some(Self::DrawText(value))),
+            DrawTriangle::TOPIC => {
+                DrawTriangle::decode(payload).map(|value| Some(Self::DrawTriangle(value)))
+            }
             _ => Ok(None),
         }
     }

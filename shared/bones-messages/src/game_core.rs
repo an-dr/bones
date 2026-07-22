@@ -12,7 +12,7 @@ mod load_tilemap;
 mod physics_worlds;
 
 pub use collision::Collision;
-pub use entity_op::{BodyKind, EntityOp, Sprite};
+pub use entity_op::{BodyKind, EntityOp, Shape, Sprite};
 pub use entity_op_message::EntityOpMessage;
 pub use load_tilemap::LoadTilemap;
 pub use physics_worlds::PhysicsWorlds;

@@ -11,6 +11,7 @@ mod physics_backend;
 mod physics_world_kind;
 mod rapier2d_backend;
 mod retro_backend;
+mod shape;
 mod world_body;
 
 pub use body_handle::BodyHandle;
@@ -21,4 +22,5 @@ pub use physics_backend::PhysicsBackend;
 pub use physics_world_kind::PhysicsWorldKind;
 pub use rapier2d_backend::Rapier2dBackend;
 pub use retro_backend::RetroBackend;
+pub use shape::Shape;
 pub use world_body::WorldBody;

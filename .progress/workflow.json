@@ -1,0 +1,163 @@
+{
+  "schemaVersion": 1,
+  "flow": "Detailed",
+  "phase": "COMMIT",
+  "baseBranch": "main",
+  "baseCommit": "ac7d35f2e2ab20ed13235462ad476fa1d69a39ac",
+  "featureBranch": "feature/game-core-demo-hazards-hud-menu",
+  "requirements": {
+    "goal": "Improve game_core_demo (narrower robot hitbox; HUD showing life+score; Esc pause menu with Settings/Exit; Settings recolors big/small boxes) and add the engine capabilities the demo actually needs to support it (extension-triggerable clean exit; a new triangle hazard shape spanning physics+rendering), based on real gaps found while building the demo.",
+    "constraints": "Existing rapier2d/retro dual-world physics and entities stay as-is; former red obstacles become purple ('big boxes'), keep colliding-for-score behavior; blue movers ('small boxes') keep existing behavior; new red triangles are the life-cost hazard; Settings uses preset-color buttons only (no new picker widget) - big-box presets are warm colors excluding red, small-box presets are cold colors; Exit must cleanly close the whole running app, not just the menu - resolved cleanly, not as a minimal stopgap; robot hitbox narrows to ~32px wide (half_w 16).",
+    "done": "Robot hitbox is visibly narrower than its sprite frame; HUD shows live life and score, score increments on purple-box collision, life decrements on red-triangle collision; Esc opens/closes an in-game menu with Settings and Exit entries; Settings lets the user pick big-box color (warm/non-red presets) and small-box color (cold presets) with changes applying live; Exit cleanly closes the running app; new engine surface (exit request, triangle shape) has tests and updated docs (ADR if it's a lasting architectural call).",
+    "outOfScope": "The full roadmap shutdown sequence (per-extension shutdown() lifecycle, Stopped event, close-request pub/sub event) - only a minimal-but-clean extension-exit path; retro-world collider support for triangles unless DESIGN finds it's actually needed (obstacles are RAPIER2D-only today); the old PROGRESS.md's leftover solver-stiffness/velocity-clamp tuning items (unrelated, already-stale prior workflow); a real color-picker widget type (stick to preset buttons)."
+  },
+  "currentIncrementId": "33c280ba03264f269efe614b7eb478eb",
+  "commitBaseline": "ac7d35f2e2ab20ed13235462ad476fa1d69a39ac",
+  "increments": [
+    {
+      "id": "33c280ba03264f269efe614b7eb478eb",
+      "number": 1,
+      "status": "verified",
+      "scope": "game-core + gfx/renderer + game_core_demo: triangle hazard shape",
+      "description": "EntityOp::Spawn wire format gains a Shape { Rect, Triangle } field (encode/decode + tests); PhysicsBackend trait's spawn_body takes a Shape instead of only half-extents; Rapier2dBackend builds ColliderBuilder::new(SharedShape::triangle(...)) for Shape::Triangle (isoceles inscribed in half_w/half_h); RetroBackend treats any Shape as its own AABB bounding box (documented limitation - triangles never route to the retro world in this plan); Collider component carries the shape. New gfx::DrawTriangle command (three vertices + color + filled + layer); core/renderer draws it via the existing render_geometry triangle-mesh path (ui_mesh.rs's approach), not fill_rect; game-core's publish_gfx publishes DrawTriangle for Shape::Triangle entities instead of DrawRect. game_core_demo then uses all of this: robot hitbox narrows to half_w 16 (~32px); existing red obstacles recolor to purple ('big boxes', unchanged Dynamic/RAPIER2D behavior, still the score trigger); new red Shape::Triangle hazard entities (stationary, RAPIER2D world) cost life on robot collision; extension-local life/score counters wired off Collision events (purple-box collision -> score++, triangle collision -> life--). Unit tests: a robot driven into a stationary rapier2d triangle stops/collides; existing rect behavior unchanged; a Shape::Triangle entity's published draw command carries triangle vertices matching its collider extent."
+    },
+    {
+      "id": "3484bd16a8ca4f8fb3a8e81ea35ee1bc",
+      "number": 2,
+      "status": "planned",
+      "scope": "game_core_demo: HUD",
+      "description": "Publishes a ui/spec Spec every tick with Label widgets showing current life and score, always visible, positioned so it doesn't overlap the play area."
+    },
+    {
+      "id": "da6095937f94452fa98f49a3fb94ef5a",
+      "number": 3,
+      "status": "planned",
+      "scope": "core + game_core_demo: pause menu, settings, exit",
+      "description": "wit/core.wit gains request-exit: func(); core/wasm-extensions/src/host.rs implements it against a shared Arc<AtomicBool>, threaded through loading.rs/supervisor.rs Host::load call sites; core/runner/src/engine/builder.rs's run loop checks it alongside platform.quit_requested() to break cleanly. game_core_demo then uses it: Esc toggles a menu state (Closed/Main/Settings) in extension state; while open, robot velocity is forced to zero regardless of held input; Main shows Button widgets Settings/Exit; Settings shows preset-color Buttons for big-box (warm, non-red) and small-box (cold) colors, applied live via EntityOp::SetColor to every existing entity of that kind, plus a Back button; Exit calls the new request-exit host-api function. Unit/integration test: calling request-exit from a test extension causes Engine::run to return. Docs: design/platform.md shutdown section gets a short note distinguishing this from the still-open full shutdown sequence."
+    }
+  ],
+  "approvals": [
+    {
+      "gate": "requirements",
+      "phase": "START",
+      "incrementId": null,
+      "note": "User confirmed Detailed flow and the four requirement facts (goal/constraints/done/out-of-scope) in chat.",
+      "approvedAt": "2026-07-22T16:47:56.4063902Z"
+    },
+    {
+      "gate": "design",
+      "phase": "DESIGN",
+      "incrementId": null,
+      "note": "Exit: new host-api request-exit function (WIT + core/wasm-extensions/src/host.rs + shared exit flag threaded into the run loop's quit_requested check), not a bus-topic hack (no interception machinery exists to hook into). Triangle: real triangle shape chosen over a fake diamond approximation - new Shape field on EntityOp::Spawn wire format, PhysicsBackend trait, rapier2d SharedShape::triangle in Rapier2dBackend, RetroBackend approximates any non-Rect shape as its own AABB bounding box (documented limitation, never exercised since triangles only spawn RAPIER2D-world in this plan), new gfx::DrawTriangle command rendered via the renderer's existing render_geometry triangle-mesh path (ui_mesh.rs) instead of fill_rect.",
+      "approvedAt": "2026-07-22T16:53:16.2639701Z"
+    },
+    {
+      "gate": "split",
+      "phase": "SPLIT",
+      "incrementId": null,
+      "note": "User approved the reshaped 3-increment plan (order: triangle-shape end-to-end, HUD, menu+settings+exit) via chat.",
+      "approvedAt": "2026-07-22T16:58:22.1181174Z"
+    },
+    {
+      "gate": "verify",
+      "phase": "VERIFY",
+      "incrementId": "33c280ba03264f269efe614b7eb478eb",
+      "note": "Self-verified: full workspace test suite (144 tests) + clippy clean, wasm32-wasip2 build clean, code-review skill run (0 critical/high findings). User explicitly asked to defer individual per-increment verification and check all 3 increments together at the end instead - not an individual user sign-off on this increment specifically.",
+      "approvedAt": "2026-07-22T21:28:24.3983582Z"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-07-22T16:47:43.9332314Z",
+      "action": "start",
+      "detail": "Started Detailed workflow."
+    },
+    {
+      "at": "2026-07-22T16:47:56.4103566Z",
+      "action": "approve",
+      "detail": "Approved requirements during START."
+    },
+    {
+      "at": "2026-07-22T16:47:57.2064416Z",
+      "action": "advance",
+      "detail": "Advanced from START to DESIGN."
+    },
+    {
+      "at": "2026-07-22T16:53:16.2667671Z",
+      "action": "approve",
+      "detail": "Approved design during DESIGN."
+    },
+    {
+      "at": "2026-07-22T16:53:17.0016355Z",
+      "action": "advance",
+      "detail": "Advanced from DESIGN to SPLIT."
+    },
+    {
+      "at": "2026-07-22T16:53:54.7094373Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 1: core: request-exit host-api capability"
+    },
+    {
+      "at": "2026-07-22T16:53:55.4922858Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 2: core/game-core: triangle collider shape"
+    },
+    {
+      "at": "2026-07-22T16:53:56.2354904Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 3: gfx + renderer: DrawTriangle command"
+    },
+    {
+      "at": "2026-07-22T16:53:57.0169329Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 4: game_core_demo: hazards, hitbox, score/life"
+    },
+    {
+      "at": "2026-07-22T16:53:57.7685023Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 5: game_core_demo: HUD"
+    },
+    {
+      "at": "2026-07-22T16:53:58.5383661Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 6: game_core_demo: pause menu + settings + exit"
+    },
+    {
+      "at": "2026-07-22T16:56:00Z",
+      "action": "reshape",
+      "detail": "User asked to rearrange and join into 3 increments, order 4+2+3, 5, 6+1: manually merged the increments array (no controller command exists for merging) into (1) triangle shape end-to-end [former 4+2+3], (2) HUD [former 5], (3) menu/settings/exit [former 6+1]. No increment had started; all were still planned."
+    },
+    {
+      "at": "2026-07-22T16:58:22.1215301Z",
+      "action": "approve",
+      "detail": "Approved split during SPLIT."
+    },
+    {
+      "at": "2026-07-22T16:58:22.8535378Z",
+      "action": "advance",
+      "detail": "Advanced from SPLIT to BRANCH."
+    },
+    {
+      "at": "2026-07-22T16:58:42.8499957Z",
+      "action": "advance",
+      "detail": "Advanced from BRANCH to BUILD."
+    },
+    {
+      "at": "2026-07-22T21:28:23.5896969Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-07-22T21:28:24.4011123Z",
+      "action": "approve",
+      "detail": "Approved verify during VERIFY."
+    },
+    {
+      "at": "2026-07-22T21:28:31.5182495Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
+    }
+  ],
+  "createdAt": "2026-07-22T16:47:43.8462272Z",
+  "updatedAt": "2026-07-22T21:28:31.5235703Z"
+}

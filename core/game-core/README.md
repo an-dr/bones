@@ -63,11 +63,16 @@ case.
   - `Spawn` — spawns (or, for an `entity_id` already in use, replaces)
     one entity, addressable afterward by that caller-assigned `entity_id`.
     Carries either an animated `sprite` or a plain filled `square_color`
-    square (obstacles/walls that don't need art). A nonzero
-    `collider_half_w`/`collider_half_h` also gives it a box collider (`0.0`
-    spawns a purely visual entity, no physics body) of the given
-    `body_kind`: `Dynamic` (pushed by other bodies, carries momentum, the
-    default), `Kinematic` (moves exactly as `SetVelocity` commands it and
+    shape (obstacles/walls that don't need art), whose collider/visual
+    `shape` (`bones_messages::game_core::Shape`) is `Rect` (an axis-aligned
+    box, the default) or `Triangle` (an isoceles triangle inscribed in the
+    same half-extents box) — collided against as a real triangle in the
+    rapier2d world; the retro world has no non-rectangular collision
+    concept, so it approximates a `Triangle` collider as its own AABB
+    bounding box. A nonzero `collider_half_w`/`collider_half_h` also gives
+    it a collider (`0.0` spawns a purely visual entity, no physics body)
+    of the given `body_kind`: `Dynamic` (pushed by other bodies, carries
+    momentum, the default), `Kinematic` (moves exactly as `SetVelocity` commands it and
     pushes `Dynamic` bodies out of its way, but is never itself pushed —
     the standard "platform/mover" body type), or `Frictionless` (a
     `Dynamic` body that carries no momentum — it settles to rest almost

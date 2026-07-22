@@ -1,4 +1,4 @@
-use bones_messages::gfx::{DrawCircle, DrawLine, DrawRect, DrawSprite};
+use bones_messages::gfx::{DrawCircle, DrawLine, DrawRect, DrawSprite, DrawTriangle};
 
 /// A `gfx/*` draw command that goes through the retained-batch/layer
 /// pipeline (as opposed to `Clear`/`LoadSprite`/`SetCamera`, which apply
@@ -11,6 +11,7 @@ pub(crate) enum RetainedDraw {
     Rect(DrawRect),
     Line(DrawLine),
     Circle(DrawCircle),
+    Triangle(DrawTriangle),
     Text {
         text: String,
         x: i32,
@@ -28,6 +29,7 @@ impl RetainedDraw {
             Self::Rect(d) => d.layer,
             Self::Line(d) => d.layer,
             Self::Circle(d) => d.layer,
+            Self::Triangle(d) => d.layer,
             Self::Text { layer, .. } => *layer,
         }
     }

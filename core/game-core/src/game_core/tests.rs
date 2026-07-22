@@ -2,7 +2,8 @@ use std::sync::{Arc, Mutex};
 
 use super::*;
 use bones_messages::game_core::{
-    BodyKind, Collision, EntityOp, EntityOpMessage, LoadTilemap, PhysicsWorlds, Sprite,
+    BodyKind, Collision, EntityOp, EntityOpMessage, LoadTilemap, PhysicsWorlds, Shape as WireShape,
+    Sprite,
 };
 use bones_messages::gfx;
 use bones_messages::EncodeMessage;
@@ -74,6 +75,7 @@ fn spawn_with_id(entity_id: u32, x: f32, y: f32) -> EntityOp {
         y,
         sprite: Some(sprite()),
         square_color: (0, 0, 0, 0),
+        shape: WireShape::Rect,
         collider_half_w: 0.0,
         collider_half_h: 0.0,
         body_kind: BodyKind::Dynamic,
@@ -98,6 +100,7 @@ fn spawn_with_collider_and_id(
         y,
         sprite: Some(sprite()),
         square_color: (0, 0, 0, 0),
+        shape: WireShape::Rect,
         collider_half_w: half_w,
         collider_half_h: half_h,
         body_kind: BodyKind::Dynamic,
@@ -119,6 +122,7 @@ fn spawn_with_collider_in_worlds(
         y,
         sprite: Some(sprite()),
         square_color: (0, 0, 0, 0),
+        shape: WireShape::Rect,
         collider_half_w: half_w,
         collider_half_h: half_h,
         body_kind: BodyKind::Dynamic,
@@ -139,6 +143,7 @@ fn spawn_kinematic_with_collider(
         y,
         sprite: Some(sprite()),
         square_color: (0, 0, 0, 0),
+        shape: WireShape::Rect,
         collider_half_w: half_w,
         collider_half_h: half_h,
         body_kind: BodyKind::Kinematic,
@@ -159,6 +164,7 @@ fn spawn_frictionless_with_collider(
         y,
         sprite: Some(sprite()),
         square_color: (0, 0, 0, 0),
+        shape: WireShape::Rect,
         collider_half_w: half_w,
         collider_half_h: half_h,
         body_kind: BodyKind::Frictionless,
@@ -179,6 +185,28 @@ fn spawn_square_with_collider(
         y,
         sprite: None,
         square_color: (200, 40, 40, 255),
+        shape: WireShape::Rect,
+        collider_half_w: half_w,
+        collider_half_h: half_h,
+        body_kind: BodyKind::Dynamic,
+        worlds: PhysicsWorlds::default(),
+    }
+}
+
+fn spawn_triangle_with_collider(
+    entity_id: u32,
+    x: f32,
+    y: f32,
+    half_w: f32,
+    half_h: f32,
+) -> EntityOp {
+    EntityOp::Spawn {
+        entity_id,
+        x,
+        y,
+        sprite: None,
+        square_color: (200, 40, 40, 255),
+        shape: WireShape::Triangle,
         collider_half_w: half_w,
         collider_half_h: half_h,
         body_kind: BodyKind::Dynamic,
@@ -569,6 +597,37 @@ fn tick_publishes_a_draw_rect_for_a_square_entity() {
     assert_eq!(rects.len(), 1);
     assert_eq!(rects[0].color, (200, 40, 40, 255));
     assert_eq!((rects[0].w, rects[0].h), (16, 16));
+}
+
+#[test]
+fn tick_publishes_a_draw_triangle_for_a_triangle_shaped_entity() {
+    let (mut game_core, bus, spy) = ready_game_core();
+    game_core.handle(&entity_op_envelope(spawn_triangle_with_collider(
+        1, 10.0, 10.0, 8.0, 8.0,
+    )));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    bus.dispatch();
+
+    let published = spy.0.lock().unwrap();
+    let rects = published
+        .iter()
+        .filter(|e| e.topic == gfx::DrawRect::TOPIC)
+        .count();
+    let triangles: Vec<_> = published
+        .iter()
+        .filter(|e| e.topic == gfx::DrawTriangle::TOPIC)
+        .map(|e| gfx::DrawTriangle::decode(&e.payload).unwrap())
+        .collect();
+
+    assert_eq!(rects, 0, "a triangle-shaped entity should not draw a rect");
+    assert_eq!(triangles.len(), 1);
+    assert_eq!(triangles[0].color, (200, 40, 40, 255));
+    // Apex centered on top, base along the bottom of the 8.0 half-extents
+    // box around (10, 10).
+    assert_eq!((triangles[0].x1, triangles[0].y1), (10, 2));
+    assert_eq!((triangles[0].x2, triangles[0].y2), (2, 18));
+    assert_eq!((triangles[0].x3, triangles[0].y3), (18, 18));
 }
 
 #[test]

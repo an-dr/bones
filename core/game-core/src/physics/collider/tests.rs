@@ -15,11 +15,13 @@ fn equal_handles_are_equal() {
         bodies: vec![world_body(PhysicsWorldKind::Rapier2d, 1)],
         half_w: 1.0,
         half_h: 1.0,
+        shape: Shape::Rect,
     };
     let b = Collider {
         bodies: vec![world_body(PhysicsWorldKind::Rapier2d, 1)],
         half_w: 1.0,
         half_h: 1.0,
+        shape: Shape::Rect,
     };
     assert_eq!(a, b);
 }
@@ -30,6 +32,7 @@ fn in_world_finds_a_registered_world() {
         bodies: vec![world_body(PhysicsWorldKind::Retro, 5)],
         half_w: 1.0,
         half_h: 1.0,
+        shape: Shape::Rect,
     };
     assert_eq!(
         collider.in_world(PhysicsWorldKind::Retro),
@@ -43,6 +46,7 @@ fn in_world_returns_none_for_an_unregistered_world() {
         bodies: vec![world_body(PhysicsWorldKind::Retro, 5)],
         half_w: 1.0,
         half_h: 1.0,
+        shape: Shape::Rect,
     };
     assert_eq!(collider.in_world(PhysicsWorldKind::Rapier2d), None);
 }
@@ -56,6 +60,7 @@ fn primary_prefers_retro_over_rapier2d() {
         ],
         half_w: 1.0,
         half_h: 1.0,
+        shape: Shape::Rect,
     };
     assert_eq!(collider.primary().world, PhysicsWorldKind::Retro);
 }
@@ -66,6 +71,7 @@ fn primary_falls_back_to_the_only_world_present() {
         bodies: vec![world_body(PhysicsWorldKind::Rapier2d, 1)],
         half_w: 1.0,
         half_h: 1.0,
+        shape: Shape::Rect,
     };
     assert_eq!(collider.primary().world, PhysicsWorldKind::Rapier2d);
 }

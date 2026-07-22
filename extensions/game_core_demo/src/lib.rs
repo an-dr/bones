@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use bones::core::host_api::{log, publish, subscribe, Level};
 use bones_messages::audio::{LoadSound, PlaySound};
 use bones_messages::game_core::{
-    BodyKind, Collision, EntityOp, EntityOpMessage, LoadTilemap, PhysicsWorlds, Sprite,
+    BodyKind, Collision, EntityOp, EntityOpMessage, LoadTilemap, PhysicsWorlds, Shape, Sprite,
 };
 use bones_messages::gfx::LoadSprite;
 use bones_messages::input::{GamepadAxis, KeyDown, KeyUp};
@@ -21,13 +21,20 @@ const SPRITE_ID: u32 = 1;
 // robot_william.png is a 256x64 strip of four 64x64 frames.
 const FRAME_SIZE: u32 = 64;
 const CONTROLLED_ENTITY_ID: u32 = 1;
-const OBSTACLE_HALF_EXTENT: f32 = 24.0;
-const OBSTACLE_COLOR: (u8, u8, u8, u8) = (200, 60, 60, 255);
+// Narrower than the sprite frame (64px) — the robot's actual body/screen
+// width, not its full drawn frame including empty margin either side.
+const CONTROLLED_HALF_EXTENT: f32 = 16.0;
+const BIG_BOX_HALF_EXTENT: f32 = 24.0;
+// Purple: red is reserved for the hazard triangles below, so a big box
+// can't be visually confused with a life-costing hazard.
+const BIG_BOX_COLOR: (u8, u8, u8, u8) = (150, 60, 200, 255);
 const FLASH_COLOR: (u8, u8, u8, u8) = (255, 255, 255, 255);
 // 0.3s: within the requested 0.1-0.5s hit-flash window.
 const FLASH_DURATION_SECONDS: f32 = 0.3;
-const MOVER_HALF_EXTENT: f32 = 16.0;
-const MOVER_COLOR: (u8, u8, u8, u8) = (60, 120, 220, 255);
+const SMALL_BOX_HALF_EXTENT: f32 = 16.0;
+const SMALL_BOX_COLOR: (u8, u8, u8, u8) = (60, 120, 220, 255);
+const HAZARD_HALF_EXTENT: f32 = 20.0;
+const HAZARD_COLOR: (u8, u8, u8, u8) = (200, 60, 60, 255);
 const MOVE_SPEED: f32 = 120.0;
 // This demo's own dead zone: below this, stick drift (platform reports raw
 // axis values with no dead zone applied) shouldn't move the entity.
@@ -92,16 +99,21 @@ struct State {
     // while actually moving, so it's always ready the instant movement
     // starts rather than carrying over stale cooldown from before a stop.
     footstep_cooldown: f32,
-    // Obstacle entity_id -> seconds remaining before its flash reverts.
-    // Only obstacle entities (never the controlled sprite) ever appear
-    // here — a hit always flashes back to OBSTACLE_COLOR, which every
-    // obstacle in this demo shares.
+    // Big box/hazard entity_id -> seconds remaining before its flash
+    // reverts (never the controlled sprite, which has no SquareColor to
+    // flash). Reverts to `BIG_BOX_COLOR` or `HAZARD_COLOR` depending on
+    // which kind of entity it names — see `revert_color`.
     flashing: HashMap<u32, f32>,
     // Local mirror of game-core's own EntityOp::SetDebugHitboxes toggle —
     // tracked here (rather than reading it back) so pressing H can flip
     // it without this extension needing any state from game-core itself.
     debug_hitboxes: bool,
+    score: u32,
+    // Starts at FULL_LIFE (see init); never below zero.
+    life: u32,
 }
+
+const FULL_LIFE: u32 = 3;
 
 thread_local! {
     static STATE: RefCell<State> = RefCell::new(State::default());
@@ -148,42 +160,68 @@ fn synthesize_tone(frequency_hz: f32, cycles: u32, amplitude: f32) -> Vec<u8> {
     wav
 }
 
-/// A plain colored square, no sprite — obstacles and walls don't need art
+/// A plain colored square, no sprite — big boxes and walls don't need art
 /// (only the controlled entity uses `robot_william.png`). Registered in
 /// the `rapier2d` world only (ADR-021, `PhysicsWorlds::RAPIER2D` — the
 /// default, stated explicitly here since this demo now exercises more
-/// than one world).
-fn spawn_obstacle(entity_id: u32, x: f32, y: f32) {
+/// than one world). Score's collision trigger (see `on_collision`).
+fn spawn_big_box(entity_id: u32, x: f32, y: f32) {
     publish_entity_op(EntityOp::Spawn {
         entity_id,
         x,
         y,
         sprite: None,
-        square_color: OBSTACLE_COLOR,
-        collider_half_w: OBSTACLE_HALF_EXTENT,
-        collider_half_h: OBSTACLE_HALF_EXTENT,
+        square_color: BIG_BOX_COLOR,
+        shape: Shape::Rect,
+        collider_half_w: BIG_BOX_HALF_EXTENT,
+        collider_half_h: BIG_BOX_HALF_EXTENT,
         body_kind: BodyKind::Dynamic,
         worlds: PhysicsWorlds::RAPIER2D,
     });
 }
 
-/// A blue square with no inertia: `Frictionless`, so the robot or a red
-/// obstacle can push it around like any other body, but it carries no
+/// A blue square with no inertia: `Frictionless`, so the robot or a big
+/// box can push it around like any other body, but it carries no
 /// momentum of its own — it stops the instant nothing is pushing it,
 /// instead of coasting or drifting. Registered in the `retro` world only
 /// (ADR-021, `PhysicsWorlds::RETRO`) — this demo's example of the
 /// no-mass, no-solver backend.
-fn spawn_mover(entity_id: u32, x: f32, y: f32) {
+fn spawn_small_box(entity_id: u32, x: f32, y: f32) {
     publish_entity_op(EntityOp::Spawn {
         entity_id,
         x,
         y,
         sprite: None,
-        square_color: MOVER_COLOR,
-        collider_half_w: MOVER_HALF_EXTENT,
-        collider_half_h: MOVER_HALF_EXTENT,
+        square_color: SMALL_BOX_COLOR,
+        shape: Shape::Rect,
+        collider_half_w: SMALL_BOX_HALF_EXTENT,
+        collider_half_h: SMALL_BOX_HALF_EXTENT,
         body_kind: BodyKind::Frictionless,
         worlds: PhysicsWorlds::RETRO,
+    });
+}
+
+/// A red triangle: costs the robot life on contact (see `on_collision`).
+/// `Kinematic` and never given a `SetVelocity` — game-core's "moves
+/// exactly as commanded, never itself pushed" body type is this demo's
+/// way to spawn a stationary hazard the robot can't shove around, since
+/// the wire vocabulary has no dedicated immovable-but-not-tilemap kind.
+/// Registered in the `rapier2d` world only: `Shape::Triangle` is a real
+/// collider shape there, but only an AABB-bounding-box approximation in
+/// `retro` (see `physics::RetroBackend`'s own docs) — not worth spawning
+/// into a world where it wouldn't actually be triangular.
+fn spawn_hazard(entity_id: u32, x: f32, y: f32) {
+    publish_entity_op(EntityOp::Spawn {
+        entity_id,
+        x,
+        y,
+        sprite: None,
+        square_color: HAZARD_COLOR,
+        shape: Shape::Triangle,
+        collider_half_w: HAZARD_HALF_EXTENT,
+        collider_half_h: HAZARD_HALF_EXTENT,
+        body_kind: BodyKind::Kinematic,
+        worlds: PhysicsWorlds::RAPIER2D,
     });
 }
 
@@ -230,14 +268,17 @@ impl Guest for Component {
         );
 
         // The controlled entity: driven by set-velocity from on_tick, below
-        // — the only entity in this demo that uses the robot sprite.
-        // Registered in both physics worlds at once (ADR-021,
-        // `PhysicsWorlds::BOTH`) — this demo's example of a single entity
-        // genuinely simulated by two independent backends simultaneously;
-        // `retro` outranks `rapier2d` in `PhysicsWorldKind::PRIORITY`, so
-        // the robot's drawn position tracks the no-mass, no-solver world
-        // while its rapier2d copy (still pushed by/pushing red obstacles)
-        // is snapped to match every tick.
+        // — the only entity in this demo that uses the robot sprite. Its
+        // collider is narrower than the sprite frame (CONTROLLED_HALF_EXTENT
+        // vs. FRAME_SIZE/2.0) — the robot's actual body width, not its full
+        // drawn frame including empty margin either side. Registered in
+        // both physics worlds at once (ADR-021, `PhysicsWorlds::BOTH`) —
+        // this demo's example of a single entity genuinely simulated by two
+        // independent backends simultaneously; `retro` outranks `rapier2d`
+        // in `PhysicsWorldKind::PRIORITY`, so the robot's drawn position
+        // tracks the no-mass, no-solver world while its rapier2d copy
+        // (still pushed by/pushing big boxes) is snapped to match every
+        // tick.
         publish_entity_op(EntityOp::Spawn {
             entity_id: CONTROLLED_ENTITY_ID,
             x: 60.0,
@@ -250,32 +291,41 @@ impl Guest for Component {
                 frame_duration: 0.15,
             }),
             square_color: (0, 0, 0, 0),
-            collider_half_w: FRAME_SIZE as f32 / 2.0,
-            collider_half_h: FRAME_SIZE as f32 / 2.0,
+            shape: Shape::Rect,
+            collider_half_w: CONTROLLED_HALF_EXTENT,
+            collider_half_h: CONTROLLED_HALF_EXTENT,
             body_kind: BodyKind::Dynamic,
             worlds: PhysicsWorlds::BOTH,
         });
 
-        // Several stationary red obstacle squares — the controlled entity
-        // (and, if pushed into a neighbor, one obstacle into another)
-        // visibly stops against each one, proving entity-entity collision
-        // alongside the tilemap's entity-terrain collision. A hit between
-        // two of these flashes white briefly and plays a sound (see
-        // on_message's Collision handling).
-        spawn_obstacle(2, 350.0, 60.0);
-        spawn_obstacle(3, 350.0, 160.0);
-        spawn_obstacle(4, 350.0, 260.0);
-        spawn_obstacle(5, 120.0, 260.0);
+        // Several stationary purple big-box squares — the controlled entity
+        // (and, if pushed into a neighbor, one box into another) visibly
+        // stops against each one, proving entity-entity collision alongside
+        // the tilemap's entity-terrain collision. A hit between two of
+        // these flashes white briefly and plays a sound; the robot hitting
+        // one scores a point (see on_message's Collision handling).
+        spawn_big_box(2, 350.0, 60.0);
+        spawn_big_box(3, 350.0, 160.0);
+        spawn_big_box(4, 350.0, 260.0);
+        spawn_big_box(5, 120.0, 260.0);
 
         // Two blue Frictionless squares: pushable, but carry no momentum —
         // pushing the robot into one moves it, but it stops the instant
-        // contact ends, unlike the red Dynamic obstacles above.
-        spawn_mover(6, 220.0, 60.0);
-        spawn_mover(7, 220.0, 260.0);
+        // contact ends, unlike the purple Dynamic big boxes above.
+        spawn_small_box(6, 220.0, 60.0);
+        spawn_small_box(7, 220.0, 260.0);
+
+        // Two stationary red hazard triangles — the robot loses life on
+        // contact (see on_message's Collision handling). Positioned clear
+        // of every other spawn above.
+        spawn_hazard(8, 60.0, 160.0);
+        spawn_hazard(9, 400.0, 200.0);
+
+        STATE.with(|state| state.borrow_mut().life = FULL_LIFE);
 
         log(
             Level::Info,
-            "init: tilemap + sprite loaded; WASD/gamepad-left-stick moves the entity into obstacles; H toggles hitbox outlines",
+            "init: tilemap + sprite loaded; WASD/gamepad-left-stick moves the entity into big/small boxes and hazards; H toggles hitbox outlines",
         );
     }
 
@@ -311,8 +361,8 @@ impl Guest for Component {
                 state.footstep_cooldown = 0.0;
             }
 
-            // Hit-flash countdown: revert any obstacle whose flash timer
-            // has expired back to its normal color.
+            // Hit-flash countdown: revert any big box/hazard whose flash
+            // timer has expired back to its normal color.
             state.flashing.retain(|&entity_id, remaining| {
                 *remaining -= dt;
                 if *remaining > 0.0 {
@@ -320,7 +370,7 @@ impl Guest for Component {
                 } else {
                     publish_entity_op(EntityOp::SetColor {
                         entity_id,
-                        color: OBSTACLE_COLOR,
+                        color: revert_color(entity_id),
                     });
                     false
                 }
@@ -367,31 +417,75 @@ impl Guest for Component {
     }
 }
 
-/// Obstacle ids are 2-5 (see `init`); the controlled entity (1) and the
-/// Kinematic movers (6-7) never flash — only a red-obstacle-on-red-obstacle
-/// hit counts as "damage" for this demo.
-fn is_obstacle(entity_id: u32) -> bool {
+/// Big box ids are 2-5 (see `init`).
+fn is_big_box(entity_id: u32) -> bool {
     (2..=5).contains(&entity_id)
 }
 
-fn on_collision(collision: Collision) {
-    if !is_obstacle(collision.entity_id_a) || !is_obstacle(collision.entity_id_b) {
-        return;
+/// Hazard triangle ids are 8-9 (see `init`).
+fn is_hazard(entity_id: u32) -> bool {
+    (8..=9).contains(&entity_id)
+}
+
+/// The color a flashed entity reverts to once its flash timer expires —
+/// only ever called with a big-box or hazard id (the only entities
+/// `on_collision` ever flashes).
+fn revert_color(entity_id: u32) -> (u8, u8, u8, u8) {
+    if is_hazard(entity_id) {
+        HAZARD_COLOR
+    } else {
+        BIG_BOX_COLOR
     }
+}
+
+/// Three collision shapes count here (small boxes, the tilemap, and any
+/// other pairing are silently ignored): two big boxes clashing (flashes
+/// both, sound, no score/life change), the robot hitting a big box
+/// (flashes it, sound, score += 1 — the original "red box collision"
+/// trigger, now purple), and the robot hitting a hazard triangle (flashes
+/// it, sound, life -= 1, saturating at zero rather than wrapping).
+fn on_collision(collision: Collision) {
+    let (a, b) = (collision.entity_id_a, collision.entity_id_b);
+
+    // `robot_hit` names the non-robot side of a robot collision, `None`
+    // for a big-box-on-big-box clash (score/life untouched either way).
+    let (flash_targets, robot_hit): (Vec<u32>, Option<u32>) = if is_big_box(a) && is_big_box(b) {
+        (vec![a, b], None)
+    } else if a == CONTROLLED_ENTITY_ID && (is_big_box(b) || is_hazard(b)) {
+        (vec![b], Some(b))
+    } else if b == CONTROLLED_ENTITY_ID && (is_big_box(a) || is_hazard(a)) {
+        (vec![a], Some(a))
+    } else {
+        return;
+    };
+
+    if let Some(hit) = robot_hit {
+        STATE.with(|state| {
+            let mut state = state.borrow_mut();
+            if is_big_box(hit) {
+                state.score += 1;
+            } else {
+                state.life = state.life.saturating_sub(1);
+            }
+            log(
+                Level::Info,
+                &format!("score={} life={}", state.score, state.life),
+            );
+        });
+    }
+
     STATE.with(|state| {
         let mut state = state.borrow_mut();
-        for entity_id in [collision.entity_id_a, collision.entity_id_b] {
+        for &entity_id in &flash_targets {
             state.flashing.insert(entity_id, FLASH_DURATION_SECONDS);
         }
     });
-    publish_entity_op(EntityOp::SetColor {
-        entity_id: collision.entity_id_a,
-        color: FLASH_COLOR,
-    });
-    publish_entity_op(EntityOp::SetColor {
-        entity_id: collision.entity_id_b,
-        color: FLASH_COLOR,
-    });
+    for &entity_id in &flash_targets {
+        publish_entity_op(EntityOp::SetColor {
+            entity_id,
+            color: FLASH_COLOR,
+        });
+    }
     publish(
         PlaySound::TOPIC,
         &PlaySound {

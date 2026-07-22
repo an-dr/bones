@@ -13,6 +13,10 @@ payloads (e.g. `sprite_demo`) get it from:
   src_h` (`id`/`src_w`/`src_h` as `u32`, the rest `i32`, all little-endian).
   `src_*` crops a sub-rectangle out of the loaded texture — the same
   mechanism a sprite sheet's individual frames use.
+- `gfx/draw-triangle` — three vertices, `filled`, `color`, `layer`. Drawn
+  via `Canvas::render_geometry` (the same untextured triangle-mesh
+  primitive `ui`'s egui output uses), not `fill_rect` — the only
+  non-axis-aligned shape this renderer draws.
 
 `Renderer` isn't `Send` on its own — SDL's `Window`/`Canvas` have real
 thread-affinity constraints on some platforms — but the vendored

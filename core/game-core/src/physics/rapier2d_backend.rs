@@ -6,7 +6,7 @@ use rapier2d::crossbeam::channel::{unbounded, Receiver};
 use rapier2d::pipeline::ChannelEventCollector;
 use rapier2d::prelude::*;
 
-use super::{BodyHandle, BodyKind, ColliderHandle, PhysicsBackend};
+use super::{BodyHandle, BodyKind, ColliderHandle, PhysicsBackend, Shape};
 
 /// rapier2d 0.22's default is 30.0. Higher pushes overlapping bodies apart
 /// faster/harder per step — tuned against visible interpenetration under
@@ -135,10 +135,11 @@ impl Default for Rapier2dBackend {
 }
 
 impl PhysicsBackend for Rapier2dBackend {
-    fn spawn_body(
+    fn spawn_shaped_body(
         &mut self,
         position: Vec2,
         half_extents: Vec2,
+        shape: Shape,
         kind: BodyKind,
     ) -> (BodyHandle, ColliderHandle) {
         let rigid_body = match kind {
@@ -152,9 +153,20 @@ impl PhysicsBackend for Rapier2dBackend {
         let body = self
             .bodies
             .insert(rigid_body.translation(vector![position.x, position.y]));
+        // Collider points are local to the body's own origin (already
+        // translated to `position` above), not world space.
+        let collider_builder = match shape {
+            Shape::Rect => ColliderBuilder::cuboid(half_extents.x, half_extents.y),
+            // Isoceles, apex centered on top — matches `Shape::Triangle`'s
+            // documented inscribed-in-the-box shape.
+            Shape::Triangle => ColliderBuilder::triangle(
+                point![0.0, -half_extents.y],
+                point![-half_extents.x, half_extents.y],
+                point![half_extents.x, half_extents.y],
+            ),
+        };
         let collider = self.colliders.insert_with_parent(
-            ColliderBuilder::cuboid(half_extents.x, half_extents.y)
-                .active_events(ActiveEvents::COLLISION_EVENTS),
+            collider_builder.active_events(ActiveEvents::COLLISION_EVENTS),
             body,
             &mut self.bodies,
         );

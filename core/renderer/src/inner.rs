@@ -120,6 +120,12 @@ impl Inner {
                     .or_default()
                     .push(RetainedDraw::Circle(draw));
             }
+            Command::DrawTriangle(draw) => {
+                self.pending_draws
+                    .entry(sender.to_string())
+                    .or_default()
+                    .push(RetainedDraw::Triangle(draw));
+            }
             Command::DrawText(draw) => {
                 self.pending_draws
                     .entry(sender.to_string())
@@ -240,6 +246,46 @@ impl Inner {
                         self.canvas
                             .draw_points(points.as_slice())
                             .map_err(|e| e.to_string())?;
+                    }
+                }
+                RetainedDraw::Triangle(draw) => {
+                    let (r, g, b, a) = draw.color;
+                    let color = FColor {
+                        r: r as f32 / 255.0,
+                        g: g as f32 / 255.0,
+                        b: b as f32 / 255.0,
+                        a: a as f32 / 255.0,
+                    };
+                    let (x1, y1) = to_screen(draw.x1, draw.y1);
+                    let (x2, y2) = to_screen(draw.x2, draw.y2);
+                    let (x3, y3) = to_screen(draw.x3, draw.y3);
+                    let points = [
+                        FPoint::new(x1 as f32, y1 as f32),
+                        FPoint::new(x2 as f32, y2 as f32),
+                        FPoint::new(x3 as f32, y3 as f32),
+                    ];
+                    if draw.filled {
+                        // No texture: `render_geometry` only needs
+                        // `tex_coord` when a texture is passed, so an
+                        // arbitrary placeholder is fine here.
+                        let vertices: Vec<Vertex> = points
+                            .iter()
+                            .map(|&position| Vertex {
+                                position,
+                                color,
+                                tex_coord: FPoint::new(0.0, 0.0),
+                            })
+                            .collect();
+                        self.canvas
+                            .render_geometry(&vertices, None, &[0u32, 1, 2][..])
+                            .map_err(|e| e.to_string())?;
+                    } else {
+                        self.canvas.set_draw_color(Color::RGBA(r, g, b, a));
+                        for [start, end] in
+                            [[points[0], points[1]], [points[1], points[2]], [points[2], points[0]]]
+                        {
+                            self.canvas.draw_line(start, end).map_err(|e| e.to_string())?;
+                        }
                     }
                 }
                 RetainedDraw::Text {

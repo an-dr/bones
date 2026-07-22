@@ -112,6 +112,22 @@ fn every_command_round_trips() {
         Command::decode(DrawText::TOPIC, &text.encode()),
         Ok(Some(Command::DrawText(text)))
     );
+
+    let triangle = DrawTriangle {
+        x1: 10,
+        y1: 0,
+        x2: 0,
+        y2: 20,
+        x3: 20,
+        y3: 20,
+        filled: true,
+        color: (128, 0, 255, 255),
+        layer: 5,
+    };
+    assert_eq!(
+        Command::decode(DrawTriangle::TOPIC, &triangle.encode()),
+        Ok(Some(Command::DrawTriangle(triangle)))
+    );
 }
 
 #[test]

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use glam::Vec2;
 
-use super::{BodyHandle, BodyKind, ColliderHandle, PhysicsBackend};
+use super::{BodyHandle, BodyKind, ColliderHandle, PhysicsBackend, Shape};
 
 struct Body {
     position: Vec2,
@@ -88,10 +88,16 @@ impl RetroBackend {
 }
 
 impl PhysicsBackend for RetroBackend {
-    fn spawn_body(
+    /// This backend has no non-rectangular collision concept — every
+    /// `Shape` (including `Triangle`) is approximated as its own
+    /// `half_extents` AABB bounding box, the same as `Shape::Rect`. Callers
+    /// that need a real triangle collider should register that entity in
+    /// the rapier2d world instead (`PhysicsWorlds`).
+    fn spawn_shaped_body(
         &mut self,
         position: Vec2,
         half_extents: Vec2,
+        _shape: Shape,
         kind: BodyKind,
     ) -> (BodyHandle, ColliderHandle) {
         let id = self.next_id;

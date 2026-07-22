@@ -14,6 +14,7 @@ fn spawn_with_sprite() -> EntityOp {
             frame_duration: 0.1,
         }),
         square_color: (0, 0, 0, 0),
+        shape: Shape::Rect,
         collider_half_w: 8.0,
         collider_half_h: 8.0,
         body_kind: BodyKind::Dynamic,
@@ -28,6 +29,7 @@ fn spawn_square() -> EntityOp {
         y: 0.0,
         sprite: None,
         square_color: (200, 40, 40, 255),
+        shape: Shape::Rect,
         collider_half_w: 8.0,
         collider_half_h: 8.0,
         body_kind: BodyKind::Kinematic,
@@ -63,6 +65,7 @@ fn spawn_with_frictionless_body_kind_round_trips() {
         y: 0.0,
         sprite: None,
         square_color: (60, 120, 220, 255),
+        shape: Shape::Rect,
         collider_half_w: 8.0,
         collider_half_h: 8.0,
         body_kind: BodyKind::Frictionless,
@@ -83,6 +86,7 @@ fn spawn_registered_in_both_physics_worlds_round_trips() {
         y: 2.0,
         sprite: None,
         square_color: (10, 20, 30, 255),
+        shape: Shape::Rect,
         collider_half_w: 4.0,
         collider_half_h: 4.0,
         body_kind: BodyKind::Dynamic,
@@ -103,10 +107,32 @@ fn spawn_registered_in_retro_only_round_trips() {
         y: 0.0,
         sprite: None,
         square_color: (0, 0, 0, 255),
+        shape: Shape::Rect,
         collider_half_w: 2.0,
         collider_half_h: 2.0,
         body_kind: BodyKind::Dynamic,
         worlds: PhysicsWorlds::RETRO,
+    };
+    let message = EntityOpMessage(op);
+    assert_eq!(
+        EntityOpMessage::decode(&message.encode()),
+        Ok(EntityOpMessage(op))
+    );
+}
+
+#[test]
+fn spawn_with_triangle_shape_round_trips() {
+    let op = EntityOp::Spawn {
+        entity_id: 8,
+        x: 3.0,
+        y: 4.0,
+        sprite: None,
+        square_color: (200, 60, 60, 255),
+        shape: Shape::Triangle,
+        collider_half_w: 20.0,
+        collider_half_h: 20.0,
+        body_kind: BodyKind::Kinematic,
+        worlds: PhysicsWorlds::default(),
     };
     let message = EntityOpMessage(op);
     assert_eq!(

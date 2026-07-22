@@ -7,7 +7,7 @@ $ErrorActionPreference = "Stop"
 rustup target add wasm32-wasip2
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-cargo build --target wasm32-wasip2 --release
+cargo build --manifest-path "$PSScriptRoot/Cargo.toml" --target wasm32-wasip2 --release
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "Built: target/wasm32-wasip2/release/game_core_demo.wasm"

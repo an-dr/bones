@@ -15,10 +15,11 @@ struct FakeBackend {
 }
 
 impl PhysicsBackend for FakeBackend {
-    fn spawn_body(
+    fn spawn_shaped_body(
         &mut self,
         position: Vec2,
         _half_extents: Vec2,
+        _shape: Shape,
         kind: BodyKind,
     ) -> (BodyHandle, ColliderHandle) {
         let id = self.next_id;
@@ -97,4 +98,23 @@ fn a_fake_backend_is_usable_behind_a_trait_object() {
 
     backend.remove_body(body);
     assert_eq!(backend.body_translation(body), None);
+}
+
+#[test]
+fn spawn_body_defaults_to_shape_rect() {
+    // `spawn_body`'s default impl delegates to `spawn_shaped_body` with
+    // `Shape::Rect` — proven indirectly here since `FakeBackend` doesn't
+    // distinguish shapes itself, just that the default method compiles and
+    // produces a usable body through the trait object.
+    let mut backend: Box<dyn PhysicsBackend> = Box::new(FakeBackend::default());
+    let (body, _) = backend.spawn_body(Vec2::ZERO, Vec2::new(1.0, 1.0), BodyKind::Dynamic);
+    assert_eq!(backend.body_translation(body), Some(Vec2::ZERO));
+}
+
+#[test]
+fn spawn_shaped_body_accepts_a_triangle_shape() {
+    let mut backend: Box<dyn PhysicsBackend> = Box::new(FakeBackend::default());
+    let (body, _) =
+        backend.spawn_shaped_body(Vec2::ZERO, Vec2::new(1.0, 1.0), Shape::Triangle, BodyKind::Dynamic);
+    assert_eq!(backend.body_translation(body), Some(Vec2::ZERO));
 }

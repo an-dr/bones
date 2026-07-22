@@ -10,8 +10,9 @@ use std::collections::HashMap;
 
 use bones_messages::game_core::{
     BodyKind as WireBodyKind, Collision, EntityOp, EntityOpMessage, LoadTilemap, PhysicsWorlds,
+    Shape as WireShape,
 };
-use bones_messages::gfx::{Clear, DrawRect, DrawSprite, SetCamera};
+use bones_messages::gfx::{Clear, DrawRect, DrawSprite, DrawTriangle, SetCamera};
 use bones_messages::tick::Tick;
 use bones_messages::{DecodeMessage, EncodeMessage, Message};
 use bus::{Bus, Envelope, Handler, Module, ModuleContext};
@@ -20,7 +21,7 @@ use glam::Vec2;
 use crate::graphics::{SpriteAnimation, SquareColor, Transform};
 use crate::physics::{
     self, BodyHandle, Collider, ColliderHandle, PhysicsBackend, PhysicsWorldKind, Rapier2dBackend,
-    RetroBackend, WorldBody,
+    RetroBackend, Shape, WorldBody,
 };
 use crate::tiles::load_collision_rects;
 
@@ -117,6 +118,7 @@ impl GameCore {
                 y,
                 sprite,
                 square_color,
+                shape,
                 collider_half_w,
                 collider_half_h,
                 body_kind,
@@ -127,6 +129,7 @@ impl GameCore {
                 y,
                 sprite,
                 square_color,
+                shape,
                 collider_half_w,
                 collider_half_h,
                 body_kind,
@@ -158,6 +161,7 @@ impl GameCore {
         y: f32,
         sprite: Option<bones_messages::game_core::Sprite>,
         square_color: (u8, u8, u8, u8),
+        shape: WireShape,
         collider_half_w: f32,
         collider_half_h: f32,
         body_kind: WireBodyKind,
@@ -195,6 +199,10 @@ impl GameCore {
                 WireBodyKind::Kinematic => physics::BodyKind::Kinematic,
                 WireBodyKind::Frictionless => physics::BodyKind::Frictionless,
             };
+            let physics_shape = match shape {
+                WireShape::Rect => Shape::Rect,
+                WireShape::Triangle => Shape::Triangle,
+            };
             let mut bodies = Vec::new();
             for world in [
                 (PhysicsWorldKind::Rapier2d, worlds.rapier2d),
@@ -203,9 +211,10 @@ impl GameCore {
             .into_iter()
             .filter_map(|(world, present)| present.then_some(world))
             {
-                let (body, collider) = self.backend_mut(world).spawn_body(
+                let (body, collider) = self.backend_mut(world).spawn_shaped_body(
                     Vec2::new(x, y),
                     Vec2::new(collider_half_w, collider_half_h),
+                    physics_shape,
                     kind,
                 );
                 self.entity_ids_by_collider
@@ -221,6 +230,7 @@ impl GameCore {
                     bodies,
                     half_w: collider_half_w,
                     half_h: collider_half_h,
+                    shape: physics_shape,
                 });
             }
         }
@@ -301,6 +311,7 @@ impl GameCore {
                     }],
                     half_w: rect.half_w,
                     half_h: rect.half_h,
+                    shape: Shape::Rect,
                 },
             ));
         }
@@ -542,15 +553,7 @@ impl GameCore {
             .query::<(&Transform, &SquareColor, &Collider)>()
             .iter()
         {
-            self.publish(DrawRect {
-                x: (transform.x - collider.half_w) as i32,
-                y: (transform.y - collider.half_h) as i32,
-                w: (collider.half_w * 2.0) as u32,
-                h: (collider.half_h * 2.0) as u32,
-                filled: true,
-                color: color.0,
-                layer: ENTITY_LAYER,
-            });
+            self.publish_shape(transform, collider, true, color.0);
         }
         if self.debug_hitboxes {
             // Every collider-bearing entity, sprite or square alike — a
@@ -559,16 +562,46 @@ impl GameCore {
             // this overlay is for checking. Drawn on `ENTITY_LAYER` after
             // every normal draw above, so the outline lands on top.
             for (_, (transform, collider)) in self.world.query::<(&Transform, &Collider)>().iter() {
-                self.publish(DrawRect {
-                    x: (transform.x - collider.half_w) as i32,
-                    y: (transform.y - collider.half_h) as i32,
-                    w: (collider.half_w * 2.0) as u32,
-                    h: (collider.half_h * 2.0) as u32,
-                    filled: false,
-                    color: DEBUG_HITBOX_COLOR,
-                    layer: ENTITY_LAYER,
-                });
+                self.publish_shape(transform, collider, false, DEBUG_HITBOX_COLOR);
             }
+        }
+    }
+
+    /// Publishes one `gfx::DrawRect` or `gfx::DrawTriangle` for `collider`'s
+    /// shape at `transform`'s position, `filled` and `color` as given —
+    /// shared by `publish_gfx`'s normal per-entity draw and its debug-
+    /// hitbox overlay, which differ only in those two parameters.
+    fn publish_shape(
+        &self,
+        transform: &Transform,
+        collider: &Collider,
+        filled: bool,
+        color: (u8, u8, u8, u8),
+    ) {
+        match collider.shape {
+            Shape::Rect => self.publish(DrawRect {
+                x: (transform.x - collider.half_w) as i32,
+                y: (transform.y - collider.half_h) as i32,
+                w: (collider.half_w * 2.0) as u32,
+                h: (collider.half_h * 2.0) as u32,
+                filled,
+                color,
+                layer: ENTITY_LAYER,
+            }),
+            // Matches `Rapier2dBackend::spawn_shaped_body`'s inscribed
+            // isoceles triangle: apex centered on top, base along the
+            // bottom of the same half-extents box.
+            Shape::Triangle => self.publish(DrawTriangle {
+                x1: transform.x as i32,
+                y1: (transform.y - collider.half_h) as i32,
+                x2: (transform.x - collider.half_w) as i32,
+                y2: (transform.y + collider.half_h) as i32,
+                x3: (transform.x + collider.half_w) as i32,
+                y3: (transform.y + collider.half_h) as i32,
+                filled,
+                color,
+                layer: ENTITY_LAYER,
+            }),
         }
     }
 }

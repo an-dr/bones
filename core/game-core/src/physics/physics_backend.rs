@@ -1,6 +1,6 @@
 use glam::Vec2;
 
-use super::{BodyHandle, BodyKind, ColliderHandle};
+use super::{BodyHandle, BodyKind, ColliderHandle, Shape};
 
 /// One simulated physics world, independent of every other `PhysicsBackend`
 /// instance — the seam ADR-021 cuts rapier2d out from behind. `game-core`
@@ -14,10 +14,30 @@ pub trait PhysicsBackend {
     /// collider concept (unlikely, but not assumed away) may still return
     /// a distinct `ColliderHandle` — the two handles are never assumed
     /// equal or interchangeable by callers.
+    ///
+    /// A thin default over `spawn_shaped_body` with `Shape::Rect` — the
+    /// overwhelming majority of callers want a box and don't need to name
+    /// `Shape` at every call site.
     fn spawn_body(
         &mut self,
         position: Vec2,
         half_extents: Vec2,
+        kind: BodyKind,
+    ) -> (BodyHandle, ColliderHandle) {
+        self.spawn_shaped_body(position, half_extents, Shape::Rect, kind)
+    }
+
+    /// Adds a body with the given `Shape`, sized by `half_extents` either
+    /// way (a `Triangle`'s base/height both come from the same box a
+    /// `Rect` of these half-extents would occupy). A backend with no real
+    /// non-`Rect` collider concept may approximate any other `Shape` as
+    /// its own `Rect` bounding box instead of rejecting it — see the
+    /// backend's own docs for whether it does.
+    fn spawn_shaped_body(
+        &mut self,
+        position: Vec2,
+        half_extents: Vec2,
+        shape: Shape,
         kind: BodyKind,
     ) -> (BodyHandle, ColliderHandle);
 
