@@ -11,8 +11,8 @@
     "done": "Robot hitbox is visibly narrower than its sprite frame; HUD shows live life and score, score increments on purple-box collision, life decrements on red-triangle collision; Esc opens/closes an in-game menu with Settings and Exit entries; Settings lets the user pick big-box color (warm/non-red presets) and small-box color (cold presets) with changes applying live; Exit cleanly closes the running app; new engine surface (exit request, triangle shape) has tests and updated docs (ADR if it's a lasting architectural call).",
     "outOfScope": "The full roadmap shutdown sequence (per-extension shutdown() lifecycle, Stopped event, close-request pub/sub event) - only a minimal-but-clean extension-exit path; retro-world collider support for triangles unless DESIGN finds it's actually needed (obstacles are RAPIER2D-only today); the old PROGRESS.md's leftover solver-stiffness/velocity-clamp tuning items (unrelated, already-stale prior workflow); a real color-picker widget type (stick to preset buttons)."
   },
-  "currentIncrementId": "da6095937f94452fa98f49a3fb94ef5a",
-  "commitBaseline": "d80fab8d192e38ebaed1c37af0639e393383b022",
+  "currentIncrementId": "a55f9e3d09cc4e4296125722421a5c9d",
+  "commitBaseline": "24cad0f7b2c4efac0cfe6488d7f88258e21424ca",
   "increments": [
     {
       "id": "33c280ba03264f269efe614b7eb478eb",
@@ -31,9 +31,16 @@
     {
       "id": "da6095937f94452fa98f49a3fb94ef5a",
       "number": 3,
-      "status": "verified",
+      "status": "completed",
       "scope": "core + game_core_demo: pause menu, settings, exit",
       "description": "wit/core.wit gains request-exit: func(); core/wasm-extensions/src/host.rs implements it against a shared Arc<AtomicBool>, threaded through loading.rs/supervisor.rs Host::load call sites; core/runner/src/engine/builder.rs's run loop checks it alongside platform.quit_requested() to break cleanly. game_core_demo then uses it: Esc toggles a menu state (Closed/Main/Settings) in extension state; while open, robot velocity is forced to zero regardless of held input; Main shows Button widgets Settings/Exit; Settings shows preset-color Buttons for big-box (warm, non-red) and small-box (cold) colors, applied live via EntityOp::SetColor to every existing entity of that kind, plus a Back button; Exit calls the new request-exit host-api function. Unit/integration test: calling request-exit from a test extension causes Engine::run to return. Docs: design/platform.md shutdown section gets a short note distinguishing this from the still-open full shutdown sequence."
+    },
+    {
+      "id": "a55f9e3d09cc4e4296125722421a5c9d",
+      "number": 4,
+      "status": "verified",
+      "scope": "game_core_demo: replace app-UI HUD/menu with a game-styled one",
+      "description": "Drops bones_messages::ui (Spec/Widget/Clicked) entirely from game_core_demo - no egui window chrome. HUD (score/life) and the pause menu/settings panel are drawn directly via gfx::DrawRect/DrawText (already-precedented pattern, sprite_demo already publishes gfx/* directly from an extension), fixed screen-space pixel positions (camera is always identity in this demo). Buttons are DrawRect+centered DrawText pairs from a single menu_buttons(MenuState) layout list, reused for both drawing and input/mouse-down hit-testing (subscribe MouseDown::TOPIC instead of Clicked::TOPIC) so the clickable area always matches what's drawn. on_button_clicked's menu-transition/recolor/request-exit logic is unchanged, only the input mechanism changes. No engine changes - request-exit stays as already built."
     }
   ],
   "approvals": [
@@ -50,13 +57,6 @@
       "incrementId": null,
       "note": "Exit: new host-api request-exit function (WIT + core/wasm-extensions/src/host.rs + shared exit flag threaded into the run loop's quit_requested check), not a bus-topic hack (no interception machinery exists to hook into). Triangle: real triangle shape chosen over a fake diamond approximation - new Shape field on EntityOp::Spawn wire format, PhysicsBackend trait, rapier2d SharedShape::triangle in Rapier2dBackend, RetroBackend approximates any non-Rect shape as its own AABB bounding box (documented limitation, never exercised since triangles only spawn RAPIER2D-world in this plan), new gfx::DrawTriangle command rendered via the renderer's existing render_geometry triangle-mesh path (ui_mesh.rs) instead of fill_rect.",
       "approvedAt": "2026-07-22T16:53:16.2639701Z"
-    },
-    {
-      "gate": "split",
-      "phase": "SPLIT",
-      "incrementId": null,
-      "note": "User approved the reshaped 3-increment plan (order: triangle-shape end-to-end, HUD, menu+settings+exit) via chat.",
-      "approvedAt": "2026-07-22T16:58:22.1181174Z"
     },
     {
       "gate": "verify",
@@ -78,6 +78,27 @@
       "incrementId": "da6095937f94452fa98f49a3fb94ef5a",
       "note": "Self-verified: full workspace test suite (145 tests incl. new request_exit_sets_the_shared_flag) + clippy clean, wasm32-wasip2 build clean, code-review skill run (0 critical/high findings, 1 improvement note about an untested live-behavior edge case - Esc reaching the extension while Settings buttons are shown). Packaged app launches, subscribes to ui/clicked as expected, and runs error-free. User explicitly asked to defer individual per-increment verification and check all 3 increments together at the end.",
       "approvedAt": "2026-07-22T21:46:43.451687Z"
+    },
+    {
+      "gate": "split",
+      "phase": "SPLIT",
+      "incrementId": null,
+      "note": "User's rejection of the app-UI (egui ui/spec) approach for increments 2-3 is itself the direction for increment 4: replace with a game-styled gfx-drawn UI. Confirmed via chat.",
+      "approvedAt": "2026-07-22T21:56:39.6546161Z"
+    },
+    {
+      "gate": "verify",
+      "phase": "VERIFY",
+      "incrementId": "a55f9e3d09cc4e4296125722421a5c9d",
+      "note": "test",
+      "approvedAt": "2026-07-22T22:01:18.1888668Z"
+    },
+    {
+      "gate": "verify",
+      "phase": "VERIFY",
+      "incrementId": "a55f9e3d09cc4e4296125722421a5c9d",
+      "note": "Self-verified: full workspace test suite (145 tests) + clippy clean, wasm32-wasip2 build clean, code-review skill run (0 critical/high findings). Packaged app launches, subscribes to input/mouse-down as expected, runs error-free. User explicitly asked to defer individual per-increment verification and check everything together at the end.",
+      "approvedAt": "2026-07-22T22:01:31.1727759Z"
     }
   ],
   "history": [
@@ -210,8 +231,53 @@
       "at": "2026-07-22T21:46:44.3172193Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-07-22T21:47:08.7390078Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to MR."
+    },
+    {
+      "at": "2026-07-22T21:56:30.3717377Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 4: game_core_demo: replace app-UI HUD/menu with a game-styled one"
+    },
+    {
+      "at": "2026-07-22T21:56:39.6576626Z",
+      "action": "approve",
+      "detail": "Approved split during SPLIT."
+    },
+    {
+      "at": "2026-07-22T21:56:40.4986416Z",
+      "action": "advance",
+      "detail": "Advanced from SPLIT to BRANCH."
+    },
+    {
+      "at": "2026-07-22T21:56:46.2772282Z",
+      "action": "advance",
+      "detail": "Advanced from BRANCH to BUILD."
+    },
+    {
+      "at": "2026-07-22T22:01:00.1113933Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-07-22T22:01:18.1993666Z",
+      "action": "approve",
+      "detail": "Approved verify during VERIFY."
+    },
+    {
+      "at": "2026-07-22T22:01:31.1837352Z",
+      "action": "approve",
+      "detail": "Approved verify during VERIFY."
+    },
+    {
+      "at": "2026-07-22T22:01:32.0536965Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-07-22T16:47:43.8462272Z",
-  "updatedAt": "2026-07-22T21:46:44.3224724Z"
+  "updatedAt": "2026-07-22T22:01:32.0593656Z"
 }

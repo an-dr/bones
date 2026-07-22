@@ -11,9 +11,8 @@ use bones_messages::audio::{LoadSound, PlaySound};
 use bones_messages::game_core::{
     BodyKind, Collision, EntityOp, EntityOpMessage, LoadTilemap, PhysicsWorlds, Shape, Sprite,
 };
-use bones_messages::gfx::LoadSprite;
-use bones_messages::input::{GamepadAxis, KeyDown, KeyUp};
-use bones_messages::ui::{Clicked, Spec, Widget};
+use bones_messages::gfx::{DrawRect, DrawText, LoadSprite};
+use bones_messages::input::{GamepadAxis, KeyDown, KeyUp, MouseDown};
 use bones_messages::{DecodeMessage, EncodeMessage, Message};
 
 const LEVEL_TMX: &[u8] = include_bytes!("assets/level.tmx");
@@ -280,74 +279,321 @@ fn spawn_hazard(entity_id: u32, x: f32, y: f32) {
     });
 }
 
-/// Publishes this tick's single UI panel (ADR-005: a full `ui/spec` every
-/// frame the extension wants it visible, no retained state to fall back
-/// on) — one window, not two: `ui`'s `pending` map is keyed by sender, so
-/// a second `ui/spec` from this same extension in the same tick would
-/// silently replace the first rather than stack with it. Always shows the
-/// score/life labels; the menu/settings widgets append below them only
-/// while `menu` isn't `Closed`. `ui/spec` carries no window-position
-/// field, so this panel's placement is whatever egui's own default window
-/// layout picks; the demo does not attempt to steer it clear of the play
-/// area.
-fn publish_ui(score: u32, life: u32, menu: MenuState) {
+// Matches bones.toml's default window size (Config::default) — this demo
+// never overrides window_width/window_height, and no engine message
+// exposes the actual window size to an extension yet, so this is a fixed
+// assumption rather than something queried at runtime.
+const SCREEN_WIDTH: i32 = 800;
+
+// Camera is always identity (game-core's own publish_gfx sets x=0,y=0,
+// zoom=1 every tick, see game-core's README), so screen-space and
+// world-space pixel coordinates coincide in this demo — a fixed HUD/menu
+// position never drifts as the robot moves.
+const HUD_LAYER: u8 = 5;
+const MENU_LAYER: u8 = 6;
+
+const HUD_X: i32 = 8;
+const HUD_Y: i32 = 8;
+const HUD_W: u32 = 170;
+const HUD_H: u32 = 54;
+const HUD_BG_COLOR: (u8, u8, u8, u8) = (15, 15, 20, 255);
+const HUD_BORDER_COLOR: (u8, u8, u8, u8) = (90, 90, 110, 255);
+const HUD_TEXT_COLOR: (u8, u8, u8, u8) = (235, 235, 235, 255);
+
+/// Draws the always-visible score/life panel directly via `gfx/*` — a
+/// solid-color backdrop rect, a thin border, and two text lines. Same
+/// "publish it every tick, no retained state" contract game-core's own
+/// entity draws already use; this is this demo's own HUD layer, above
+/// every entity (`ENTITY_LAYER` is 0 in game-core).
+fn draw_hud(score: u32, life: u32) {
+    publish(
+        DrawRect::TOPIC,
+        &DrawRect {
+            x: HUD_X,
+            y: HUD_Y,
+            w: HUD_W,
+            h: HUD_H,
+            filled: true,
+            color: HUD_BG_COLOR,
+            layer: HUD_LAYER,
+        }
+        .encode(),
+    );
+    publish(
+        DrawRect::TOPIC,
+        &DrawRect {
+            x: HUD_X,
+            y: HUD_Y,
+            w: HUD_W,
+            h: HUD_H,
+            filled: false,
+            color: HUD_BORDER_COLOR,
+            layer: HUD_LAYER,
+        }
+        .encode(),
+    );
     let score_text = format!("Score: {score}");
+    publish(
+        DrawText::TOPIC,
+        &DrawText {
+            text: &score_text,
+            x: HUD_X + 10,
+            y: HUD_Y + 8,
+            size: 16,
+            color: HUD_TEXT_COLOR,
+            layer: HUD_LAYER,
+        }
+        .encode(),
+    );
     let life_text = format!("Life: {life}");
-    let mut widgets = vec![
-        Widget::Label { text: &score_text },
-        Widget::Label { text: &life_text },
-    ];
+    publish(
+        DrawText::TOPIC,
+        &DrawText {
+            text: &life_text,
+            x: HUD_X + 10,
+            y: HUD_Y + 30,
+            size: 16,
+            color: HUD_TEXT_COLOR,
+            layer: HUD_LAYER,
+        }
+        .encode(),
+    );
+}
+
+const PANEL_W: u32 = 360;
+const PANEL_H: u32 = 300;
+const PANEL_X: i32 = (SCREEN_WIDTH - PANEL_W as i32) / 2;
+const PANEL_Y: i32 = 130;
+const PANEL_BG_COLOR: (u8, u8, u8, u8) = (20, 20, 30, 255);
+const PANEL_BORDER_COLOR: (u8, u8, u8, u8) = (110, 110, 140, 255);
+const PANEL_TITLE_COLOR: (u8, u8, u8, u8) = (255, 255, 255, 255);
+const SECTION_LABEL_COLOR: (u8, u8, u8, u8) = (200, 200, 210, 255);
+const BUTTON_COLOR: (u8, u8, u8, u8) = (70, 90, 140, 255);
+const BUTTON_TEXT_COLOR: (u8, u8, u8, u8) = (255, 255, 255, 255);
+const BUTTON_MARGIN: i32 = 20;
+const BUTTON_H: u32 = 36;
+const BUTTON_GAP: i32 = 12;
+// Room for a section-title label (drawn separately in `draw_menu`) plus
+// spacing above the next row of buttons.
+const SECTION_GAP: i32 = 46;
+
+/// One clickable rectangle, positioned identically whether it's being
+/// drawn (`draw_menu`) or hit-tested against a click (`on_mouse_down`) —
+/// both read from `menu_buttons`, so the two can never drift apart the
+/// way a hand-duplicated layout could.
+struct ButtonLayout {
+    id: u32,
+    x: i32,
+    y: i32,
+    w: u32,
+    h: u32,
+    label: &'static str,
+}
+
+impl ButtonLayout {
+    fn contains(&self, x: f32, y: f32) -> bool {
+        x >= self.x as f32
+            && x < (self.x + self.w as i32) as f32
+            && y >= self.y as f32
+            && y < (self.y + self.h as i32) as f32
+    }
+}
+
+/// Every button `menu` currently shows, top to bottom — empty for
+/// `Closed`. Pure layout math, no side effects, so both `draw_menu` and
+/// `on_mouse_down` can call it freely every tick/click.
+fn menu_buttons(menu: MenuState) -> Vec<ButtonLayout> {
+    let content_x = PANEL_X + BUTTON_MARGIN;
+    let content_w = (PANEL_W as i32 - 2 * BUTTON_MARGIN) as u32;
+    let mut buttons = Vec::new();
     match menu {
         MenuState::Closed => {}
         MenuState::Main => {
-            widgets.push(Widget::Label {
-                text: "-- Paused (Esc to resume) --",
-            });
-            widgets.push(Widget::Button {
+            let row_y = PANEL_Y + 70;
+            buttons.push(ButtonLayout {
                 id: BUTTON_SETTINGS,
+                x: content_x,
+                y: row_y,
+                w: content_w,
+                h: BUTTON_H,
                 label: "Settings",
             });
-            widgets.push(Widget::Button {
+            buttons.push(ButtonLayout {
                 id: BUTTON_EXIT,
+                x: content_x,
+                y: row_y + BUTTON_H as i32 + BUTTON_GAP,
+                w: content_w,
+                h: BUTTON_H,
                 label: "Exit",
             });
         }
         MenuState::Settings => {
-            widgets.push(Widget::Label {
-                text: "-- Settings --",
-            });
-            widgets.push(Widget::Label {
-                text: "Big box color:",
-            });
+            let preset_w = ((content_w as i32 - 2 * BUTTON_GAP) / 3) as u32;
+            let big_row_y = PANEL_Y + 70;
             for (index, &(name, _)) in BIG_BOX_PRESETS.iter().enumerate() {
-                widgets.push(Widget::Button {
+                buttons.push(ButtonLayout {
                     id: BUTTON_BIG_BOX_PRESET_BASE + index as u32,
+                    x: content_x + index as i32 * (preset_w as i32 + BUTTON_GAP),
+                    y: big_row_y,
+                    w: preset_w,
+                    h: BUTTON_H,
                     label: name,
                 });
             }
-            widgets.push(Widget::Label {
-                text: "Small box color:",
-            });
+            let small_row_y = big_row_y + BUTTON_H as i32 + SECTION_GAP;
             for (index, &(name, _)) in SMALL_BOX_PRESETS.iter().enumerate() {
-                widgets.push(Widget::Button {
+                buttons.push(ButtonLayout {
                     id: BUTTON_SMALL_BOX_PRESET_BASE + index as u32,
+                    x: content_x + index as i32 * (preset_w as i32 + BUTTON_GAP),
+                    y: small_row_y,
+                    w: preset_w,
+                    h: BUTTON_H,
                     label: name,
                 });
             }
-            widgets.push(Widget::Button {
+            let back_y = small_row_y + BUTTON_H as i32 + SECTION_GAP;
+            buttons.push(ButtonLayout {
                 id: BUTTON_BACK,
+                x: content_x,
+                y: back_y,
+                w: content_w,
+                h: BUTTON_H,
                 label: "Back",
             });
         }
     }
+    buttons
+}
+
+/// Draws the pause menu/settings panel — a no-op while `Closed`. A solid
+/// backdrop panel (not a full-screen dim: this renderer's `DrawRect`
+/// doesn't blend alpha for filled rects yet, so a translucent overlay
+/// would just render opaque) with a title, section labels for `Settings`,
+/// and every button from `menu_buttons`.
+fn draw_menu(menu: MenuState) {
+    if menu == MenuState::Closed {
+        return;
+    }
     publish(
-        Spec::TOPIC,
-        &Spec {
-            title: "HUD",
-            widgets,
+        DrawRect::TOPIC,
+        &DrawRect {
+            x: PANEL_X,
+            y: PANEL_Y,
+            w: PANEL_W,
+            h: PANEL_H,
+            filled: true,
+            color: PANEL_BG_COLOR,
+            layer: MENU_LAYER,
         }
         .encode(),
     );
+    publish(
+        DrawRect::TOPIC,
+        &DrawRect {
+            x: PANEL_X,
+            y: PANEL_Y,
+            w: PANEL_W,
+            h: PANEL_H,
+            filled: false,
+            color: PANEL_BORDER_COLOR,
+            layer: MENU_LAYER,
+        }
+        .encode(),
+    );
+
+    let title = match menu {
+        MenuState::Main => "Paused (Esc to resume)",
+        MenuState::Settings => "Settings",
+        MenuState::Closed => "",
+    };
+    publish(
+        DrawText::TOPIC,
+        &DrawText {
+            text: title,
+            x: PANEL_X + BUTTON_MARGIN,
+            y: PANEL_Y + 20,
+            size: 18,
+            color: PANEL_TITLE_COLOR,
+            layer: MENU_LAYER,
+        }
+        .encode(),
+    );
+
+    if menu == MenuState::Settings {
+        publish(
+            DrawText::TOPIC,
+            &DrawText {
+                text: "Big box color",
+                x: PANEL_X + BUTTON_MARGIN,
+                y: PANEL_Y + 52,
+                size: 14,
+                color: SECTION_LABEL_COLOR,
+                layer: MENU_LAYER,
+            }
+            .encode(),
+        );
+        let small_label_y = PANEL_Y + 70 + BUTTON_H as i32 + 10;
+        publish(
+            DrawText::TOPIC,
+            &DrawText {
+                text: "Small box color",
+                x: PANEL_X + BUTTON_MARGIN,
+                y: small_label_y,
+                size: 14,
+                color: SECTION_LABEL_COLOR,
+                layer: MENU_LAYER,
+            }
+            .encode(),
+        );
+    }
+
+    for button in menu_buttons(menu) {
+        publish(
+            DrawRect::TOPIC,
+            &DrawRect {
+                x: button.x,
+                y: button.y,
+                w: button.w,
+                h: button.h,
+                filled: true,
+                color: BUTTON_COLOR,
+                layer: MENU_LAYER,
+            }
+            .encode(),
+        );
+        // Rough centering assuming ~8px average glyph width at size 16 —
+        // good enough for this demo's short labels, not measured text.
+        let text_x = button.x + (button.w as i32 - button.label.len() as i32 * 8) / 2;
+        let text_y = button.y + (button.h as i32 - 16) / 2;
+        publish(
+            DrawText::TOPIC,
+            &DrawText {
+                text: button.label,
+                x: text_x,
+                y: text_y,
+                size: 16,
+                color: BUTTON_TEXT_COLOR,
+                layer: MENU_LAYER,
+            }
+            .encode(),
+        );
+    }
+}
+
+/// Left-click hit-testing against whatever `menu_buttons` the current menu
+/// shows — a no-op while `Closed` (nothing to click) or for any click that
+/// doesn't land inside a button.
+fn on_mouse_down(x: f32, y: f32) {
+    let menu = STATE.with(|state| state.borrow().menu);
+    if menu == MenuState::Closed {
+        return;
+    }
+    for button in menu_buttons(menu) {
+        if button.contains(x, y) {
+            on_button_clicked(button.id);
+            break;
+        }
+    }
 }
 
 /// Esc toggles `Closed` <-> whatever the menu currently is — `Settings`
@@ -392,7 +638,7 @@ impl Guest for Component {
         subscribe(KeyUp::TOPIC);
         subscribe(GamepadAxis::TOPIC);
         subscribe(Collision::TOPIC);
-        subscribe(Clicked::TOPIC);
+        subscribe(MouseDown::TOPIC);
         subscribe("core/tick");
 
         let load_sprite = LoadSprite {
@@ -560,7 +806,8 @@ impl Guest for Component {
             let state = state.borrow();
             (state.score, state.life, state.menu)
         });
-        publish_ui(score, life, menu);
+        draw_hud(score, life);
+        draw_menu(menu);
     }
 
     fn on_message(topic: String, _sender: String, payload: Vec<u8>) -> Option<Vec<u8>> {
@@ -596,9 +843,14 @@ impl Guest for Component {
                     on_collision(message);
                 }
             }
-            Clicked::TOPIC => {
-                if let Ok(message) = Clicked::decode(&payload) {
-                    on_button_clicked(message.id);
+            MouseDown::TOPIC => {
+                if let Ok(message) = MouseDown::decode(&payload) {
+                    // 1: SDL's left mouse button code (see MouseDown's own
+                    // doc comment) — the only button this demo's menu reacts
+                    // to.
+                    if message.button == 1 {
+                        on_mouse_down(message.x, message.y);
+                    }
                 }
             }
             _ => {}
