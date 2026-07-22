@@ -13,6 +13,7 @@ use bones_messages::game_core::{
 };
 use bones_messages::gfx::LoadSprite;
 use bones_messages::input::{GamepadAxis, KeyDown, KeyUp};
+use bones_messages::ui::{Spec, Widget};
 use bones_messages::{DecodeMessage, EncodeMessage, Message};
 
 const LEVEL_TMX: &[u8] = include_bytes!("assets/level.tmx");
@@ -225,6 +226,29 @@ fn spawn_hazard(entity_id: u32, x: f32, y: f32) {
     });
 }
 
+/// Publishes this tick's HUD panel (ADR-005: a full `ui/spec` every frame
+/// the extension wants it visible, no retained state to fall back on) —
+/// two plain labels, no interaction, so `on_message` never needs to
+/// handle `ui/clicked`/`ui/changed` for it. `ui/spec` carries no window-
+/// position field, so this panel's placement is whatever egui's own
+/// default window layout picks; the demo does not attempt to steer it
+/// clear of the play area.
+fn publish_hud(score: u32, life: u32) {
+    let score_text = format!("Score: {score}");
+    let life_text = format!("Life: {life}");
+    publish(
+        Spec::TOPIC,
+        &Spec {
+            title: "HUD",
+            widgets: vec![
+                Widget::Label { text: &score_text },
+                Widget::Label { text: &life_text },
+            ],
+        }
+        .encode(),
+    );
+}
+
 struct Component;
 
 impl Guest for Component {
@@ -376,6 +400,12 @@ impl Guest for Component {
                 }
             });
         });
+
+        let (score, life) = STATE.with(|state| {
+            let state = state.borrow();
+            (state.score, state.life)
+        });
+        publish_hud(score, life);
     }
 
     fn on_message(topic: String, _sender: String, payload: Vec<u8>) -> Option<Vec<u8>> {

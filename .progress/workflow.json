@@ -11,20 +11,20 @@
     "done": "Robot hitbox is visibly narrower than its sprite frame; HUD shows live life and score, score increments on purple-box collision, life decrements on red-triangle collision; Esc opens/closes an in-game menu with Settings and Exit entries; Settings lets the user pick big-box color (warm/non-red presets) and small-box color (cold presets) with changes applying live; Exit cleanly closes the running app; new engine surface (exit request, triangle shape) has tests and updated docs (ADR if it's a lasting architectural call).",
     "outOfScope": "The full roadmap shutdown sequence (per-extension shutdown() lifecycle, Stopped event, close-request pub/sub event) - only a minimal-but-clean extension-exit path; retro-world collider support for triangles unless DESIGN finds it's actually needed (obstacles are RAPIER2D-only today); the old PROGRESS.md's leftover solver-stiffness/velocity-clamp tuning items (unrelated, already-stale prior workflow); a real color-picker widget type (stick to preset buttons)."
   },
-  "currentIncrementId": "33c280ba03264f269efe614b7eb478eb",
-  "commitBaseline": "ac7d35f2e2ab20ed13235462ad476fa1d69a39ac",
+  "currentIncrementId": "3484bd16a8ca4f8fb3a8e81ea35ee1bc",
+  "commitBaseline": "8e7940b19a1d04f58a3d1874f4e2234380b91d25",
   "increments": [
     {
       "id": "33c280ba03264f269efe614b7eb478eb",
       "number": 1,
-      "status": "verified",
+      "status": "completed",
       "scope": "game-core + gfx/renderer + game_core_demo: triangle hazard shape",
       "description": "EntityOp::Spawn wire format gains a Shape { Rect, Triangle } field (encode/decode + tests); PhysicsBackend trait's spawn_body takes a Shape instead of only half-extents; Rapier2dBackend builds ColliderBuilder::new(SharedShape::triangle(...)) for Shape::Triangle (isoceles inscribed in half_w/half_h); RetroBackend treats any Shape as its own AABB bounding box (documented limitation - triangles never route to the retro world in this plan); Collider component carries the shape. New gfx::DrawTriangle command (three vertices + color + filled + layer); core/renderer draws it via the existing render_geometry triangle-mesh path (ui_mesh.rs's approach), not fill_rect; game-core's publish_gfx publishes DrawTriangle for Shape::Triangle entities instead of DrawRect. game_core_demo then uses all of this: robot hitbox narrows to half_w 16 (~32px); existing red obstacles recolor to purple ('big boxes', unchanged Dynamic/RAPIER2D behavior, still the score trigger); new red Shape::Triangle hazard entities (stationary, RAPIER2D world) cost life on robot collision; extension-local life/score counters wired off Collision events (purple-box collision -> score++, triangle collision -> life--). Unit tests: a robot driven into a stationary rapier2d triangle stops/collides; existing rect behavior unchanged; a Shape::Triangle entity's published draw command carries triangle vertices matching its collider extent."
     },
     {
       "id": "3484bd16a8ca4f8fb3a8e81ea35ee1bc",
       "number": 2,
-      "status": "planned",
+      "status": "verified",
       "scope": "game_core_demo: HUD",
       "description": "Publishes a ui/spec Spec every tick with Label widgets showing current life and score, always visible, positioned so it doesn't overlap the play area."
     },
@@ -64,6 +64,13 @@
       "incrementId": "33c280ba03264f269efe614b7eb478eb",
       "note": "Self-verified: full workspace test suite (144 tests) + clippy clean, wasm32-wasip2 build clean, code-review skill run (0 critical/high findings). User explicitly asked to defer individual per-increment verification and check all 3 increments together at the end instead - not an individual user sign-off on this increment specifically.",
       "approvedAt": "2026-07-22T21:28:24.3983582Z"
+    },
+    {
+      "gate": "verify",
+      "phase": "VERIFY",
+      "incrementId": "3484bd16a8ca4f8fb3a8e81ea35ee1bc",
+      "note": "Self-verified: extension builds and clippy-checks clean for wasm32-wasip2. HUD uses the already-tested ui::Spec/Widget wire format (bones-messages tests already cover Spec/Widget round-tripping) - no new engine surface, so no new engine-level tests needed. User asked to defer individual per-increment verification and check all 3 increments together at the end.",
+      "approvedAt": "2026-07-22T21:31:16.8777524Z"
     }
   ],
   "history": [
@@ -156,8 +163,28 @@
       "at": "2026-07-22T21:28:31.5182495Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-07-22T21:29:13.0100577Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to BUILD."
+    },
+    {
+      "at": "2026-07-22T21:31:16.1437582Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-07-22T21:31:16.8805406Z",
+      "action": "approve",
+      "detail": "Approved verify during VERIFY."
+    },
+    {
+      "at": "2026-07-22T21:31:17.7672496Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-07-22T16:47:43.8462272Z",
-  "updatedAt": "2026-07-22T21:28:31.5235703Z"
+  "updatedAt": "2026-07-22T21:31:17.7734578Z"
 }
