@@ -11,8 +11,8 @@
     "done": "Robot hitbox is visibly narrower than its sprite frame; HUD shows live life and score, score increments on purple-box collision, life decrements on red-triangle collision; Esc opens/closes an in-game menu with Settings and Exit entries; Settings lets the user pick big-box color (warm/non-red presets) and small-box color (cold presets) with changes applying live; Exit cleanly closes the running app; new engine surface (exit request, triangle shape) has tests and updated docs (ADR if it's a lasting architectural call).",
     "outOfScope": "The full roadmap shutdown sequence (per-extension shutdown() lifecycle, Stopped event, close-request pub/sub event) - only a minimal-but-clean extension-exit path; retro-world collider support for triangles unless DESIGN finds it's actually needed (obstacles are RAPIER2D-only today); the old PROGRESS.md's leftover solver-stiffness/velocity-clamp tuning items (unrelated, already-stale prior workflow); a real color-picker widget type (stick to preset buttons)."
   },
-  "currentIncrementId": "748dc1e9cf2c4c47921ea1787e1c7059",
-  "commitBaseline": "54f72955f15271d776ff44056edc7d284e342bdf",
+  "currentIncrementId": "1c8131c6021b451dbb2da2df11e581f1",
+  "commitBaseline": "c770115cd473ad2da3838c171b46bbe4aab2dd9a",
   "increments": [
     {
       "id": "33c280ba03264f269efe614b7eb478eb",
@@ -115,9 +115,16 @@
     {
       "id": "748dc1e9cf2c4c47921ea1787e1c7059",
       "number": 15,
-      "status": "verified",
+      "status": "completed",
       "scope": "game_core_demo: interior floor uses rock tiles from tileset_grass, not a separate bricks tileset",
       "description": "Replaces the brick interior floor with paving/rock tiles cropped from tileset_grass.png's own cobblestone region (rows 8-9/cols 0-1 and row10 col1 - gids 129,130,145,162), instead of the separate tileset_bricks.png tileset - a genuinely 16px-periodic paving pattern within the source image (grout lines land on the same 16px grid the tile system already slices at), verified seamless under any dither combination by rendering a mixed test grid before use (unlike the bricks source, which was one continuous coursing texture where sub-tile position mattered). Drops the now-unused bricks tileset entirely: level.tmx's <tileset name=\"bricks\"> declaration and tileset_bricks.png asset removed, lib.rs's TILESET_BRICKS_PNG/BRICK_SPRITE_ID/BRICK_TILESET_NAME constants and its TilesetImage registration removed."
+    },
+    {
+      "id": "1c8131c6021b451dbb2da2df11e581f1",
+      "number": 16,
+      "status": "verified",
+      "scope": "game_core_demo: rebuild level.tmx at the asset pack's real 32x32 tile size",
+      "description": "The tileset has been declared/sliced at 16x16 since increment 6, but the source art's real native tile size is 32x32 - corroborated by the robot's own collider (CONTROLLED_HALF_EXTENT=16.0, a 32px-wide hitbox that reads as exactly one 32px tile, not two 16px ones) and confirmed directly by the user. level.tmx's tileset declaration moves to tilewidth/tileheight=32 (grass image is now an 8x8 grid of 64 tiles, not 16x16 of 256); map dimensions recompute to 60x45 tiles to keep the same 1920x1440px world (unchanged, so camera/entity/HUD math stays valid); margin/wall-band tile counts recompute to 2/1 tiles to keep the same 64px/32px pixel thicknesses. Grass margin uses one verified pixel-uniform 32x32 tile (gid 1); the rock-paved interior uses 4 verified-seamless 32x32 crops from the same cobblestone region (gids 33,34,41,50 - each independently grout-bordered, confirmed via a rendered dithered test grid before use, same rigor as increment 15). Regenerates level.tmx; no lib.rs changes needed (entity spawn coordinates are pixel-based, already correct since the world's pixel dimensions are unchanged)."
     }
   ],
   "approvals": [
@@ -241,18 +248,25 @@
       "approvedAt": "2026-07-23T17:10:25.657531Z"
     },
     {
-      "gate": "split",
-      "phase": "SPLIT",
-      "incrementId": null,
-      "note": "User directed this directly in chat after seeing the fixed-but-still-undesired brick texture; verified the new source region tiles seamlessly via a rendered test grid before implementing.",
-      "approvedAt": "2026-07-23T17:14:19.7676792Z"
-    },
-    {
       "gate": "verify",
       "phase": "VERIFY",
       "incrementId": "748dc1e9cf2c4c47921ea1787e1c7059",
       "note": "Verified the rock-paving region's genuine 16px periodicity by sampling brightness profiles before use (grout lines recur every 16px, aligned to absolute multiples of 16 - unlike the bricks source, so mixing different grid-aligned crops is safe), then confirmed via a rendered dithered test grid before touching level.tmx. Independently re-verified the actual generated file's interior region via a from-scratch reconstruction script, rebuilt via build.ps1 (confirmed dist wasm mtime newer than both source edits), and visually confirmed in the real running app - clean seamless rock-paving floor, no scrambled cuts. Full workspace test suite green; clippy clean on the extension.",
       "approvedAt": "2026-07-23T17:18:04.4501176Z"
+    },
+    {
+      "gate": "split",
+      "phase": "SPLIT",
+      "incrementId": null,
+      "note": "User directly asserted the correct tile size, corroborated by the robot hitbox's own dimension; verified both sizes tile seamlessly before choosing 32 per the user's direction.",
+      "approvedAt": "2026-07-23T17:22:14.6634149Z"
+    },
+    {
+      "gate": "verify",
+      "phase": "VERIFY",
+      "incrementId": "1c8131c6021b451dbb2da2df11e581f1",
+      "note": "Verified 32x32 is a valid tile size for this source art the same rigorous way as increment 15 (uniform-color check for the grass margin tile, a rendered dithered test grid for the rock tiles) before regenerating. Independently re-verified the actual generated level.tmx's interior via a from-scratch reconstruction, confirmed the collision object geometry is pixel-identical to before, rebuilt via build.ps1 (confirmed dist wasm mtime newer than the .tmx edit, and its file size dropped as expected with fewer/bigger tiles), and visually confirmed in the real running app - tiles are visibly bigger and the robot now reads as roughly one tile wide. Full workspace test suite green; clippy clean on the extension.",
+      "approvedAt": "2026-07-23T17:24:41.3205987Z"
     }
   ],
   "history": [
@@ -855,8 +869,48 @@
       "at": "2026-07-23T17:18:05.2934571Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-07-23T17:18:29.0627321Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to MR."
+    },
+    {
+      "at": "2026-07-23T17:22:13.9331322Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 16: game_core_demo: rebuild level.tmx at the asset pack's real 32x32 tile size"
+    },
+    {
+      "at": "2026-07-23T17:22:14.6662057Z",
+      "action": "approve",
+      "detail": "Approved split during SPLIT."
+    },
+    {
+      "at": "2026-07-23T17:22:15.3878973Z",
+      "action": "advance",
+      "detail": "Advanced from SPLIT to BRANCH."
+    },
+    {
+      "at": "2026-07-23T17:22:16.1661221Z",
+      "action": "advance",
+      "detail": "Advanced from BRANCH to BUILD."
+    },
+    {
+      "at": "2026-07-23T17:24:39.2011508Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-07-23T17:24:41.3237179Z",
+      "action": "approve",
+      "detail": "Approved verify during VERIFY."
+    },
+    {
+      "at": "2026-07-23T17:24:42.1014711Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-07-22T16:47:43.8462272Z",
-  "updatedAt": "2026-07-23T17:18:05.3015302Z"
+  "updatedAt": "2026-07-23T17:24:42.1070212Z"
 }
