@@ -306,13 +306,14 @@ fn spawn_hazard(entity_id: u32, x: f32, y: f32) {
 // Matches bones.toml's default window size (Config::default) — this demo
 // never overrides window_width/window_height, and no engine message
 // exposes the actual window size to an extension yet, so this is a fixed
-// assumption rather than something queried at runtime.
+// assumption rather than something queried at runtime. Also what's passed
+// as EntityOp::SetCameraFollow's viewport_w/viewport_h, below.
 const SCREEN_WIDTH: i32 = 800;
+const SCREEN_HEIGHT: i32 = 600;
 
-// Camera is always identity (game-core's own publish_gfx sets x=0,y=0,
-// zoom=1 every tick, see game-core's README), so screen-space and
-// world-space pixel coordinates coincide in this demo — a fixed HUD/menu
-// position never drifts as the robot moves.
+// HUD/menu draws are all screen_space: true (gfx::DrawRect/DrawText), so
+// these fixed pixel positions stay put on screen regardless of where
+// EntityOp::SetCameraFollow has panned the camera.
 const HUD_LAYER: u8 = 5;
 const MENU_LAYER: u8 = 6;
 
@@ -340,7 +341,7 @@ fn draw_hud(score: u32, life: u32) {
             filled: true,
             color: HUD_BG_COLOR,
             layer: HUD_LAYER,
-            screen_space: false,
+            screen_space: true,
         }
         .encode(),
     );
@@ -354,7 +355,7 @@ fn draw_hud(score: u32, life: u32) {
             filled: false,
             color: HUD_BORDER_COLOR,
             layer: HUD_LAYER,
-            screen_space: false,
+            screen_space: true,
         }
         .encode(),
     );
@@ -368,7 +369,7 @@ fn draw_hud(score: u32, life: u32) {
             size: 16,
             color: HUD_TEXT_COLOR,
             layer: HUD_LAYER,
-            screen_space: false,
+            screen_space: true,
         }
         .encode(),
     );
@@ -382,7 +383,7 @@ fn draw_hud(score: u32, life: u32) {
             size: 16,
             color: HUD_TEXT_COLOR,
             layer: HUD_LAYER,
-            screen_space: false,
+            screen_space: true,
         }
         .encode(),
     );
@@ -512,7 +513,7 @@ fn draw_menu(menu: MenuState) {
             filled: true,
             color: PANEL_BG_COLOR,
             layer: MENU_LAYER,
-            screen_space: false,
+            screen_space: true,
         }
         .encode(),
     );
@@ -526,7 +527,7 @@ fn draw_menu(menu: MenuState) {
             filled: false,
             color: PANEL_BORDER_COLOR,
             layer: MENU_LAYER,
-            screen_space: false,
+            screen_space: true,
         }
         .encode(),
     );
@@ -545,7 +546,7 @@ fn draw_menu(menu: MenuState) {
             size: 18,
             color: PANEL_TITLE_COLOR,
             layer: MENU_LAYER,
-            screen_space: false,
+            screen_space: true,
         }
         .encode(),
     );
@@ -560,7 +561,7 @@ fn draw_menu(menu: MenuState) {
                 size: 14,
                 color: SECTION_LABEL_COLOR,
                 layer: MENU_LAYER,
-                screen_space: false,
+                screen_space: true,
             }
             .encode(),
         );
@@ -574,7 +575,7 @@ fn draw_menu(menu: MenuState) {
                 size: 14,
                 color: SECTION_LABEL_COLOR,
                 layer: MENU_LAYER,
-                screen_space: false,
+                screen_space: true,
             }
             .encode(),
         );
@@ -591,7 +592,7 @@ fn draw_menu(menu: MenuState) {
                 filled: true,
                 color: BUTTON_COLOR,
                 layer: MENU_LAYER,
-                screen_space: false,
+                screen_space: true,
             }
             .encode(),
         );
@@ -608,7 +609,7 @@ fn draw_menu(menu: MenuState) {
                 size: 16,
                 color: BUTTON_TEXT_COLOR,
                 layer: MENU_LAYER,
-                screen_space: false,
+                screen_space: true,
             }
             .encode(),
         );
@@ -712,6 +713,18 @@ impl Guest for Component {
             ],
         };
         publish(LoadTilemap::TOPIC, &load_tilemap.encode());
+
+        // The level is now much bigger than the window (level.tmx is
+        // 120x90 tiles), so the camera needs to actually follow the
+        // controlled entity rather than sit fixed at the origin — clamped
+        // to the level's bounds (game-core's own EntityOp::SetCameraFollow
+        // doc comment) so it stops panning once an edge would come into
+        // view, instead of showing past the map.
+        publish_entity_op(EntityOp::SetCameraFollow {
+            entity_id: CONTROLLED_ENTITY_ID,
+            viewport_w: SCREEN_WIDTH as f32,
+            viewport_h: SCREEN_HEIGHT as f32,
+        });
 
         // ~80ms, 1200Hz — a short click for footsteps.
         let footstep = synthesize_tone(1200.0, 96, 0.5);

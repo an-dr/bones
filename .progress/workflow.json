@@ -11,8 +11,8 @@
     "done": "Robot hitbox is visibly narrower than its sprite frame; HUD shows live life and score, score increments on purple-box collision, life decrements on red-triangle collision; Esc opens/closes an in-game menu with Settings and Exit entries; Settings lets the user pick big-box color (warm/non-red presets) and small-box color (cold presets) with changes applying live; Exit cleanly closes the running app; new engine surface (exit request, triangle shape) has tests and updated docs (ADR if it's a lasting architectural call).",
     "outOfScope": "The full roadmap shutdown sequence (per-extension shutdown() lifecycle, Stopped event, close-request pub/sub event) - only a minimal-but-clean extension-exit path; retro-world collider support for triangles unless DESIGN finds it's actually needed (obstacles are RAPIER2D-only today); the old PROGRESS.md's leftover solver-stiffness/velocity-clamp tuning items (unrelated, already-stale prior workflow); a real color-picker widget type (stick to preset buttons)."
   },
-  "currentIncrementId": "f8f5418341934ad8b23c9fd18c2b21a5",
-  "commitBaseline": "3840efe701fe8ad30c955b0cdb5e7ba5ca4228f7",
+  "currentIncrementId": "26a39f17637941c983abb8b8e17daf98",
+  "commitBaseline": "f26c6db667e43d5a8b552f124bb47d57ca4886d9",
   "increments": [
     {
       "id": "33c280ba03264f269efe614b7eb478eb",
@@ -66,14 +66,14 @@
     {
       "id": "f8f5418341934ad8b23c9fd18c2b21a5",
       "number": 8,
-      "status": "verified",
+      "status": "completed",
       "scope": "gfx/renderer + game-core: screen-space draws and camera-follow-with-clamp",
       "description": "shared/bones-messages: DrawRect and DrawText each gain a screen_space: bool field (encode/decode + tests) - every EXISTING call site (game-core's publish_shape, sprite_demo, game_core_demo's current 11 DrawRect/DrawText calls) gets screen_space: false added, a pure mechanical no-behavior-change default. core/renderer: RetainedDraw::Text gains screen_space (Rect already wraps the whole DrawRect struct so it flows through for free); inner.rs's record() carries the flag through for Text; composite()'s Rect and Text draw arms skip both the camera translation and zoom scaling when screen_space is true, drawing at literal (x,y,w,h) screen pixels regardless of camera position - Sprite/Line/Circle/Triangle stay world-space only, unchanged, since nothing needs a screen-space version of those yet. bones_messages::game_core::EntityOp gains SetCameraFollow { entity_id: u32, viewport_w: f32, viewport_h: f32 } (TAG 6, encode/decode + tests) - a caller sets this once to have game-core auto-follow that entity. core/game-core: tiles/tile_draw.rs gains map_pixel_size(tmx_bytes) -> Option<(f32, f32)> (a third small reparse alongside load_collision_rects/load_tile_draws, consistent with this module's existing one-parse-per-concern pattern); GameCore stores level_width_px/level_height_px (set in load_tilemap) and camera_follow: Option<CameraFollow{entity_id,viewport_w,viewport_h}>; apply_entity_op handles the new variant; publish_gfx replaces its always-fixed SetCamera{0,0,1.0} with a computed camera when following - centered on the target entity's Transform (self.entities lookup, same pattern as set_velocity/set_color), clamped per axis to [0, max(0, level_size_px - viewport_size_px)] so the camera stops panning once the level edge would go out of view; falls back to the fixed (0,0) camera if not following or the target entity is missing. Unit tests: camera centers on a followed entity mid-map; camera clamps (does not overshoot) near each edge; an unfollowed/default GameCore still publishes the fixed (0,0) camera (regression)."
     },
     {
       "id": "26a39f17637941c983abb8b8e17daf98",
       "number": 9,
-      "status": "planned",
+      "status": "verified",
       "scope": "game_core_demo: a big grass world with camera-follow",
       "description": "level.tmx grows from 38x28 to 120x90 tiles (1920x1440px vs. the 800x600 window - room to actually pan) - Ground layer grass-filled throughout, brick border walls moved out to the new edges; existing obstacles/hazards/boxes stay clustered near the original spawn area rather than being redistributed (the ask is grass coverage + camera, not a level redesign). lib.rs's init calls the new EntityOp::SetCameraFollow { entity_id: 1, viewport_w: 800.0, viewport_h: 600.0 } once, after LoadTilemap so level bounds are already known. Every existing HUD/pause-menu DrawRect/DrawText call (score/life labels, panel backdrop, buttons, button text - added as screen_space: false plumbing in increment 8) flips to screen_space: true, so they stay fixed on screen as the camera pans instead of drifting with the world. Rebuild via build.ps1 and a manual run to confirm grass covers the expanded area, the camera follows and clamps at the level edges, and the HUD/menu stay put."
     }
@@ -162,6 +162,13 @@
       "incrementId": "f8f5418341934ad8b23c9fd18c2b21a5",
       "note": "Self-verified: full workspace test suite green (game-core 115 tests incl. 6 new camera-follow tests, bones-messages 52 incl. screen_space + SetCameraFollow round-trips). Clippy clean on bones-messages/renderer/game-core/app (game-core's one finding is pre-existing in rapier2d_backend.rs, untouched here) and both wasm extensions. Rebuilt sprite_demo's stale release wasm fixture that the runner integration suite loads directly - it predated the wire format change and was failing to decode, not a source defect. code-review skill run: 0 critical/high findings, 1 informational note (no unfollow op - deliberately out of scope). Continuing this workflow's established self-verification pattern.",
       "approvedAt": "2026-07-23T16:41:13.2901202Z"
+    },
+    {
+      "gate": "verify",
+      "phase": "VERIFY",
+      "incrementId": "26a39f17637941c983abb8b8e17daf98",
+      "note": "Self-verified: full workspace test suite green (no regressions - this increment only touches the wasm extension, which has no native Rust unit tests, matching this repo's established pattern for extensions). Rebuilt via build.ps1, smoke-tested the packaged dist/bones.exe (ran ~2s, ticked cleanly at 60Hz, no renderer decode errors, tilemap+sprite loaded), then visually confirmed via a real screenshot: grass covers the expanded 120x90 map, the HUD (Score/Life) stays fixed top-left as screen_space:true content, brick interior floor renders correctly, and the camera is correctly clamped near (0,0) since the robot spawns close to the map's top-left corner - matches the clamp math already exhaustively unit-tested in increment 8. Independently validated level.tmx's generated XML/CSV structure (well-formed, correct cell count, no empty cells, wall objects match computed geometry) before building.",
+      "approvedAt": "2026-07-23T16:50:53.9317597Z"
     }
   ],
   "history": [
@@ -504,8 +511,28 @@
       "at": "2026-07-23T16:41:14.0525674Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-07-23T16:41:41.6027063Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to BUILD."
+    },
+    {
+      "at": "2026-07-23T16:50:42.9399085Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-07-23T16:50:53.9346323Z",
+      "action": "approve",
+      "detail": "Approved verify during VERIFY."
+    },
+    {
+      "at": "2026-07-23T16:50:54.7178532Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-07-22T16:47:43.8462272Z",
-  "updatedAt": "2026-07-23T16:41:14.0583023Z"
+  "updatedAt": "2026-07-23T16:50:54.7259593Z"
 }
