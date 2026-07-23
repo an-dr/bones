@@ -260,9 +260,24 @@ struct State {
     resolution_options: Vec<(u32, u32)>,
     // Whether that dropdown is currently showing its option list.
     resolution_expanded: bool,
+    // `Some` freezes gameplay (EntityOp::SetPaused published alongside, in
+    // on_collision) and switches on_tick to drawing the end screen instead
+    // of the normal HUD/menu - `None` the entire time gameplay is ongoing.
+    // Enter (KeyDown) is the only way back to `None`, via restart().
+    game_over: Option<Outcome>,
+}
+
+/// Which end screen `State::game_over` is currently showing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Outcome {
+    GameOver,
+    Win,
 }
 
 const FULL_LIFE: u32 = 3;
+// Reachable now that a scattered layout (increment 22) fills the arena with
+// many more big boxes than the original handful clustered near spawn.
+const WIN_SCORE: u32 = 100;
 
 thread_local! {
     static STATE: RefCell<State> = RefCell::new(State::default());
@@ -372,6 +387,85 @@ fn spawn_hazard(entity_id: u32, x: f32, y: f32) {
         body_kind: BodyKind::Kinematic,
         worlds: PhysicsWorlds::RAPIER2D,
     });
+}
+
+/// Spawns the controlled entity plus every big box/small box/hazard at
+/// their starting positions. Called once from `init`, and again from
+/// `restart` — `EntityOp::Spawn` on an `entity_id` already in use replaces
+/// that entity (the same semantics `gfx::DrawSprite` batches already use),
+/// so a restart returns every entity to exactly where it began, not
+/// wherever play left it.
+fn spawn_entities() {
+    // The controlled entity: driven by set-velocity from on_tick, below —
+    // the only entity in this demo that uses the robot sprite. Its
+    // collider is narrower than the sprite frame (CONTROLLED_HALF_EXTENT
+    // vs. FRAME_SIZE/2.0) — the robot's actual body width, not its full
+    // drawn frame including empty margin either side. Registered in both
+    // physics worlds at once (ADR-021, `PhysicsWorlds::BOTH`) — this
+    // demo's example of a single entity genuinely simulated by two
+    // independent backends simultaneously; `retro` outranks `rapier2d` in
+    // `PhysicsWorldKind::PRIORITY`, so the robot's drawn position tracks
+    // the no-mass, no-solver world while its rapier2d copy (still pushed
+    // by/pushing big boxes) is snapped to match every tick.
+    publish_entity_op(EntityOp::Spawn {
+        entity_id: CONTROLLED_ENTITY_ID,
+        x: LEVEL_ORIGIN_X + 60.0,
+        y: LEVEL_ORIGIN_Y + 60.0,
+        sprite: Some(Sprite {
+            sprite_id: SPRITE_ID,
+            frame_w: FRAME_SIZE,
+            frame_h: FRAME_SIZE,
+            frame_count: 4,
+            frame_duration: 0.15,
+        }),
+        square_color: (0, 0, 0, 0),
+        shape: Shape::Rect,
+        collider_half_w: CONTROLLED_HALF_EXTENT,
+        collider_half_h: CONTROLLED_HALF_EXTENT,
+        body_kind: BodyKind::Dynamic,
+        worlds: PhysicsWorlds::BOTH,
+    });
+
+    // Several stationary purple big-box squares — the controlled entity
+    // (and, if pushed into a neighbor, one box into another) visibly stops
+    // against each one, proving entity-entity collision alongside the
+    // tilemap's entity-terrain collision. A hit between two of these
+    // flashes white briefly and plays a sound; the robot hitting one
+    // scores a point (see on_message's Collision handling).
+    spawn_big_box(2, LEVEL_ORIGIN_X + 350.0, LEVEL_ORIGIN_Y + 60.0);
+    spawn_big_box(3, LEVEL_ORIGIN_X + 350.0, LEVEL_ORIGIN_Y + 160.0);
+    spawn_big_box(4, LEVEL_ORIGIN_X + 350.0, LEVEL_ORIGIN_Y + 260.0);
+    spawn_big_box(5, LEVEL_ORIGIN_X + 120.0, LEVEL_ORIGIN_Y + 260.0);
+
+    // Two blue Frictionless squares: pushable, but carry no momentum —
+    // pushing the robot into one moves it, but it stops the instant
+    // contact ends, unlike the purple Dynamic big boxes above.
+    spawn_small_box(6, LEVEL_ORIGIN_X + 220.0, LEVEL_ORIGIN_Y + 60.0);
+    spawn_small_box(7, LEVEL_ORIGIN_X + 220.0, LEVEL_ORIGIN_Y + 260.0);
+
+    // Two stationary red hazard triangles — the robot loses life on
+    // contact (see on_message's Collision handling). Positioned clear of
+    // every other spawn above.
+    spawn_hazard(8, LEVEL_ORIGIN_X + 60.0, LEVEL_ORIGIN_Y + 160.0);
+    spawn_hazard(9, LEVEL_ORIGIN_X + 400.0, LEVEL_ORIGIN_Y + 200.0);
+}
+
+/// Resets gameplay to a fresh start: score/life/every entity back to their
+/// initial state (`spawn_entities` again, replacing whatever play left
+/// them at), closes any open menu, and unpauses — the only way back to
+/// `None` from `State::game_over`.
+fn restart() {
+    STATE.with(|state| {
+        let mut state = state.borrow_mut();
+        state.score = 0;
+        state.life = FULL_LIFE;
+        state.big_box_color = BIG_BOX_COLOR;
+        state.small_box_color = SMALL_BOX_COLOR;
+        state.game_over = None;
+        state.menu = MenuState::Closed;
+    });
+    spawn_entities();
+    publish_entity_op(EntityOp::SetPaused { paused: false });
 }
 
 // Matches bones.toml's default window size (Config::default) — this demo
@@ -811,6 +905,80 @@ fn draw_menu(
     }
 }
 
+// Above MENU_LAYER, so the end screen always wins if both were somehow
+// drawn the same tick (shouldn't happen — toggle_menu is a no-op once
+// State::game_over is Some — but layering defensively costs nothing).
+const END_LAYER: u8 = 7;
+const END_OVERLAY_COLOR: (u8, u8, u8, u8) = (10, 10, 15, 255);
+const GAME_OVER_TITLE_COLOR: (u8, u8, u8, u8) = (220, 40, 40, 255);
+const WIN_TITLE_COLOR: (u8, u8, u8, u8) = (255, 215, 0, 255);
+
+/// One line of screen_space text, horizontally centered on `SCREEN_WIDTH` —
+/// same rough ~half-glyph-width-per-point centering estimate `draw_menu`'s
+/// button labels already use, just applied around the screen's own center
+/// instead of a button's.
+fn draw_centered_text(text: &str, y: i32, size: u16, color: (u8, u8, u8, u8)) {
+    let width_estimate = text.len() as i32 * size as i32 / 2;
+    let x = (SCREEN_WIDTH - width_estimate) / 2;
+    publish(
+        DrawText::TOPIC,
+        &DrawText {
+            text,
+            x,
+            y,
+            size,
+            color,
+            layer: END_LAYER,
+            screen_space: true,
+        }
+        .encode(),
+    );
+}
+
+/// A full-canvas backdrop (opaque — `DrawRect` doesn't blend alpha for
+/// filled rects yet, see `draw_menu`'s own doc comment) plus `outcome`'s
+/// message, called every tick while `State::game_over` is `Some`. `score`
+/// is only shown for `Win` — `GameOver` doesn't need it, life having
+/// already hit zero is the whole story.
+fn draw_end_screen(outcome: Outcome, score: u32) {
+    publish(
+        DrawRect::TOPIC,
+        &DrawRect {
+            x: 0,
+            y: 0,
+            w: SCREEN_WIDTH as u32,
+            h: SCREEN_HEIGHT as u32,
+            filled: true,
+            color: END_OVERLAY_COLOR,
+            layer: END_LAYER,
+            screen_space: true,
+        }
+        .encode(),
+    );
+    match outcome {
+        Outcome::GameOver => {
+            draw_centered_text("GAME OVER", SCREEN_HEIGHT / 2 - 30, 48, GAME_OVER_TITLE_COLOR);
+            draw_centered_text(
+                "Press Enter to retry",
+                SCREEN_HEIGHT / 2 + 30,
+                20,
+                BUTTON_TEXT_COLOR,
+            );
+        }
+        Outcome::Win => {
+            draw_centered_text("You Win!", SCREEN_HEIGHT / 2 - 60, 48, WIN_TITLE_COLOR);
+            let points_text = format!("You got {score} points!");
+            draw_centered_text(&points_text, SCREEN_HEIGHT / 2, 22, BUTTON_TEXT_COLOR);
+            draw_centered_text(
+                "Press Enter to restart",
+                SCREEN_HEIGHT / 2 + 40,
+                20,
+                BUTTON_TEXT_COLOR,
+            );
+        }
+    }
+}
+
 /// Left-click hit-testing against whatever `menu_buttons` the current menu
 /// shows — a no-op while `Closed` (nothing to click) or for any click that
 /// doesn't land inside a button.
@@ -866,17 +1034,26 @@ fn on_mouse_down(x: f32, y: f32) {
 /// every entity, including one still settling from a recent push, on
 /// exactly the frame Esc was pressed instead of letting it keep drifting
 /// in the background while the menu is up.
+/// A no-op while `State::game_over` is `Some` — the end screen has its own
+/// Enter-to-restart, not the pause menu, and the game is already paused
+/// for a different reason (SetPaused published from on_collision, not
+/// here) that restart() alone should undo.
 fn toggle_menu() {
     let paused = STATE.with(|state| {
         let mut state = state.borrow_mut();
+        if state.game_over.is_some() {
+            return None;
+        }
         state.menu = if state.menu == MenuState::Closed {
             MenuState::Main
         } else {
             MenuState::Closed
         };
-        state.menu != MenuState::Closed
+        Some(state.menu != MenuState::Closed)
     });
-    publish_entity_op(EntityOp::SetPaused { paused });
+    if let Some(paused) = paused {
+        publish_entity_op(EntityOp::SetPaused { paused });
+    }
 }
 
 fn on_button_clicked(id: u32) {
@@ -1026,59 +1203,7 @@ impl Guest for Component {
             .encode(),
         );
 
-        // The controlled entity: driven by set-velocity from on_tick, below
-        // — the only entity in this demo that uses the robot sprite. Its
-        // collider is narrower than the sprite frame (CONTROLLED_HALF_EXTENT
-        // vs. FRAME_SIZE/2.0) — the robot's actual body width, not its full
-        // drawn frame including empty margin either side. Registered in
-        // both physics worlds at once (ADR-021, `PhysicsWorlds::BOTH`) —
-        // this demo's example of a single entity genuinely simulated by two
-        // independent backends simultaneously; `retro` outranks `rapier2d`
-        // in `PhysicsWorldKind::PRIORITY`, so the robot's drawn position
-        // tracks the no-mass, no-solver world while its rapier2d copy
-        // (still pushed by/pushing big boxes) is snapped to match every
-        // tick.
-        publish_entity_op(EntityOp::Spawn {
-            entity_id: CONTROLLED_ENTITY_ID,
-            x: LEVEL_ORIGIN_X + 60.0,
-            y: LEVEL_ORIGIN_Y + 60.0,
-            sprite: Some(Sprite {
-                sprite_id: SPRITE_ID,
-                frame_w: FRAME_SIZE,
-                frame_h: FRAME_SIZE,
-                frame_count: 4,
-                frame_duration: 0.15,
-            }),
-            square_color: (0, 0, 0, 0),
-            shape: Shape::Rect,
-            collider_half_w: CONTROLLED_HALF_EXTENT,
-            collider_half_h: CONTROLLED_HALF_EXTENT,
-            body_kind: BodyKind::Dynamic,
-            worlds: PhysicsWorlds::BOTH,
-        });
-
-        // Several stationary purple big-box squares — the controlled entity
-        // (and, if pushed into a neighbor, one box into another) visibly
-        // stops against each one, proving entity-entity collision alongside
-        // the tilemap's entity-terrain collision. A hit between two of
-        // these flashes white briefly and plays a sound; the robot hitting
-        // one scores a point (see on_message's Collision handling).
-        spawn_big_box(2, LEVEL_ORIGIN_X + 350.0, LEVEL_ORIGIN_Y + 60.0);
-        spawn_big_box(3, LEVEL_ORIGIN_X + 350.0, LEVEL_ORIGIN_Y + 160.0);
-        spawn_big_box(4, LEVEL_ORIGIN_X + 350.0, LEVEL_ORIGIN_Y + 260.0);
-        spawn_big_box(5, LEVEL_ORIGIN_X + 120.0, LEVEL_ORIGIN_Y + 260.0);
-
-        // Two blue Frictionless squares: pushable, but carry no momentum —
-        // pushing the robot into one moves it, but it stops the instant
-        // contact ends, unlike the purple Dynamic big boxes above.
-        spawn_small_box(6, LEVEL_ORIGIN_X + 220.0, LEVEL_ORIGIN_Y + 60.0);
-        spawn_small_box(7, LEVEL_ORIGIN_X + 220.0, LEVEL_ORIGIN_Y + 260.0);
-
-        // Two stationary red hazard triangles — the robot loses life on
-        // contact (see on_message's Collision handling). Positioned clear
-        // of every other spawn above.
-        spawn_hazard(8, LEVEL_ORIGIN_X + 60.0, LEVEL_ORIGIN_Y + 160.0);
-        spawn_hazard(9, LEVEL_ORIGIN_X + 400.0, LEVEL_ORIGIN_Y + 200.0);
+        spawn_entities();
 
         STATE.with(|state| {
             let mut state = state.borrow_mut();
@@ -1104,7 +1229,7 @@ impl Guest for Component {
         // velocity while the player is looking at a menu.
         let (vx, vy) = STATE.with(|state| {
             let state = state.borrow();
-            if state.menu == MenuState::Closed {
+            if state.menu == MenuState::Closed && state.game_over.is_none() {
                 state.held.velocity()
             } else {
                 (0.0, 0.0)
@@ -1160,19 +1285,28 @@ impl Guest for Component {
             });
         });
 
-        let (score, life, menu, fullscreen, resolution, resolution_expanded, resolution_options) =
-            STATE.with(|state| {
-                let state = state.borrow();
-                (
-                    state.score,
-                    state.life,
-                    state.menu,
-                    state.fullscreen,
-                    state.resolution,
-                    state.resolution_expanded,
-                    state.resolution_options.clone(),
-                )
-            });
+        let (
+            score,
+            life,
+            menu,
+            fullscreen,
+            resolution,
+            resolution_expanded,
+            resolution_options,
+            game_over,
+        ) = STATE.with(|state| {
+            let state = state.borrow();
+            (
+                state.score,
+                state.life,
+                state.menu,
+                state.fullscreen,
+                state.resolution,
+                state.resolution_expanded,
+                state.resolution_options.clone(),
+                state.game_over,
+            )
+        });
         draw_hud(score, life);
         draw_menu(
             menu,
@@ -1181,6 +1315,13 @@ impl Guest for Component {
             resolution_expanded,
             &resolution_options,
         );
+        // Drawn last (and covers the whole canvas, opaque) so it's always
+        // on top of the HUD/menu above regardless of publish order within
+        // this tick - not that menu should ever be open at the same time
+        // (toggle_menu is a no-op once game_over is Some).
+        if let Some(outcome) = game_over {
+            draw_end_screen(outcome, score);
+        }
     }
 
     fn on_message(topic: String, _sender: String, payload: Vec<u8>) -> Option<Vec<u8>> {
@@ -1190,6 +1331,16 @@ impl Guest for Component {
                     match message.key {
                         "H" => toggle_debug_hitboxes(),
                         "Escape" => toggle_menu(),
+                        // Only meaningful once State::game_over is Some -
+                        // a no-op the rest of the time, not bound to
+                        // anything else this demo does with Enter. Both
+                        // keycodes: SDL reports the numpad Enter key as
+                        // its own distinct "KpEnter", not "Return".
+                        "Return" | "KpEnter" => {
+                            if STATE.with(|state| state.borrow().game_over.is_some()) {
+                                restart();
+                            }
+                        }
                         _ => set_key_held(message.key, true),
                     }
                 }
@@ -1274,6 +1425,13 @@ fn revert_color(entity_id: u32, big_box_color: (u8, u8, u8, u8)) -> (u8, u8, u8,
 /// trigger, now purple), and the robot hitting a hazard triangle (flashes
 /// it, sound, life -= 1, saturating at zero rather than wrapping).
 fn on_collision(collision: Collision) {
+    // Physics is paused the instant an outcome is set (below), so this
+    // shouldn't fire again before restart() — guarded anyway rather than
+    // assumed.
+    if STATE.with(|state| state.borrow().game_over.is_some()) {
+        return;
+    }
+
     let (a, b) = (collision.entity_id_a, collision.entity_id_b);
 
     // `robot_hit` names the non-robot side of a robot collision, `None`
@@ -1289,7 +1447,7 @@ fn on_collision(collision: Collision) {
     };
 
     if let Some(hit) = robot_hit {
-        STATE.with(|state| {
+        let outcome = STATE.with(|state| {
             let mut state = state.borrow_mut();
             if is_big_box(hit) {
                 state.score += 1;
@@ -1300,7 +1458,24 @@ fn on_collision(collision: Collision) {
                 Level::Info,
                 &format!("score={} life={}", state.score, state.life),
             );
+            let outcome = if state.life == 0 {
+                Some(Outcome::GameOver)
+            } else if state.score >= WIN_SCORE {
+                Some(Outcome::Win)
+            } else {
+                None
+            };
+            state.game_over = outcome;
+            outcome
         });
+        // Freezes every entity (game-core's own tick, ADR: SetPaused skips
+        // stepping/collision-publishing entirely) the instant the game
+        // ends, the same mechanism the pause menu already uses — nothing
+        // keeps moving on the end screen, and no further Collision can
+        // fire to re-trigger this.
+        if outcome.is_some() {
+            publish_entity_op(EntityOp::SetPaused { paused: true });
+        }
     }
 
     STATE.with(|state| {
