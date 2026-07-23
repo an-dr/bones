@@ -11,8 +11,8 @@
     "done": "Robot hitbox is visibly narrower than its sprite frame; HUD shows live life and score, score increments on purple-box collision, life decrements on red-triangle collision; Esc opens/closes an in-game menu with Settings and Exit entries; Settings lets the user pick big-box color (warm/non-red presets) and small-box color (cold presets) with changes applying live; Exit cleanly closes the running app; new engine surface (exit request, triangle shape) has tests and updated docs (ADR if it's a lasting architectural call).",
     "outOfScope": "The full roadmap shutdown sequence (per-extension shutdown() lifecycle, Stopped event, close-request pub/sub event) - only a minimal-but-clean extension-exit path; retro-world collider support for triangles unless DESIGN finds it's actually needed (obstacles are RAPIER2D-only today); the old PROGRESS.md's leftover solver-stiffness/velocity-clamp tuning items (unrelated, already-stale prior workflow); a real color-picker widget type (stick to preset buttons)."
   },
-  "currentIncrementId": "932c32cd84844e849aa729e45c0241c2",
-  "commitBaseline": "73fb6acfe95c6d366c3d384ff886a70593207fec",
+  "currentIncrementId": "b5be7af660a64c38a88f26267244f68b",
+  "commitBaseline": "30ce7863971434f31c56f5e6951fba85f055adda",
   "increments": [
     {
       "id": "33c280ba03264f269efe614b7eb478eb",
@@ -129,16 +129,44 @@
     {
       "id": "932c32cd84844e849aa729e45c0241c2",
       "number": 17,
-      "status": "verified",
+      "status": "completed",
       "scope": "gfx/renderer + game-core: display settings (resolution/fullscreen) and camera zoom",
       "description": "shared/bones-messages: new gfx::SetDisplay { width: u32, height: u32, fullscreen: bool } command (own file, encode/decode + tests, Command enum variant) - a caller's request to resize/fullscreen-toggle the actual OS window. core/renderer: Inner records the window's initial size at Module::init and calls canvas.set_logical_size(w, h, LetterBox) once (SDL's logical-presentation scaling, sdl3 crate's Canvas::set_logical_size) - every gfx/* coordinate stays in that fixed logical space forever after, so nothing else in the engine (game-core's camera math, an extension's screen_space HUD) ever needs to know or care what the actual window size is. record()'s SetDisplay arm applies immediately (singleton, like Clear/SetCamera): canvas.window_mut().set_size(width, height) then .set_fullscreen(fullscreen) - logical size is never touched, so existing content auto-scales/letterboxes to the new window size with zero ripple effects elsewhere. bones_messages::game_core::EntityOp::SetCameraFollow gains a zoom: f32 field (wire format + existing call-site/test updates - default 1.0 preserves current behavior). core/game-core: CameraFollow stores zoom; camera_position()'s clamp divides viewport_w/viewport_h by zoom before clamping (zooming in shows less world per pixel, shrinking the effective world-space viewport) and publishes the real configured zoom via gfx::SetCamera instead of the hardcoded 1.0. Unit tests: SetDisplay round-trips; SetCameraFollow's zoom round-trips; camera clamp math at zoom != 1.0 (both centers correctly and clamps at a tighter effective viewport)."
     },
     {
       "id": "b5be7af660a64c38a88f26267244f68b",
       "number": 18,
-      "status": "planned",
+      "status": "verified",
       "scope": "game_core_demo: Display settings section (resolution, fullscreen, zoom presets)",
       "description": "Settings panel gains a Display section below the existing Big/Small box color sections: 3 resolution preset buttons (800x600/1024x768/1280x720), a Fullscreen toggle button (label reflects current state), and 3 zoom preset buttons (1.0x/1.5x/2.0x) - same preset-button idiom as the color pickers, no new widget type. PANEL_H grows to fit the extra rows. State gains resolution: (u32,u32), fullscreen: bool, zoom: f32 (defaults 800x600/false/1.0, matching SCREEN_WIDTH/SCREEN_HEIGHT and SetCameraFollow's current init call). on_button_clicked: a resolution preset updates state and publishes gfx::SetDisplay with the new size and the current fullscreen flag; the fullscreen toggle flips state.fullscreen and republishes gfx::SetDisplay with the current resolution; a zoom preset updates state.zoom and republishes EntityOp::SetCameraFollow with CONTROLLED_ENTITY_ID/SCREEN_WIDTH/SCREEN_HEIGHT unchanged and the new zoom - all cheap idempotent re-publishes, no new engine surface. Rebuild via build.ps1 and visually verify each control in the real running app."
+    },
+    {
+      "id": "49c8060f939541d988adf1d897921a18",
+      "number": 19,
+      "status": "planned",
+      "scope": "core: cross-platform display-mode query + a renderer display-changed event",
+      "description": "New host-api surface (wit/core.wit): record display-mode { width: u32, height: u32 }; list-display-modes: func() -> list<display-mode> (every fullscreen-capable resolution SDL reports for the window's display, genuinely cross-platform via SDL_GetFullscreenDisplayModes); native-display-mode: func() -> option<display-mode> (the desktop's own resolution, SDL_GetDesktopDisplayMode). core/platform: Platform queries and retains this once at construction (before any window hand-off) via self.sdl.video().displays(), exposed as plain accessor methods - a caller has no other way to reach this OS-level info, matching the 'platform is the only component touching the OS' contract. core/wasm-extensions/host.rs: State carries the two query results (computed once, threaded through Host::load the same way exit_requested already is - shared Arc-wrapped data, not a live handle); implements the two new HostApiImports methods. core/runner: builder.rs computes this once from platform and threads it through loading.rs/supervisor.rs's Host::load call sites. Separately: core/renderer's Renderer::new gains a Bus parameter (bypassing ServiceRegistry's single-consumer consume() the same way Ui::new already does, not fighting it) so it can publish a new bones_messages::renderer::DisplayChanged { width, height } event immediately after applying a gfx::SetDisplay command, carrying the REAL resulting window size (queried post-application) rather than what was requested - fullscreen may not honor the requested size, so this is how a caller learns what actually happened instead of guessing. Unit tests: display-mode round-trips through the WIT boundary is covered by existing contract-test patterns where applicable; DisplayChanged encode/decode round-trips."
+    },
+    {
+      "id": "22aa0798780e47abba1dfac9b1e5e066",
+      "number": 20,
+      "status": "planned",
+      "scope": "game_core_demo: resolution dropdown + reactive fullscreen-click fix",
+      "description": "Settings' 3 fixed resolution preset buttons are replaced by a dropdown: a single button showing the current resolution that expands a scrollable-if-needed list of every list-display-modes() entry (deduped/sorted) plus the native-display-mode() one clearly marked, collapsing again on a selection or Back. State subscribes to renderer/display-changed and updates state.resolution from it - fixes the real fullscreen-click bug (mouse hit-testing was guessing the actual window size from what was requested, which fullscreen doesn't honor; now it reflects what the renderer confirms actually happened). No change to the zoom presets or fullscreen toggle from increment 18."
+    },
+    {
+      "id": "ffea26b5dab84bb09c4a543b7c7e75a0",
+      "number": 21,
+      "status": "planned",
+      "scope": "game_core_demo: win/lose end screens with Enter-to-restart",
+      "description": "Life reaching 0 shows a full-screen 'Game Over' overlay; score reaching WIN_SCORE (100, per the bigger arena's more numerous boxes from increment 22) shows 'You Win!\\nYou got {score} points!\\nPress Enter to restart' - both screen_space, large centered text, blocking further play input. Enter key (a new KeyDown match arm) resets score/life/camera/robot position and re-applies starting entity state, returning to normal play. New MenuState-adjacent end-state enum or a state.game_over: Option<Outcome> field - whichever reads cleaner once the existing menu/input code is in front of me."
+    },
+    {
+      "id": "9472981ae16e4e3ab5d907b22bdaf7a1",
+      "number": 22,
+      "status": "planned",
+      "scope": "game_core_demo: scatter more boxes/hazards across the full interior",
+      "description": "Expands the handful of big/small boxes and hazard triangles (currently clustered near the original spawn corner) into a scattered layout filling the whole ~1728x1248 interior at a moderate, non-overlapping density - enough to make WIN_SCORE (100) a real target, not clustered near spawn. Existing entity_id constants/arrays (BIG_BOX_IDS, SMALL_BOX_IDS, hazard ids) grow accordingly; spawn_big_box/spawn_small_box/spawn_hazard helpers are reused unchanged, just called with many more coordinates generated programmatically (a grid with jitter/spacing) rather than hand-placed."
     }
   ],
   "approvals": [
@@ -288,6 +316,13 @@
       "incrementId": "932c32cd84844e849aa729e45c0241c2",
       "note": "Self-verified: full workspace test suite green (116 game-core tests incl. new zoom-clamp test, 53 bones-messages tests incl. SetDisplay round-trip). Clippy clean on renderer/bones-messages/game-core (game-core's one finding is pre-existing, untouched). code-review skill run: found and fixed one real high-severity bug before commit (SDL set_size/set_fullscreen ordering could silently drop a windowed resize). Rebuilt via build.ps1 and visually confirmed behavior-preserving at the default window size (no SetDisplay/zoom UI wired up yet - that's increment 18) - HUD, camera, and floor all render identically to before.",
       "approvedAt": "2026-07-23T19:40:41.9020959Z"
+    },
+    {
+      "gate": "verify",
+      "phase": "VERIFY",
+      "incrementId": "b5be7af660a64c38a88f26267244f68b",
+      "note": "Self-verified: full workspace test suite green, clippy clean. code-review skill run: found and fixed one real high-severity bug before commit (mouse-click coordinates weren't converted from physical window pixels back to the fixed logical space menu_buttons lays out in - fixed via on_mouse_down rescaling by the extension's own last-requested resolution). Rebuilt via build.ps1. Could not click through the new Display section myself - the session's UI-automation click tool has a persistent validation bug - confirmed instead via an unattended run with no crash/error across its whole log; user is testing interactively themselves and found the fullscreen-click gap this fix doesn't fully cover (root-caused: fullscreen doesn't honor the requested resolution, so the extension's guess is sometimes wrong - properly fixed by increment 19/20's reactive display-changed event).",
+      "approvedAt": "2026-07-23T20:02:12.0918807Z"
     }
   ],
   "history": [
@@ -975,8 +1010,48 @@
       "at": "2026-07-23T19:40:42.8096336Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-07-23T19:40:59.7164539Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to BUILD."
+    },
+    {
+      "at": "2026-07-23T20:01:16.7801574Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 19: core: cross-platform display-mode query + a renderer display-changed event"
+    },
+    {
+      "at": "2026-07-23T20:01:17.9751246Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 20: game_core_demo: resolution dropdown + reactive fullscreen-click fix"
+    },
+    {
+      "at": "2026-07-23T20:01:18.7995825Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 21: game_core_demo: win/lose end screens with Enter-to-restart"
+    },
+    {
+      "at": "2026-07-23T20:01:19.6349224Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 22: game_core_demo: scatter more boxes/hazards across the full interior"
+    },
+    {
+      "at": "2026-07-23T20:01:21.2527225Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-07-23T20:02:12.0960741Z",
+      "action": "approve",
+      "detail": "Approved verify during VERIFY."
+    },
+    {
+      "at": "2026-07-23T20:02:12.9902800Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-07-22T16:47:43.8462272Z",
-  "updatedAt": "2026-07-23T19:40:42.8157287Z"
+  "updatedAt": "2026-07-23T20:02:12.9972183Z"
 }
