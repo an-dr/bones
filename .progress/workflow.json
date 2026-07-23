@@ -11,8 +11,8 @@
     "done": "Robot hitbox is visibly narrower than its sprite frame; HUD shows live life and score, score increments on purple-box collision, life decrements on red-triangle collision; Esc opens/closes an in-game menu with Settings and Exit entries; Settings lets the user pick big-box color (warm/non-red presets) and small-box color (cold presets) with changes applying live; Exit cleanly closes the running app; new engine surface (exit request, triangle shape) has tests and updated docs (ADR if it's a lasting architectural call).",
     "outOfScope": "The full roadmap shutdown sequence (per-extension shutdown() lifecycle, Stopped event, close-request pub/sub event) - only a minimal-but-clean extension-exit path; retro-world collider support for triangles unless DESIGN finds it's actually needed (obstacles are RAPIER2D-only today); the old PROGRESS.md's leftover solver-stiffness/velocity-clamp tuning items (unrelated, already-stale prior workflow); a real color-picker widget type (stick to preset buttons)."
   },
-  "currentIncrementId": "c22c65d5ad794d91b7b90ff944cc3ff2",
-  "commitBaseline": "073e4ec11013031607a5a011a5d430192d088374",
+  "currentIncrementId": "748dc1e9cf2c4c47921ea1787e1c7059",
+  "commitBaseline": "54f72955f15271d776ff44056edc7d284e342bdf",
   "increments": [
     {
       "id": "33c280ba03264f269efe614b7eb478eb",
@@ -108,9 +108,16 @@
     {
       "id": "c22c65d5ad794d91b7b90ff944cc3ff2",
       "number": 14,
-      "status": "verified",
+      "status": "completed",
       "scope": "game_core_demo: fix non-seamless brick floor tiling",
       "description": "level.tmx's brick interior floor picked only 4 of tileset_bricks.png's 16 sub-tiles (local ids 0,3,8,13) via a diagonal dither (col-row) mod 4 - each sub-tile is a real brick-coursing fragment, not an independently tileable swatch, so scrambling their relative position cuts bricks mid-shape at every tile boundary (confirmed by rendering both schemes side by side: the dither produces a broken mosaic, direct reconstruction produces a clean continuous brick wall). This bug originated in the original 38x28 level.tmx (increment 6), just much more visible now across the bigger interior. Fix: the Ground layer's brick placement uses all 16 sub-tiles via direct reconstruction - local_id = (row % 4) * 4 + (col % 4) - which exactly reassembles tileset_bricks.png's real coursing, tiled seamlessly at every boundary. Regenerated level.tmx; the grass margin/wall-band tiles are untouched (already confirmed pixel-uniform, not the source of the seam issue)."
+    },
+    {
+      "id": "748dc1e9cf2c4c47921ea1787e1c7059",
+      "number": 15,
+      "status": "verified",
+      "scope": "game_core_demo: interior floor uses rock tiles from tileset_grass, not a separate bricks tileset",
+      "description": "Replaces the brick interior floor with paving/rock tiles cropped from tileset_grass.png's own cobblestone region (rows 8-9/cols 0-1 and row10 col1 - gids 129,130,145,162), instead of the separate tileset_bricks.png tileset - a genuinely 16px-periodic paving pattern within the source image (grout lines land on the same 16px grid the tile system already slices at), verified seamless under any dither combination by rendering a mixed test grid before use (unlike the bricks source, which was one continuous coursing texture where sub-tile position mattered). Drops the now-unused bricks tileset entirely: level.tmx's <tileset name=\"bricks\"> declaration and tileset_bricks.png asset removed, lib.rs's TILESET_BRICKS_PNG/BRICK_SPRITE_ID/BRICK_TILESET_NAME constants and its TilesetImage registration removed."
     }
   ],
   "approvals": [
@@ -227,18 +234,25 @@
       "approvedAt": "2026-07-23T17:03:07.7747562Z"
     },
     {
-      "gate": "split",
-      "phase": "SPLIT",
-      "incrementId": null,
-      "note": "User flagged a real visual defect (non-seamless tiles) directly in chat; root cause investigated and confirmed via pixel analysis and a rendered side-by-side comparison before fixing.",
-      "approvedAt": "2026-07-23T17:07:18.9444431Z"
-    },
-    {
       "gate": "verify",
       "phase": "VERIFY",
       "incrementId": "c22c65d5ad794d91b7b90ff944cc3ff2",
       "note": "Root-caused via pixel analysis (found the 3 grass GIDs already pixel-identical solid color, confirming grass wasn't the problem) and confirmed the brick dither bug by rendering both the old and new tiling schemes side by side (old: scrambled mosaic; new: clean continuous coursing) before touching any code. Regenerated level.tmx, independently re-verified the actual generated file's interior + corner transition via a from-scratch reconstruction script, then rebuilt via build.ps1 (confirmed dist wasm mtime newer than the .tmx edit this time) and visually confirmed in the real running app via screenshot - brick floor is now a clean continuous pattern. Full workspace test suite green (no code outside the demo's asset/lib.rs changed).",
       "approvedAt": "2026-07-23T17:10:25.657531Z"
+    },
+    {
+      "gate": "split",
+      "phase": "SPLIT",
+      "incrementId": null,
+      "note": "User directed this directly in chat after seeing the fixed-but-still-undesired brick texture; verified the new source region tiles seamlessly via a rendered test grid before implementing.",
+      "approvedAt": "2026-07-23T17:14:19.7676792Z"
+    },
+    {
+      "gate": "verify",
+      "phase": "VERIFY",
+      "incrementId": "748dc1e9cf2c4c47921ea1787e1c7059",
+      "note": "Verified the rock-paving region's genuine 16px periodicity by sampling brightness profiles before use (grout lines recur every 16px, aligned to absolute multiples of 16 - unlike the bricks source, so mixing different grid-aligned crops is safe), then confirmed via a rendered dithered test grid before touching level.tmx. Independently re-verified the actual generated file's interior region via a from-scratch reconstruction script, rebuilt via build.ps1 (confirmed dist wasm mtime newer than both source edits), and visually confirmed in the real running app - clean seamless rock-paving floor, no scrambled cuts. Full workspace test suite green; clippy clean on the extension.",
+      "approvedAt": "2026-07-23T17:18:04.4501176Z"
     }
   ],
   "history": [
@@ -801,8 +815,48 @@
       "at": "2026-07-23T17:10:26.5210426Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-07-23T17:10:35.4401097Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to MR."
+    },
+    {
+      "at": "2026-07-23T17:14:19.0079939Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 15: game_core_demo: interior floor uses rock tiles from tileset_grass, not a separate bricks tileset"
+    },
+    {
+      "at": "2026-07-23T17:14:19.770714Z",
+      "action": "approve",
+      "detail": "Approved split during SPLIT."
+    },
+    {
+      "at": "2026-07-23T17:14:20.4877286Z",
+      "action": "advance",
+      "detail": "Advanced from SPLIT to BRANCH."
+    },
+    {
+      "at": "2026-07-23T17:14:21.2743895Z",
+      "action": "advance",
+      "detail": "Advanced from BRANCH to BUILD."
+    },
+    {
+      "at": "2026-07-23T17:18:03.3446479Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-07-23T17:18:04.4533385Z",
+      "action": "approve",
+      "detail": "Approved verify during VERIFY."
+    },
+    {
+      "at": "2026-07-23T17:18:05.2934571Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-07-22T16:47:43.8462272Z",
-  "updatedAt": "2026-07-23T17:10:26.5303495Z"
+  "updatedAt": "2026-07-23T17:18:05.3015302Z"
 }

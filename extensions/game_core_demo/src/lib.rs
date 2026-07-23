@@ -27,15 +27,14 @@ const FRAME_SIZE: u32 = 64;
 // originated in this repo, license terms not verified here. Tile
 // placement itself lives in level.tmx's "Ground" layer (real Tiled data,
 // parsed and rendered by game-core via the `tiled` crate) — this
-// extension only supplies the tileset images and the sprite ids to
-// register them under, matched to the .tmx's embedded `<tileset name=...>`
-// by name.
+// extension only supplies the tileset image and the sprite id to
+// register it under, matched to the .tmx's embedded `<tileset name=...>`
+// by name. One image supplies both the grass margin and the interior's
+// rock paving (level.tmx's own generator script documents where each
+// lives within it) - no separate bricks tileset since increment 15.
 const TILESET_GRASS_PNG: &[u8] = include_bytes!("assets/tileset_grass.png");
-const TILESET_BRICKS_PNG: &[u8] = include_bytes!("assets/tileset_bricks.png");
 const GRASS_SPRITE_ID: u32 = 2;
-const BRICK_SPRITE_ID: u32 = 3;
 const GRASS_TILESET_NAME: &str = "grass";
-const BRICK_TILESET_NAME: &str = "bricks";
 
 const CONTROLLED_ENTITY_ID: u32 = 1;
 // Narrower than the sprite frame (64px) — the robot's actual body/screen
@@ -692,25 +691,18 @@ impl Guest for Component {
         };
         publish(LoadSprite::TOPIC, &load_sprite.encode());
 
-        // Tile placement (grass outside the wall, bricks inside) lives in
+        // Tile placement (grass margin, rock-paved interior) lives in
         // level.tmx's own "Ground" layer, real Tiled data — game-core
         // parses and renders it (see its own doc comment on load_tilemap)
-        // via the `tiled` crate, matching each embedded `<tileset name=...>`
+        // via the `tiled` crate, matching the embedded `<tileset name=...>`
         // to the image bytes supplied here by name.
         let load_tilemap = LoadTilemap {
             tmx_bytes: LEVEL_TMX,
-            tileset_images: vec![
-                TilesetImage {
-                    name: GRASS_TILESET_NAME,
-                    sprite_id: GRASS_SPRITE_ID,
-                    png_bytes: TILESET_GRASS_PNG,
-                },
-                TilesetImage {
-                    name: BRICK_TILESET_NAME,
-                    sprite_id: BRICK_SPRITE_ID,
-                    png_bytes: TILESET_BRICKS_PNG,
-                },
-            ],
+            tileset_images: vec![TilesetImage {
+                name: GRASS_TILESET_NAME,
+                sprite_id: GRASS_SPRITE_ID,
+                png_bytes: TILESET_GRASS_PNG,
+            }],
         };
         publish(LoadTilemap::TOPIC, &load_tilemap.encode());
 
