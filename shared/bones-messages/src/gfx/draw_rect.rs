@@ -17,6 +17,12 @@ pub struct DrawRect {
     pub color: (u8, u8, u8, u8),
     /// Composite order: layers draw bottom-up, ties broken by publish order.
     pub layer: u8,
+    /// Skips the camera transform (`gfx/set-camera`) entirely when `true` —
+    /// `x`/`y`/`w`/`h` are literal screen pixels regardless of camera
+    /// position or zoom, for HUD/menu content that must stay put as the
+    /// camera pans. `false` is every caller's behavior from before this
+    /// field existed.
+    pub screen_space: bool,
 }
 
 impl Message for DrawRect {
@@ -37,6 +43,7 @@ impl EncodeMessage for DrawRect {
             .u8(b)
             .u8(a)
             .u8(self.layer)
+            .u8(self.screen_space as u8)
             .finish()
     }
 }
@@ -57,6 +64,7 @@ impl<'a> DecodeMessage<'a> for DrawRect {
                 reader.read_u8()?,
             ),
             layer: reader.read_u8()?,
+            screen_space: reader.read_u8()? != 0,
         };
         reader.finish()?;
         Ok(message)

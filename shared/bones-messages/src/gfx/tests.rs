@@ -68,6 +68,7 @@ fn every_command_round_trips() {
         filled: true,
         color: (255, 0, 0, 255),
         layer: 2,
+        screen_space: false,
     };
     assert_eq!(
         Command::decode(DrawRect::TOPIC, &rect.encode()),
@@ -107,6 +108,7 @@ fn every_command_round_trips() {
         size: 16,
         color: (255, 255, 255, 255),
         layer: 9,
+        screen_space: false,
     };
     assert_eq!(
         Command::decode(DrawText::TOPIC, &text.encode()),
@@ -127,6 +129,38 @@ fn every_command_round_trips() {
     assert_eq!(
         Command::decode(DrawTriangle::TOPIC, &triangle.encode()),
         Ok(Some(Command::DrawTriangle(triangle)))
+    );
+}
+
+#[test]
+fn screen_space_draws_round_trip() {
+    let rect = DrawRect {
+        x: 10,
+        y: 20,
+        w: 30,
+        h: 40,
+        filled: true,
+        color: (255, 0, 0, 255),
+        layer: 2,
+        screen_space: true,
+    };
+    assert_eq!(
+        Command::decode(DrawRect::TOPIC, &rect.encode()),
+        Ok(Some(Command::DrawRect(rect)))
+    );
+
+    let text = DrawText {
+        text: "score: 0",
+        x: 8,
+        y: 8,
+        size: 16,
+        color: (255, 255, 255, 255),
+        layer: 9,
+        screen_space: true,
+    };
+    assert_eq!(
+        Command::decode(DrawText::TOPIC, &text.encode()),
+        Ok(Some(Command::DrawText(text)))
     );
 }
 

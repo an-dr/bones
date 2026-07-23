@@ -340,6 +340,7 @@ fn draw_hud(score: u32, life: u32) {
             filled: true,
             color: HUD_BG_COLOR,
             layer: HUD_LAYER,
+            screen_space: false,
         }
         .encode(),
     );
@@ -353,6 +354,7 @@ fn draw_hud(score: u32, life: u32) {
             filled: false,
             color: HUD_BORDER_COLOR,
             layer: HUD_LAYER,
+            screen_space: false,
         }
         .encode(),
     );
@@ -366,6 +368,7 @@ fn draw_hud(score: u32, life: u32) {
             size: 16,
             color: HUD_TEXT_COLOR,
             layer: HUD_LAYER,
+            screen_space: false,
         }
         .encode(),
     );
@@ -379,6 +382,7 @@ fn draw_hud(score: u32, life: u32) {
             size: 16,
             color: HUD_TEXT_COLOR,
             layer: HUD_LAYER,
+            screen_space: false,
         }
         .encode(),
     );
@@ -508,6 +512,7 @@ fn draw_menu(menu: MenuState) {
             filled: true,
             color: PANEL_BG_COLOR,
             layer: MENU_LAYER,
+            screen_space: false,
         }
         .encode(),
     );
@@ -521,6 +526,7 @@ fn draw_menu(menu: MenuState) {
             filled: false,
             color: PANEL_BORDER_COLOR,
             layer: MENU_LAYER,
+            screen_space: false,
         }
         .encode(),
     );
@@ -539,6 +545,7 @@ fn draw_menu(menu: MenuState) {
             size: 18,
             color: PANEL_TITLE_COLOR,
             layer: MENU_LAYER,
+            screen_space: false,
         }
         .encode(),
     );
@@ -553,6 +560,7 @@ fn draw_menu(menu: MenuState) {
                 size: 14,
                 color: SECTION_LABEL_COLOR,
                 layer: MENU_LAYER,
+                screen_space: false,
             }
             .encode(),
         );
@@ -566,6 +574,7 @@ fn draw_menu(menu: MenuState) {
                 size: 14,
                 color: SECTION_LABEL_COLOR,
                 layer: MENU_LAYER,
+                screen_space: false,
             }
             .encode(),
         );
@@ -582,6 +591,7 @@ fn draw_menu(menu: MenuState) {
                 filled: true,
                 color: BUTTON_COLOR,
                 layer: MENU_LAYER,
+                screen_space: false,
             }
             .encode(),
         );
@@ -598,6 +608,7 @@ fn draw_menu(menu: MenuState) {
                 size: 16,
                 color: BUTTON_TEXT_COLOR,
                 layer: MENU_LAYER,
+                screen_space: false,
             }
             .encode(),
         );

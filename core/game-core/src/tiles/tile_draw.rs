@@ -83,5 +83,32 @@ pub fn load_tile_draws(
     Ok(draws)
 }
 
+/// The map's total pixel extent (`width`/`height` in tiles times
+/// `tile_width`/`tile_height`), for camera-follow clamping
+/// (`EntityOp::SetCameraFollow`) — `None` for an unparseable `.tmx`, the
+/// same "ignore rather than fail the module" contract `load_tile_draws`
+/// and `load_collision_rects` already follow. A third small reparse of
+/// `tmx_bytes` rather than threading this out of `load_tile_draws`'s own
+/// parse: consistent with this module's existing one-parse-per-concern
+/// functions, and the `.tmx` files this loads are small, load-time-only
+/// parses, not a per-tick cost.
+pub fn map_pixel_size(tmx_bytes: &[u8]) -> Option<(f32, f32)> {
+    let mut loader = Loader::with_cache_and_reader(
+        tiled::DefaultResourceCache::new(),
+        |path: &Path| -> std::io::Result<_> {
+            if path == Path::new(VIRTUAL_MAP_PATH) {
+                Ok(Cursor::new(tmx_bytes.to_vec()))
+            } else {
+                Err(std::io::ErrorKind::NotFound.into())
+            }
+        },
+    );
+    let map = loader.load_tmx_map(VIRTUAL_MAP_PATH).ok()?;
+    Some((
+        (map.width * map.tile_width) as f32,
+        (map.height * map.tile_height) as f32,
+    ))
+}
+
 #[cfg(test)]
 mod tests;

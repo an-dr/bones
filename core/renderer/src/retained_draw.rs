@@ -19,6 +19,7 @@ pub(crate) enum RetainedDraw {
         size: u16,
         color: (u8, u8, u8, u8),
         layer: u8,
+        screen_space: bool,
     },
 }
 

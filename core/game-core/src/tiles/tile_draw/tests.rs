@@ -75,3 +75,13 @@ fn a_map_with_no_ground_layer_yields_no_draws() {
 fn malformed_xml_is_a_structured_error() {
     assert!(load_tile_draws(b"not xml at all", |_name| Some(1)).is_err());
 }
+
+#[test]
+fn map_pixel_size_multiplies_tile_count_by_tile_size() {
+    assert_eq!(map_pixel_size(fixture_tmx()), Some((32.0, 32.0)));
+}
+
+#[test]
+fn map_pixel_size_of_malformed_xml_is_none() {
+    assert_eq!(map_pixel_size(b"not xml at all"), None);
+}

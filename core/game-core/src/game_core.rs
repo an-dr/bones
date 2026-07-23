@@ -23,7 +23,7 @@ use crate::physics::{
     self, BodyHandle, Collider, ColliderHandle, PhysicsBackend, PhysicsWorldKind, Rapier2dBackend,
     RetroBackend, Shape, WorldBody,
 };
-use crate::tiles::{load_collision_rects, load_tile_draws, TileDraw};
+use crate::tiles::{load_collision_rects, load_tile_draws, map_pixel_size, TileDraw};
 
 /// The `gfx/*` layer game-core draws its entities on.
 const ENTITY_LAYER: u8 = 1;
@@ -87,6 +87,22 @@ pub struct GameCore {
     // Replaced wholesale by a later `load_tilemap` call, the same
     // replace-on-reload semantics collision rects already have.
     tile_draws: Vec<TileDraw>,
+    // The loaded tilemap's total pixel extent, for `camera_position`'s
+    // clamp — `None` before any `load_tilemap` call, or if the `.tmx`
+    // couldn't be parsed, in which case a camera-follow centers on its
+    // target unclamped rather than pinning to `(0, 0)`.
+    level_size_px: Option<(f32, f32)>,
+    // `EntityOp::SetCameraFollow` state — `None` is the original fixed
+    // `(0, 0)` camera every caller got before this existed.
+    camera_follow: Option<CameraFollow>,
+}
+
+// Purely `GameCore`'s own internal camera-follow state, never constructed
+// or matched outside this file — no independent identity of its own.
+struct CameraFollow {
+    entity_id: u32,
+    viewport_w: f32,
+    viewport_h: f32,
 }
 
 impl GameCore {
@@ -100,6 +116,8 @@ impl GameCore {
             entity_ids_by_collider: HashMap::new(),
             debug_hitboxes: false,
             tile_draws: Vec::new(),
+            level_size_px: None,
+            camera_follow: None,
             paused: false,
         }
     }
@@ -160,6 +178,17 @@ impl GameCore {
             EntityOp::SetColor { entity_id, color } => self.set_color(entity_id, color),
             EntityOp::SetDebugHitboxes { enabled } => self.debug_hitboxes = enabled,
             EntityOp::SetPaused { paused } => self.paused = paused,
+            EntityOp::SetCameraFollow {
+                entity_id,
+                viewport_w,
+                viewport_h,
+            } => {
+                self.camera_follow = Some(CameraFollow {
+                    entity_id,
+                    viewport_w,
+                    viewport_h,
+                })
+            }
         }
     }
 
@@ -360,6 +389,7 @@ impl GameCore {
         if let Ok(draws) = load_tile_draws(load.tmx_bytes, sprite_id_for_tileset) {
             self.tile_draws = draws;
         }
+        self.level_size_px = map_pixel_size(load.tmx_bytes);
     }
 
     /// Runs one simulation step, then publishes the resulting frame. While
@@ -574,9 +604,10 @@ impl GameCore {
             b: 20,
             a: 255,
         });
+        let (camera_x, camera_y) = self.camera_position();
         self.publish(SetCamera {
-            x: 0.0,
-            y: 0.0,
+            x: camera_x,
+            y: camera_y,
             zoom: 1.0,
         });
         // Ground tiles first, on BACKGROUND_LAYER — resolved once by
@@ -644,6 +675,42 @@ impl GameCore {
         }
     }
 
+    /// The `gfx::SetCamera` position `publish_gfx` publishes every tick:
+    /// `(0, 0)` (the original fixed camera) with no active
+    /// `EntityOp::SetCameraFollow`, or if the followed entity doesn't
+    /// exist (already despawned, or never spawned) — otherwise centered on
+    /// that entity's `Transform`, clamped per axis to
+    /// `[0, level_size - viewport_size]` once `level_size_px` is known
+    /// (`load_tilemap` having run), so the camera stops panning once the
+    /// level edge would come into view. Unclamped (just centered) if no
+    /// tilemap has been loaded yet, rather than pinning to `(0, 0)`.
+    fn camera_position(&self) -> (f32, f32) {
+        let Some(follow) = &self.camera_follow else {
+            return (0.0, 0.0);
+        };
+        let Some(&entity) = self.entities.get(&follow.entity_id) else {
+            return (0.0, 0.0);
+        };
+        let Ok(transform) = self.world.get::<&Transform>(entity) else {
+            return (0.0, 0.0);
+        };
+        let (level_w, level_h) = match self.level_size_px {
+            Some((w, h)) => (Some(w), Some(h)),
+            None => (None, None),
+        };
+        let clamp_axis = |center: f32, viewport: f32, level: Option<f32>| -> f32 {
+            let raw = center - viewport / 2.0;
+            match level {
+                Some(level) => raw.clamp(0.0, (level - viewport).max(0.0)),
+                None => raw,
+            }
+        };
+        (
+            clamp_axis(transform.x, follow.viewport_w, level_w),
+            clamp_axis(transform.y, follow.viewport_h, level_h),
+        )
+    }
+
     /// Publishes one `gfx::DrawRect` or `gfx::DrawTriangle` for `collider`'s
     /// shape at `transform`'s position, `filled` and `color` as given —
     /// shared by `publish_gfx`'s normal per-entity draw and its debug-
@@ -664,6 +731,7 @@ impl GameCore {
                 filled,
                 color,
                 layer: ENTITY_LAYER,
+                screen_space: false,
             }),
             // Matches `Rapier2dBackend::spawn_shaped_body`'s inscribed
             // isoceles triangle: apex centered on top, base along the

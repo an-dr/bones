@@ -137,6 +137,7 @@ impl Inner {
                         size: draw.size,
                         color: draw.color,
                         layer: draw.layer,
+                        screen_space: draw.screen_space,
                     });
             }
         }
@@ -209,9 +210,17 @@ impl Inner {
                 RetainedDraw::Rect(draw) => {
                     let (r, g, b, a) = draw.color;
                     self.canvas.set_draw_color(Color::RGBA(r, g, b, a));
-                    let (screen_x, screen_y) = to_screen(draw.x, draw.y);
-                    let screen_w = (draw.w as f32 * zoom).round().max(0.0) as u32;
-                    let screen_h = (draw.h as f32 * zoom).round().max(0.0) as u32;
+                    // `screen_space` draws bypass the camera transform and
+                    // zoom entirely — literal screen pixels, for HUD/menu
+                    // content that must stay put as the camera pans.
+                    let (screen_x, screen_y, scale) = if draw.screen_space {
+                        (draw.x, draw.y, 1.0)
+                    } else {
+                        let (x, y) = to_screen(draw.x, draw.y);
+                        (x, y, zoom)
+                    };
+                    let screen_w = (draw.w as f32 * scale).round().max(0.0) as u32;
+                    let screen_h = (draw.h as f32 * scale).round().max(0.0) as u32;
                     let rect = Rect::new(screen_x, screen_y, screen_w, screen_h);
                     let result = if draw.filled {
                         self.canvas.fill_rect(rect)
@@ -294,6 +303,7 @@ impl Inner {
                     y,
                     size,
                     color,
+                    screen_space,
                     ..
                 } => {
                     if text.is_empty() {
@@ -310,9 +320,14 @@ impl Inner {
                         .update(None, &rgba, width as usize * 4)
                         .map_err(|e| e.to_string())?;
 
-                    let (screen_x, screen_y) = to_screen(*x, *y);
-                    let screen_w = (width as f32 * zoom).round().max(0.0) as u32;
-                    let screen_h = (height as f32 * zoom).round().max(0.0) as u32;
+                    let (screen_x, screen_y, scale) = if *screen_space {
+                        (*x, *y, 1.0)
+                    } else {
+                        let (sx, sy) = to_screen(*x, *y);
+                        (sx, sy, zoom)
+                    };
+                    let screen_w = (width as f32 * scale).round().max(0.0) as u32;
+                    let screen_h = (height as f32 * scale).round().max(0.0) as u32;
                     self.canvas
                         .copy(
                             &texture,

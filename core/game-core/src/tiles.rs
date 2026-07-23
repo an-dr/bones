@@ -7,5 +7,5 @@
 mod tile_draw;
 mod tilemap;
 
-pub use tile_draw::{load_tile_draws, TileDraw};
+pub use tile_draw::{load_tile_draws, map_pixel_size, TileDraw};
 pub use tilemap::{load_collision_rects, CollisionRect};

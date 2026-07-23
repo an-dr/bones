@@ -131,6 +131,21 @@ pub enum EntityOp {
     /// `entity_id`: applies to the whole simulation, the same as
     /// `SetDebugHitboxes`.
     SetPaused { paused: bool },
+    /// Has `game-core` auto-follow `entity_id`'s `Transform` every tick,
+    /// replacing the fixed `(0, 0)` camera it publishes by default: the
+    /// camera centers on that entity, clamped per axis to
+    /// `[0, level_size - viewport_size]` so it stops panning once the
+    /// level edge would come into view (a no-op/unclamped center if the
+    /// level is smaller than the viewport). `viewport_w`/`viewport_h` are
+    /// the caller's own known window size — `game-core` has no rendering
+    /// authority and doesn't otherwise know it. A no-op each tick the
+    /// followed `entity_id` doesn't exist (falls back to the fixed
+    /// camera), not a caller-visible error.
+    SetCameraFollow {
+        entity_id: u32,
+        viewport_w: f32,
+        viewport_h: f32,
+    },
 }
 
 const TAG_SPAWN: u8 = 0;
@@ -139,6 +154,7 @@ const TAG_DESPAWN: u8 = 2;
 const TAG_SET_COLOR: u8 = 3;
 const TAG_SET_DEBUG_HITBOXES: u8 = 4;
 const TAG_SET_PAUSED: u8 = 5;
+const TAG_SET_CAMERA_FOLLOW: u8 = 6;
 
 impl EntityOp {
     pub(super) fn encode_into(&self, writer: Writer) -> Writer {
@@ -207,6 +223,15 @@ impl EntityOp {
             EntityOp::SetPaused { paused } => {
                 writer.u8(TAG_SET_PAUSED).u8(if *paused { 1 } else { 0 })
             }
+            EntityOp::SetCameraFollow {
+                entity_id,
+                viewport_w,
+                viewport_h,
+            } => writer
+                .u8(TAG_SET_CAMERA_FOLLOW)
+                .u32(*entity_id)
+                .f32(*viewport_w)
+                .f32(*viewport_h),
         }
     }
 
@@ -284,6 +309,11 @@ impl EntityOp {
             }),
             TAG_SET_PAUSED => Ok(EntityOp::SetPaused {
                 paused: reader.read_u8()? != 0,
+            }),
+            TAG_SET_CAMERA_FOLLOW => Ok(EntityOp::SetCameraFollow {
+                entity_id: reader.read_u32()?,
+                viewport_w: reader.read_f32()?,
+                viewport_h: reader.read_f32()?,
             }),
             _ => Err(DecodeError::InvalidTag {
                 message: "game-core entity op",
