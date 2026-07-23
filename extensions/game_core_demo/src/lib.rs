@@ -55,8 +55,16 @@ const SMALL_BOX_HALF_EXTENT: f32 = 16.0;
 const SMALL_BOX_COLOR: (u8, u8, u8, u8) = (60, 120, 220, 255);
 const HAZARD_HALF_EXTENT: f32 = 20.0;
 const HAZARD_COLOR: (u8, u8, u8, u8) = (200, 60, 60, 255);
-const BIG_BOX_IDS: [u32; 4] = [2, 3, 4, 5];
-const SMALL_BOX_IDS: [u32; 2] = [6, 7];
+// Entity id ranges, each starting right after the previous - scatter_grid's
+// own loop assigns ids sequentially within whichever range matches the
+// type it picked for a given cell, so these three counts are the only
+// place the total (48) is stated.
+const NUM_BIG_BOXES: u32 = 32;
+const NUM_SMALL_BOXES: u32 = 8;
+const NUM_HAZARDS: u32 = 8;
+const BIG_BOX_ID_START: u32 = 2;
+const SMALL_BOX_ID_START: u32 = BIG_BOX_ID_START + NUM_BIG_BOXES;
+const HAZARD_ID_START: u32 = SMALL_BOX_ID_START + NUM_SMALL_BOXES;
 // level.tmx's walled interior sits at this offset from the map's own
 // origin (a 64px grass margin surrounds it on every side) — every spawn
 // coordinate below is the original design's coordinate (when the wall
@@ -389,6 +397,42 @@ fn spawn_hazard(entity_id: u32, x: f32, y: f32) {
     });
 }
 
+// Interior play area (level.tmx's own generator script): world x:[96,1824),
+// y:[96,1344) - orig-space (LEVEL_ORIGIN-relative, since that offset cancels
+// out of both ends the same way it does for every spawn coordinate here)
+// that's x:[32,1760), y:[32,1280). `SCATTER_MIN`/`SCATTER_MAX_*` inset that
+// by a further 120px margin so nothing spawns flush against a wall or
+// overlapping the robot's own spawn point (60, 60) - comfortably clear at
+// the grid's own nearest cell, (152, 152).
+const SCATTER_MIN: f32 = 152.0;
+const SCATTER_MAX_X: f32 = 1640.0;
+const SCATTER_MAX_Y: f32 = 1160.0;
+// 8x6 = 48, matching NUM_BIG_BOXES + NUM_SMALL_BOXES + NUM_HAZARDS exactly
+// - scatter_grid's loop has one cell per entity, no gaps needed for
+// "not too dense": at this column/row count the ~210x200px cell spacing
+// already leaves generous room around each ~40-48px box/hazard.
+const GRID_COLUMNS: u32 = 8;
+const GRID_ROWS: u32 = 6;
+
+/// `index`'s (x, y) in the scatter grid (row-major, `GRID_COLUMNS` wide,
+/// spanning the full `SCATTER_MIN..SCATTER_MAX_*` usable area), plus a
+/// small deterministic per-index jitter so the layout doesn't read as an
+/// obviously rigid grid — no `rand` dependency, so the same layout every
+/// run (restart() included), which is a feature: reproducible for testing,
+/// not a limitation.
+fn scatter_position(index: u32) -> (f32, f32) {
+    let column = (index % GRID_COLUMNS) as f32;
+    let row = (index / GRID_COLUMNS) as f32;
+    let column_spacing = (SCATTER_MAX_X - SCATTER_MIN) / (GRID_COLUMNS - 1) as f32;
+    let row_spacing = (SCATTER_MAX_Y - SCATTER_MIN) / (GRID_ROWS - 1) as f32;
+    let jitter_x = (index.wrapping_mul(37) % 41) as f32 - 20.0;
+    let jitter_y = (index.wrapping_mul(53) % 41) as f32 - 20.0;
+    (
+        LEVEL_ORIGIN_X + SCATTER_MIN + column * column_spacing + jitter_x,
+        LEVEL_ORIGIN_Y + SCATTER_MIN + row * row_spacing + jitter_y,
+    )
+}
+
 /// Spawns the controlled entity plus every big box/small box/hazard at
 /// their starting positions. Called once from `init`, and again from
 /// `restart` — `EntityOp::Spawn` on an `entity_id` already in use replaces
@@ -426,28 +470,34 @@ fn spawn_entities() {
         worlds: PhysicsWorlds::BOTH,
     });
 
-    // Several stationary purple big-box squares — the controlled entity
-    // (and, if pushed into a neighbor, one box into another) visibly stops
-    // against each one, proving entity-entity collision alongside the
-    // tilemap's entity-terrain collision. A hit between two of these
-    // flashes white briefly and plays a sound; the robot hitting one
-    // scores a point (see on_message's Collision handling).
-    spawn_big_box(2, LEVEL_ORIGIN_X + 350.0, LEVEL_ORIGIN_Y + 60.0);
-    spawn_big_box(3, LEVEL_ORIGIN_X + 350.0, LEVEL_ORIGIN_Y + 160.0);
-    spawn_big_box(4, LEVEL_ORIGIN_X + 350.0, LEVEL_ORIGIN_Y + 260.0);
-    spawn_big_box(5, LEVEL_ORIGIN_X + 120.0, LEVEL_ORIGIN_Y + 260.0);
-
-    // Two blue Frictionless squares: pushable, but carry no momentum —
-    // pushing the robot into one moves it, but it stops the instant
-    // contact ends, unlike the purple Dynamic big boxes above.
-    spawn_small_box(6, LEVEL_ORIGIN_X + 220.0, LEVEL_ORIGIN_Y + 60.0);
-    spawn_small_box(7, LEVEL_ORIGIN_X + 220.0, LEVEL_ORIGIN_Y + 260.0);
-
-    // Two stationary red hazard triangles — the robot loses life on
-    // contact (see on_message's Collision handling). Positioned clear of
-    // every other spawn above.
-    spawn_hazard(8, LEVEL_ORIGIN_X + 60.0, LEVEL_ORIGIN_Y + 160.0);
-    spawn_hazard(9, LEVEL_ORIGIN_X + 400.0, LEVEL_ORIGIN_Y + 200.0);
+    // Scattered across the whole interior (scatter_position), one cell per
+    // entity: mostly stationary purple big-box squares — the controlled
+    // entity (and, if pushed into a neighbor, one box into another)
+    // visibly stops against each one, proving entity-entity collision
+    // alongside the tilemap's entity-terrain collision, and the robot
+    // hitting one scores a point (see on_collision) - with WIN_SCORE (100)
+    // reachable by re-hitting boxes already pushed clear, not just needing
+    // 100 distinct ones. Every 6th cell is a stationary red hazard
+    // triangle instead (life -= 1 on contact); every remaining 3rd is a
+    // blue Frictionless small box (pushable, no momentum, unlike the big
+    // boxes) rather than another big box - real variety, not a uniform
+    // field of identical squares.
+    let mut next_big_box_id = BIG_BOX_ID_START;
+    let mut next_small_box_id = SMALL_BOX_ID_START;
+    let mut next_hazard_id = HAZARD_ID_START;
+    for index in 0..(NUM_BIG_BOXES + NUM_SMALL_BOXES + NUM_HAZARDS) {
+        let (x, y) = scatter_position(index);
+        if index % 6 == 0 {
+            spawn_hazard(next_hazard_id, x, y);
+            next_hazard_id += 1;
+        } else if index % 3 == 0 {
+            spawn_small_box(next_small_box_id, x, y);
+            next_small_box_id += 1;
+        } else {
+            spawn_big_box(next_big_box_id, x, y);
+            next_big_box_id += 1;
+        }
+    }
 }
 
 /// Resets gameplay to a fresh start: score/life/every entity back to their
@@ -1071,12 +1121,12 @@ fn on_button_clicked(id: u32) {
         });
     } else if let Some(color) = preset_color(id, BUTTON_BIG_BOX_PRESET_BASE, &BIG_BOX_PRESETS) {
         STATE.with(|state| state.borrow_mut().big_box_color = color);
-        for entity_id in BIG_BOX_IDS {
+        for entity_id in BIG_BOX_ID_START..BIG_BOX_ID_START + NUM_BIG_BOXES {
             publish_entity_op(EntityOp::SetColor { entity_id, color });
         }
     } else if let Some(color) = preset_color(id, BUTTON_SMALL_BOX_PRESET_BASE, &SMALL_BOX_PRESETS) {
         STATE.with(|state| state.borrow_mut().small_box_color = color);
-        for entity_id in SMALL_BOX_IDS {
+        for entity_id in SMALL_BOX_ID_START..SMALL_BOX_ID_START + NUM_SMALL_BOXES {
             publish_entity_op(EntityOp::SetColor { entity_id, color });
         }
     } else if id == BUTTON_FULLSCREEN_TOGGLE {
@@ -1395,14 +1445,16 @@ impl Guest for Component {
     }
 }
 
-/// Big box ids are 2-5 (see `init`).
+/// Big box ids are `BIG_BOX_ID_START..BIG_BOX_ID_START + NUM_BIG_BOXES`
+/// (see `spawn_entities`).
 fn is_big_box(entity_id: u32) -> bool {
-    (2..=5).contains(&entity_id)
+    (BIG_BOX_ID_START..BIG_BOX_ID_START + NUM_BIG_BOXES).contains(&entity_id)
 }
 
-/// Hazard triangle ids are 8-9 (see `init`).
+/// Hazard triangle ids are `HAZARD_ID_START..HAZARD_ID_START + NUM_HAZARDS`
+/// (see `spawn_entities`).
 fn is_hazard(entity_id: u32) -> bool {
-    (8..=9).contains(&entity_id)
+    (HAZARD_ID_START..HAZARD_ID_START + NUM_HAZARDS).contains(&entity_id)
 }
 
 /// The color a flashed entity reverts to once its flash timer expires —

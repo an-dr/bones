@@ -11,8 +11,8 @@
     "done": "Robot hitbox is visibly narrower than its sprite frame; HUD shows live life and score, score increments on purple-box collision, life decrements on red-triangle collision; Esc opens/closes an in-game menu with Settings and Exit entries; Settings lets the user pick big-box color (warm/non-red presets) and small-box color (cold presets) with changes applying live; Exit cleanly closes the running app; new engine surface (exit request, triangle shape) has tests and updated docs (ADR if it's a lasting architectural call).",
     "outOfScope": "The full roadmap shutdown sequence (per-extension shutdown() lifecycle, Stopped event, close-request pub/sub event) - only a minimal-but-clean extension-exit path; retro-world collider support for triangles unless DESIGN finds it's actually needed (obstacles are RAPIER2D-only today); the old PROGRESS.md's leftover solver-stiffness/velocity-clamp tuning items (unrelated, already-stale prior workflow); a real color-picker widget type (stick to preset buttons)."
   },
-  "currentIncrementId": "ffea26b5dab84bb09c4a543b7c7e75a0",
-  "commitBaseline": "fd97c5ed427d5cac04c34eb2a670285ba4c01122",
+  "currentIncrementId": "9472981ae16e4e3ab5d907b22bdaf7a1",
+  "commitBaseline": "098a76a651e1f195ba2387e77196e406ae45d8b9",
   "increments": [
     {
       "id": "33c280ba03264f269efe614b7eb478eb",
@@ -157,14 +157,14 @@
     {
       "id": "ffea26b5dab84bb09c4a543b7c7e75a0",
       "number": 21,
-      "status": "verified",
+      "status": "completed",
       "scope": "game_core_demo: win/lose end screens with Enter-to-restart",
       "description": "Life reaching 0 shows a full-screen 'Game Over' overlay; score reaching WIN_SCORE (100, per the bigger arena's more numerous boxes from increment 22) shows 'You Win!\\nYou got {score} points!\\nPress Enter to restart' - both screen_space, large centered text, blocking further play input. Enter key (a new KeyDown match arm) resets score/life/camera/robot position and re-applies starting entity state, returning to normal play. New MenuState-adjacent end-state enum or a state.game_over: Option<Outcome> field - whichever reads cleaner once the existing menu/input code is in front of me."
     },
     {
       "id": "9472981ae16e4e3ab5d907b22bdaf7a1",
       "number": 22,
-      "status": "planned",
+      "status": "verified",
       "scope": "game_core_demo: scatter more boxes/hazards across the full interior",
       "description": "Expands the handful of big/small boxes and hazard triangles (currently clustered near the original spawn corner) into a scattered layout filling the whole ~1728x1248 interior at a moderate, non-overlapping density - enough to make WIN_SCORE (100) a real target, not clustered near spawn. Existing entity_id constants/arrays (BIG_BOX_IDS, SMALL_BOX_IDS, hazard ids) grow accordingly; spawn_big_box/spawn_small_box/spawn_hazard helpers are reused unchanged, just called with many more coordinates generated programmatically (a grid with jitter/spacing) rather than hand-placed."
     }
@@ -344,6 +344,13 @@
       "incrementId": "ffea26b5dab84bb09c4a543b7c7e75a0",
       "note": "Full workspace test suite green; clippy clean. code-review: fixed a minor keycode-coverage gap (numpad Enter) before committing. Results shown to user in chat; user asked to trigger both end states themselves to confirm visuals/restart flow.",
       "approvedAt": "2026-07-23T20:51:30.3221944Z"
+    },
+    {
+      "gate": "verify",
+      "phase": "VERIFY",
+      "incrementId": "9472981ae16e4e3ab5d907b22bdaf7a1",
+      "note": "Full workspace test suite green; clippy clean. No critical/high findings. Layout overlap-safety verified analytically; visually confirmed via a passive screenshot (no input). Results shown to user in chat. Last of 22 increments on this branch.",
+      "approvedAt": "2026-07-23T20:58:29.8741662Z"
     }
   ],
   "history": [
@@ -1131,8 +1138,28 @@
       "at": "2026-07-23T20:51:31.1650264Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-07-23T20:51:46.7607016Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to BUILD."
+    },
+    {
+      "at": "2026-07-23T20:58:16.4670101Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-07-23T20:58:29.8779824Z",
+      "action": "approve",
+      "detail": "Approved verify during VERIFY."
+    },
+    {
+      "at": "2026-07-23T20:58:30.7290444Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-07-22T16:47:43.8462272Z",
-  "updatedAt": "2026-07-23T20:51:31.1734510Z"
+  "updatedAt": "2026-07-23T20:58:30.7362795Z"
 }
