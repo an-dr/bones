@@ -11,8 +11,8 @@
     "done": "Robot hitbox is visibly narrower than its sprite frame; HUD shows live life and score, score increments on purple-box collision, life decrements on red-triangle collision; Esc opens/closes an in-game menu with Settings and Exit entries; Settings lets the user pick big-box color (warm/non-red presets) and small-box color (cold presets) with changes applying live; Exit cleanly closes the running app; new engine surface (exit request, triangle shape) has tests and updated docs (ADR if it's a lasting architectural call).",
     "outOfScope": "The full roadmap shutdown sequence (per-extension shutdown() lifecycle, Stopped event, close-request pub/sub event) - only a minimal-but-clean extension-exit path; retro-world collider support for triangles unless DESIGN finds it's actually needed (obstacles are RAPIER2D-only today); the old PROGRESS.md's leftover solver-stiffness/velocity-clamp tuning items (unrelated, already-stale prior workflow); a real color-picker widget type (stick to preset buttons)."
   },
-  "currentIncrementId": "5b67008dc0c04aabb5141ad53aea5513",
-  "commitBaseline": "94a92703451b815a8327461ec3dccc3cdaf6c5df",
+  "currentIncrementId": "f265c68578f445cd87a1ab8cf9a623a8",
+  "commitBaseline": "9b1c4d0568aefdf08b4940ec6375b601ac534f6d",
   "increments": [
     {
       "id": "33c280ba03264f269efe614b7eb478eb",
@@ -80,9 +80,16 @@
     {
       "id": "5b67008dc0c04aabb5141ad53aea5513",
       "number": 10,
-      "status": "verified",
+      "status": "completed",
       "scope": "game_core_demo: lower-frequency footstep sound",
       "description": "synthesize_tone's footstep call in init drops from 1200Hz/96 cycles (a high-pitched click) to 110Hz/9 cycles (~82ms, a low thud) - amplitude unchanged at 0.5. The hit sound's own doc comment ('a lower blip for a hit, distinct from footsteps') gets corrected too, since footsteps are now the lower of the two tones (110Hz vs the hit's 300Hz), not the higher one. No engine changes - this is entirely inside synthesize_tone's existing caller-supplied parameters."
+    },
+    {
+      "id": "f265c68578f445cd87a1ab8cf9a623a8",
+      "number": 11,
+      "status": "verified",
+      "scope": "game_core_demo: 30% faster footstep cadence",
+      "description": "FOOTSTEP_INTERVAL_SECONDS drops from 0.5 to 0.35 (0.5 * 0.7) - the cooldown between footstep sounds while moving, not the robot's movement speed or the tone itself. No engine changes."
     }
   ],
   "approvals": [
@@ -171,18 +178,25 @@
       "approvedAt": "2026-07-23T16:50:53.9317597Z"
     },
     {
-      "gate": "split",
-      "phase": "SPLIT",
-      "incrementId": null,
-      "note": "User directed this small audio tweak directly in chat (footsteps should be low frequency, not a high click).",
-      "approvedAt": "2026-07-23T16:51:52.5744082Z"
-    },
-    {
       "gate": "verify",
       "phase": "VERIFY",
       "incrementId": "5b67008dc0c04aabb5141ad53aea5513",
       "note": "Self-verified: full workspace test suite green (no regressions, this is a two-constant change inside an existing function call with no test coverage of its own, consistent with how other synthesize_tone calls in this file are verified). Clippy clean on the wasm extension. Rebuilt via build.ps1 and smoke-tested the packaged dist/bones.exe (~2s run, no errors, sound loaded and ticking cleanly).",
       "approvedAt": "2026-07-23T16:53:06.741427Z"
+    },
+    {
+      "gate": "split",
+      "phase": "SPLIT",
+      "incrementId": null,
+      "note": "User directed this small tuning change directly in chat.",
+      "approvedAt": "2026-07-23T16:55:41.6792885Z"
+    },
+    {
+      "gate": "verify",
+      "phase": "VERIFY",
+      "incrementId": "f265c68578f445cd87a1ab8cf9a623a8",
+      "note": "Self-verified: full workspace test suite green, clippy clean on the wasm extension. Single-constant tuning change with no distinct test coverage of its own, consistent with increment 10's verification.",
+      "approvedAt": "2026-07-23T16:56:17.437937Z"
     }
   ],
   "history": [
@@ -585,8 +599,48 @@
       "at": "2026-07-23T16:53:07.5460909Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-07-23T16:53:22.3463769Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to MR."
+    },
+    {
+      "at": "2026-07-23T16:55:40.9570423Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 11: game_core_demo: 30% faster footstep cadence"
+    },
+    {
+      "at": "2026-07-23T16:55:41.6826859Z",
+      "action": "approve",
+      "detail": "Approved split during SPLIT."
+    },
+    {
+      "at": "2026-07-23T16:55:42.384402Z",
+      "action": "advance",
+      "detail": "Advanced from SPLIT to BRANCH."
+    },
+    {
+      "at": "2026-07-23T16:55:43.2010262Z",
+      "action": "advance",
+      "detail": "Advanced from BRANCH to BUILD."
+    },
+    {
+      "at": "2026-07-23T16:56:16.7097139Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-07-23T16:56:17.4407881Z",
+      "action": "approve",
+      "detail": "Approved verify during VERIFY."
+    },
+    {
+      "at": "2026-07-23T16:56:18.1703663Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-07-22T16:47:43.8462272Z",
-  "updatedAt": "2026-07-23T16:53:07.5566648Z"
+  "updatedAt": "2026-07-23T16:56:18.1757376Z"
 }
