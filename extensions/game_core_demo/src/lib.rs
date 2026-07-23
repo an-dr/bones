@@ -726,8 +726,8 @@ impl Guest for Component {
             viewport_h: SCREEN_HEIGHT as f32,
         });
 
-        // ~80ms, 1200Hz — a short click for footsteps.
-        let footstep = synthesize_tone(1200.0, 96, 0.5);
+        // ~82ms, 110Hz — a low thud for footsteps.
+        let footstep = synthesize_tone(110.0, 9, 0.5);
         publish(
             LoadSound::TOPIC,
             &LoadSound {
@@ -736,7 +736,7 @@ impl Guest for Component {
             }
             .encode(),
         );
-        // ~120ms, 300Hz — a lower blip for a hit, distinct from footsteps.
+        // ~120ms, 300Hz — a higher blip for a hit, distinct from footsteps.
         let hit = synthesize_tone(300.0, 36, 0.7);
         publish(
             LoadSound::TOPIC,

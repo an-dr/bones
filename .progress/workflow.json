@@ -11,8 +11,8 @@
     "done": "Robot hitbox is visibly narrower than its sprite frame; HUD shows live life and score, score increments on purple-box collision, life decrements on red-triangle collision; Esc opens/closes an in-game menu with Settings and Exit entries; Settings lets the user pick big-box color (warm/non-red presets) and small-box color (cold presets) with changes applying live; Exit cleanly closes the running app; new engine surface (exit request, triangle shape) has tests and updated docs (ADR if it's a lasting architectural call).",
     "outOfScope": "The full roadmap shutdown sequence (per-extension shutdown() lifecycle, Stopped event, close-request pub/sub event) - only a minimal-but-clean extension-exit path; retro-world collider support for triangles unless DESIGN finds it's actually needed (obstacles are RAPIER2D-only today); the old PROGRESS.md's leftover solver-stiffness/velocity-clamp tuning items (unrelated, already-stale prior workflow); a real color-picker widget type (stick to preset buttons)."
   },
-  "currentIncrementId": "26a39f17637941c983abb8b8e17daf98",
-  "commitBaseline": "f26c6db667e43d5a8b552f124bb47d57ca4886d9",
+  "currentIncrementId": "5b67008dc0c04aabb5141ad53aea5513",
+  "commitBaseline": "94a92703451b815a8327461ec3dccc3cdaf6c5df",
   "increments": [
     {
       "id": "33c280ba03264f269efe614b7eb478eb",
@@ -73,9 +73,16 @@
     {
       "id": "26a39f17637941c983abb8b8e17daf98",
       "number": 9,
-      "status": "verified",
+      "status": "completed",
       "scope": "game_core_demo: a big grass world with camera-follow",
       "description": "level.tmx grows from 38x28 to 120x90 tiles (1920x1440px vs. the 800x600 window - room to actually pan) - Ground layer grass-filled throughout, brick border walls moved out to the new edges; existing obstacles/hazards/boxes stay clustered near the original spawn area rather than being redistributed (the ask is grass coverage + camera, not a level redesign). lib.rs's init calls the new EntityOp::SetCameraFollow { entity_id: 1, viewport_w: 800.0, viewport_h: 600.0 } once, after LoadTilemap so level bounds are already known. Every existing HUD/pause-menu DrawRect/DrawText call (score/life labels, panel backdrop, buttons, button text - added as screen_space: false plumbing in increment 8) flips to screen_space: true, so they stay fixed on screen as the camera pans instead of drifting with the world. Rebuild via build.ps1 and a manual run to confirm grass covers the expanded area, the camera follows and clamps at the level edges, and the HUD/menu stay put."
+    },
+    {
+      "id": "5b67008dc0c04aabb5141ad53aea5513",
+      "number": 10,
+      "status": "verified",
+      "scope": "game_core_demo: lower-frequency footstep sound",
+      "description": "synthesize_tone's footstep call in init drops from 1200Hz/96 cycles (a high-pitched click) to 110Hz/9 cycles (~82ms, a low thud) - amplitude unchanged at 0.5. The hit sound's own doc comment ('a lower blip for a hit, distinct from footsteps') gets corrected too, since footsteps are now the lower of the two tones (110Hz vs the hit's 300Hz), not the higher one. No engine changes - this is entirely inside synthesize_tone's existing caller-supplied parameters."
     }
   ],
   "approvals": [
@@ -150,13 +157,6 @@
       "approvedAt": "2026-07-23T16:10:58.1209257Z"
     },
     {
-      "gate": "split",
-      "phase": "SPLIT",
-      "incrementId": null,
-      "note": "User directed this work directly via chat (big grass world + camera follow with edge clamp); the screen_space-flag-vs-echo-camera design fork confirmed via AskUserQuestion.",
-      "approvedAt": "2026-07-23T16:27:24.6423894Z"
-    },
-    {
       "gate": "verify",
       "phase": "VERIFY",
       "incrementId": "f8f5418341934ad8b23c9fd18c2b21a5",
@@ -169,6 +169,20 @@
       "incrementId": "26a39f17637941c983abb8b8e17daf98",
       "note": "Self-verified: full workspace test suite green (no regressions - this increment only touches the wasm extension, which has no native Rust unit tests, matching this repo's established pattern for extensions). Rebuilt via build.ps1, smoke-tested the packaged dist/bones.exe (ran ~2s, ticked cleanly at 60Hz, no renderer decode errors, tilemap+sprite loaded), then visually confirmed via a real screenshot: grass covers the expanded 120x90 map, the HUD (Score/Life) stays fixed top-left as screen_space:true content, brick interior floor renders correctly, and the camera is correctly clamped near (0,0) since the robot spawns close to the map's top-left corner - matches the clamp math already exhaustively unit-tested in increment 8. Independently validated level.tmx's generated XML/CSV structure (well-formed, correct cell count, no empty cells, wall objects match computed geometry) before building.",
       "approvedAt": "2026-07-23T16:50:53.9317597Z"
+    },
+    {
+      "gate": "split",
+      "phase": "SPLIT",
+      "incrementId": null,
+      "note": "User directed this small audio tweak directly in chat (footsteps should be low frequency, not a high click).",
+      "approvedAt": "2026-07-23T16:51:52.5744082Z"
+    },
+    {
+      "gate": "verify",
+      "phase": "VERIFY",
+      "incrementId": "5b67008dc0c04aabb5141ad53aea5513",
+      "note": "Self-verified: full workspace test suite green (no regressions, this is a two-constant change inside an existing function call with no test coverage of its own, consistent with how other synthesize_tone calls in this file are verified). Clippy clean on the wasm extension. Rebuilt via build.ps1 and smoke-tested the packaged dist/bones.exe (~2s run, no errors, sound loaded and ticking cleanly).",
+      "approvedAt": "2026-07-23T16:53:06.741427Z"
     }
   ],
   "history": [
@@ -531,8 +545,48 @@
       "at": "2026-07-23T16:50:54.7178532Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-07-23T16:51:11.8391774Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to MR."
+    },
+    {
+      "at": "2026-07-23T16:51:43.2935593Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 10: game_core_demo: lower-frequency footstep sound"
+    },
+    {
+      "at": "2026-07-23T16:51:52.5775861Z",
+      "action": "approve",
+      "detail": "Approved split during SPLIT."
+    },
+    {
+      "at": "2026-07-23T16:51:53.3429538Z",
+      "action": "advance",
+      "detail": "Advanced from SPLIT to BRANCH."
+    },
+    {
+      "at": "2026-07-23T16:51:54.1475903Z",
+      "action": "advance",
+      "detail": "Advanced from BRANCH to BUILD."
+    },
+    {
+      "at": "2026-07-23T16:53:06.0077677Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-07-23T16:53:06.7443866Z",
+      "action": "approve",
+      "detail": "Approved verify during VERIFY."
+    },
+    {
+      "at": "2026-07-23T16:53:07.5460909Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-07-22T16:47:43.8462272Z",
-  "updatedAt": "2026-07-23T16:50:54.7259593Z"
+  "updatedAt": "2026-07-23T16:53:07.5566648Z"
 }
