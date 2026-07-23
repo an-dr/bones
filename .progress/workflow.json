@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "flow": "Detailed",
-  "phase": "VERIFY",
+  "phase": "COMMIT",
   "baseBranch": "main",
   "baseCommit": "ac7d35f2e2ab20ed13235462ad476fa1d69a39ac",
   "featureBranch": "feature/game-core-demo-hazards-hud-menu",
@@ -12,7 +12,7 @@
     "outOfScope": "The full roadmap shutdown sequence (per-extension shutdown() lifecycle, Stopped event, close-request pub/sub event) - only a minimal-but-clean extension-exit path; retro-world collider support for triangles unless DESIGN finds it's actually needed (obstacles are RAPIER2D-only today); the old PROGRESS.md's leftover solver-stiffness/velocity-clamp tuning items (unrelated, already-stale prior workflow); a real color-picker widget type (stick to preset buttons)."
   },
   "currentIncrementId": "783709322ef94cec9abc73c4e3d81344",
-  "commitBaseline": null,
+  "commitBaseline": "5944e2ba5dcfb7d46673817759454ed0cf6a070c",
   "increments": [
     {
       "id": "33c280ba03264f269efe614b7eb478eb",
@@ -101,7 +101,7 @@
     {
       "id": "783709322ef94cec9abc73c4e3d81344",
       "number": 13,
-      "status": "in_progress",
+      "status": "verified",
       "scope": "game_core_demo: footstep cadence back to 0.35s",
       "description": "FOOTSTEP_INTERVAL_SECONDS drops back from 0.2 to 0.35 - 0.2 read as too fast once actually audible (increment 12's dist/ package had been stale, masking the real effect of both 11 and 12 until this session's rebuild); 0.35 is the value that landed right."
     }
@@ -218,6 +218,13 @@
       "incrementId": null,
       "note": "User heard the real effect after the stale-dist fix and directed this value directly in chat.",
       "approvedAt": "2026-07-23T17:02:03.6363333Z"
+    },
+    {
+      "gate": "verify",
+      "phase": "VERIFY",
+      "incrementId": "783709322ef94cec9abc73c4e3d81344",
+      "note": "Self-verified: full workspace test suite green, clippy clean. Rebuilt via build.ps1 this time (not just a debug cargo build like increments 11/12 mistakenly did) - confirmed dist/extensions/game_core_demo.wasm's mtime is newer than the lib.rs edit, so the packaged artifact actually reflects this change.",
+      "approvedAt": "2026-07-23T17:03:07.7747562Z"
     }
   ],
   "history": [
@@ -730,8 +737,18 @@
       "at": "2026-07-23T17:02:47.3199347Z",
       "action": "advance",
       "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-07-23T17:03:07.7786028Z",
+      "action": "approve",
+      "detail": "Approved verify during VERIFY."
+    },
+    {
+      "at": "2026-07-23T17:03:08.5805699Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-07-22T16:47:43.8462272Z",
-  "updatedAt": "2026-07-23T17:02:47.3273064Z"
+  "updatedAt": "2026-07-23T17:03:08.5865409Z"
 }
