@@ -103,6 +103,7 @@ struct CameraFollow {
     entity_id: u32,
     viewport_w: f32,
     viewport_h: f32,
+    zoom: f32,
 }
 
 impl GameCore {
@@ -182,11 +183,13 @@ impl GameCore {
                 entity_id,
                 viewport_w,
                 viewport_h,
+                zoom,
             } => {
                 self.camera_follow = Some(CameraFollow {
                     entity_id,
                     viewport_w,
                     viewport_h,
+                    zoom,
                 })
             }
         }
@@ -604,11 +607,11 @@ impl GameCore {
             b: 20,
             a: 255,
         });
-        let (camera_x, camera_y) = self.camera_position();
+        let (camera_x, camera_y, zoom) = self.camera_position();
         self.publish(SetCamera {
             x: camera_x,
             y: camera_y,
-            zoom: 1.0,
+            zoom,
         });
         // Ground tiles first, on BACKGROUND_LAYER — resolved once by
         // `load_tilemap`, replayed unchanged every tick (see
@@ -675,24 +678,26 @@ impl GameCore {
         }
     }
 
-    /// The `gfx::SetCamera` position `publish_gfx` publishes every tick:
-    /// `(0, 0)` (the original fixed camera) with no active
+    /// The `gfx::SetCamera` `publish_gfx` publishes every tick: `(0, 0,
+    /// 1.0)` (the original fixed unzoomed camera) with no active
     /// `EntityOp::SetCameraFollow`, or if the followed entity doesn't
     /// exist (already despawned, or never spawned) — otherwise centered on
-    /// that entity's `Transform`, clamped per axis to
-    /// `[0, level_size - viewport_size]` once `level_size_px` is known
-    /// (`load_tilemap` having run), so the camera stops panning once the
-    /// level edge would come into view. Unclamped (just centered) if no
-    /// tilemap has been loaded yet, rather than pinning to `(0, 0)`.
-    fn camera_position(&self) -> (f32, f32) {
+    /// that entity's `Transform` at `follow.zoom`, clamped per axis to
+    /// `[0, level_size - viewport_size / zoom]` once `level_size_px` is
+    /// known (`load_tilemap` having run), so the camera stops panning once
+    /// the level edge would come into view — zooming in shows less world
+    /// per pixel, shrinking the effective viewport the clamp uses.
+    /// Unclamped (just centered) if no tilemap has been loaded yet, rather
+    /// than pinning to `(0, 0)`.
+    fn camera_position(&self) -> (f32, f32, f32) {
         let Some(follow) = &self.camera_follow else {
-            return (0.0, 0.0);
+            return (0.0, 0.0, 1.0);
         };
         let Some(&entity) = self.entities.get(&follow.entity_id) else {
-            return (0.0, 0.0);
+            return (0.0, 0.0, 1.0);
         };
         let Ok(transform) = self.world.get::<&Transform>(entity) else {
-            return (0.0, 0.0);
+            return (0.0, 0.0, 1.0);
         };
         let (level_w, level_h) = match self.level_size_px {
             Some((w, h)) => (Some(w), Some(h)),
@@ -705,9 +710,12 @@ impl GameCore {
                 None => raw,
             }
         };
+        let effective_viewport_w = follow.viewport_w / follow.zoom;
+        let effective_viewport_h = follow.viewport_h / follow.zoom;
         (
-            clamp_axis(transform.x, follow.viewport_w, level_w),
-            clamp_axis(transform.y, follow.viewport_h, level_h),
+            clamp_axis(transform.x, effective_viewport_w, level_w),
+            clamp_axis(transform.y, effective_viewport_h, level_h),
+            follow.zoom,
         )
     }
 

@@ -716,6 +716,7 @@ impl Guest for Component {
             entity_id: CONTROLLED_ENTITY_ID,
             viewport_w: SCREEN_WIDTH as f32,
             viewport_h: SCREEN_HEIGHT as f32,
+            zoom: 1.0,
         });
 
         // ~82ms, 110Hz — a low thud for footsteps.

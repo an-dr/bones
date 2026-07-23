@@ -11,8 +11,8 @@
     "done": "Robot hitbox is visibly narrower than its sprite frame; HUD shows live life and score, score increments on purple-box collision, life decrements on red-triangle collision; Esc opens/closes an in-game menu with Settings and Exit entries; Settings lets the user pick big-box color (warm/non-red presets) and small-box color (cold presets) with changes applying live; Exit cleanly closes the running app; new engine surface (exit request, triangle shape) has tests and updated docs (ADR if it's a lasting architectural call).",
     "outOfScope": "The full roadmap shutdown sequence (per-extension shutdown() lifecycle, Stopped event, close-request pub/sub event) - only a minimal-but-clean extension-exit path; retro-world collider support for triangles unless DESIGN finds it's actually needed (obstacles are RAPIER2D-only today); the old PROGRESS.md's leftover solver-stiffness/velocity-clamp tuning items (unrelated, already-stale prior workflow); a real color-picker widget type (stick to preset buttons)."
   },
-  "currentIncrementId": "1c8131c6021b451dbb2da2df11e581f1",
-  "commitBaseline": "c770115cd473ad2da3838c171b46bbe4aab2dd9a",
+  "currentIncrementId": "932c32cd84844e849aa729e45c0241c2",
+  "commitBaseline": "73fb6acfe95c6d366c3d384ff886a70593207fec",
   "increments": [
     {
       "id": "33c280ba03264f269efe614b7eb478eb",
@@ -122,9 +122,23 @@
     {
       "id": "1c8131c6021b451dbb2da2df11e581f1",
       "number": 16,
-      "status": "verified",
+      "status": "completed",
       "scope": "game_core_demo: rebuild level.tmx at the asset pack's real 32x32 tile size",
       "description": "The tileset has been declared/sliced at 16x16 since increment 6, but the source art's real native tile size is 32x32 - corroborated by the robot's own collider (CONTROLLED_HALF_EXTENT=16.0, a 32px-wide hitbox that reads as exactly one 32px tile, not two 16px ones) and confirmed directly by the user. level.tmx's tileset declaration moves to tilewidth/tileheight=32 (grass image is now an 8x8 grid of 64 tiles, not 16x16 of 256); map dimensions recompute to 60x45 tiles to keep the same 1920x1440px world (unchanged, so camera/entity/HUD math stays valid); margin/wall-band tile counts recompute to 2/1 tiles to keep the same 64px/32px pixel thicknesses. Grass margin uses one verified pixel-uniform 32x32 tile (gid 1); the rock-paved interior uses 4 verified-seamless 32x32 crops from the same cobblestone region (gids 33,34,41,50 - each independently grout-bordered, confirmed via a rendered dithered test grid before use, same rigor as increment 15). Regenerates level.tmx; no lib.rs changes needed (entity spawn coordinates are pixel-based, already correct since the world's pixel dimensions are unchanged)."
+    },
+    {
+      "id": "932c32cd84844e849aa729e45c0241c2",
+      "number": 17,
+      "status": "verified",
+      "scope": "gfx/renderer + game-core: display settings (resolution/fullscreen) and camera zoom",
+      "description": "shared/bones-messages: new gfx::SetDisplay { width: u32, height: u32, fullscreen: bool } command (own file, encode/decode + tests, Command enum variant) - a caller's request to resize/fullscreen-toggle the actual OS window. core/renderer: Inner records the window's initial size at Module::init and calls canvas.set_logical_size(w, h, LetterBox) once (SDL's logical-presentation scaling, sdl3 crate's Canvas::set_logical_size) - every gfx/* coordinate stays in that fixed logical space forever after, so nothing else in the engine (game-core's camera math, an extension's screen_space HUD) ever needs to know or care what the actual window size is. record()'s SetDisplay arm applies immediately (singleton, like Clear/SetCamera): canvas.window_mut().set_size(width, height) then .set_fullscreen(fullscreen) - logical size is never touched, so existing content auto-scales/letterboxes to the new window size with zero ripple effects elsewhere. bones_messages::game_core::EntityOp::SetCameraFollow gains a zoom: f32 field (wire format + existing call-site/test updates - default 1.0 preserves current behavior). core/game-core: CameraFollow stores zoom; camera_position()'s clamp divides viewport_w/viewport_h by zoom before clamping (zooming in shows less world per pixel, shrinking the effective world-space viewport) and publishes the real configured zoom via gfx::SetCamera instead of the hardcoded 1.0. Unit tests: SetDisplay round-trips; SetCameraFollow's zoom round-trips; camera clamp math at zoom != 1.0 (both centers correctly and clamps at a tighter effective viewport)."
+    },
+    {
+      "id": "b5be7af660a64c38a88f26267244f68b",
+      "number": 18,
+      "status": "planned",
+      "scope": "game_core_demo: Display settings section (resolution, fullscreen, zoom presets)",
+      "description": "Settings panel gains a Display section below the existing Big/Small box color sections: 3 resolution preset buttons (800x600/1024x768/1280x720), a Fullscreen toggle button (label reflects current state), and 3 zoom preset buttons (1.0x/1.5x/2.0x) - same preset-button idiom as the color pickers, no new widget type. PANEL_H grows to fit the extra rows. State gains resolution: (u32,u32), fullscreen: bool, zoom: f32 (defaults 800x600/false/1.0, matching SCREEN_WIDTH/SCREEN_HEIGHT and SetCameraFollow's current init call). on_button_clicked: a resolution preset updates state and publishes gfx::SetDisplay with the new size and the current fullscreen flag; the fullscreen toggle flips state.fullscreen and republishes gfx::SetDisplay with the current resolution; a zoom preset updates state.zoom and republishes EntityOp::SetCameraFollow with CONTROLLED_ENTITY_ID/SCREEN_WIDTH/SCREEN_HEIGHT unchanged and the new zoom - all cheap idempotent re-publishes, no new engine surface. Rebuild via build.ps1 and visually verify each control in the real running app."
     }
   ],
   "approvals": [
@@ -255,18 +269,25 @@
       "approvedAt": "2026-07-23T17:18:04.4501176Z"
     },
     {
-      "gate": "split",
-      "phase": "SPLIT",
-      "incrementId": null,
-      "note": "User directly asserted the correct tile size, corroborated by the robot hitbox's own dimension; verified both sizes tile seamlessly before choosing 32 per the user's direction.",
-      "approvedAt": "2026-07-23T17:22:14.6634149Z"
-    },
-    {
       "gate": "verify",
       "phase": "VERIFY",
       "incrementId": "1c8131c6021b451dbb2da2df11e581f1",
       "note": "Verified 32x32 is a valid tile size for this source art the same rigorous way as increment 15 (uniform-color check for the grass margin tile, a rendered dithered test grid for the rock tiles) before regenerating. Independently re-verified the actual generated level.tmx's interior via a from-scratch reconstruction, confirmed the collision object geometry is pixel-identical to before, rebuilt via build.ps1 (confirmed dist wasm mtime newer than the .tmx edit, and its file size dropped as expected with fewer/bigger tiles), and visually confirmed in the real running app - tiles are visibly bigger and the robot now reads as roughly one tile wide. Full workspace test suite green; clippy clean on the extension.",
       "approvedAt": "2026-07-23T17:24:41.3205987Z"
+    },
+    {
+      "gate": "split",
+      "phase": "SPLIT",
+      "incrementId": null,
+      "note": "User directed this feature directly in chat; the logical-size-decoupling design (avoids window-size ripple effects into game-core/HUD) chosen and explained in chat before splitting.",
+      "approvedAt": "2026-07-23T17:31:39.9375651Z"
+    },
+    {
+      "gate": "verify",
+      "phase": "VERIFY",
+      "incrementId": "932c32cd84844e849aa729e45c0241c2",
+      "note": "Self-verified: full workspace test suite green (116 game-core tests incl. new zoom-clamp test, 53 bones-messages tests incl. SetDisplay round-trip). Clippy clean on renderer/bones-messages/game-core (game-core's one finding is pre-existing, untouched). code-review skill run: found and fixed one real high-severity bug before commit (SDL set_size/set_fullscreen ordering could silently drop a windowed resize). Rebuilt via build.ps1 and visually confirmed behavior-preserving at the default window size (no SetDisplay/zoom UI wired up yet - that's increment 18) - HUD, camera, and floor all render identically to before.",
+      "approvedAt": "2026-07-23T19:40:41.9020959Z"
     }
   ],
   "history": [
@@ -909,8 +930,53 @@
       "at": "2026-07-23T17:24:42.1014711Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-07-23T17:24:52.2283461Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to MR."
+    },
+    {
+      "at": "2026-07-23T17:31:38.4524097Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 17: gfx/renderer + game-core: display settings (resolution/fullscreen) and camera zoom"
+    },
+    {
+      "at": "2026-07-23T17:31:39.2002063Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 18: game_core_demo: Display settings section (resolution, fullscreen, zoom presets)"
+    },
+    {
+      "at": "2026-07-23T17:31:39.9406104Z",
+      "action": "approve",
+      "detail": "Approved split during SPLIT."
+    },
+    {
+      "at": "2026-07-23T17:31:40.6554695Z",
+      "action": "advance",
+      "detail": "Advanced from SPLIT to BRANCH."
+    },
+    {
+      "at": "2026-07-23T17:31:41.4494351Z",
+      "action": "advance",
+      "detail": "Advanced from BRANCH to BUILD."
+    },
+    {
+      "at": "2026-07-23T19:40:27.2842835Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-07-23T19:40:41.9048985Z",
+      "action": "approve",
+      "detail": "Approved verify during VERIFY."
+    },
+    {
+      "at": "2026-07-23T19:40:42.8096336Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-07-22T16:47:43.8462272Z",
-  "updatedAt": "2026-07-23T17:24:42.1070212Z"
+  "updatedAt": "2026-07-23T19:40:42.8157287Z"
 }

@@ -60,6 +60,16 @@ fn every_command_round_trips() {
         Ok(Some(Command::SetCamera(camera)))
     );
 
+    let display = SetDisplay {
+        width: 1280,
+        height: 720,
+        fullscreen: true,
+    };
+    assert_eq!(
+        Command::decode(SetDisplay::TOPIC, &display.encode()),
+        Ok(Some(Command::SetDisplay(display)))
+    );
+
     let rect = DrawRect {
         x: 10,
         y: 20,

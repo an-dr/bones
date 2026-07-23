@@ -553,14 +553,14 @@ fn tick_publishes_a_clear_a_camera_and_one_draw_sprite_per_sprite_entity() {
     assert_eq!((sprites[0].dst_x, sprites[0].dst_y), (-5, -4));
 }
 
-fn published_camera(spy: &Spy) -> (f32, f32) {
+fn published_camera(spy: &Spy) -> (f32, f32, f32) {
     let published = spy.0.lock().unwrap();
     let camera = published
         .iter()
         .rfind(|e| e.topic == gfx::SetCamera::TOPIC)
         .map(|e| gfx::SetCamera::decode(&e.payload).unwrap())
         .expect("publish_gfx always publishes a camera");
-    (camera.x, camera.y)
+    (camera.x, camera.y, camera.zoom)
 }
 
 #[test]
@@ -571,7 +571,7 @@ fn camera_stays_fixed_at_the_origin_without_a_follow_target() {
     game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
     bus.dispatch();
 
-    assert_eq!(published_camera(&spy), (0.0, 0.0));
+    assert_eq!(published_camera(&spy), (0.0, 0.0, 1.0));
 }
 
 #[test]
@@ -591,13 +591,14 @@ fn camera_centers_on_the_followed_entity_away_from_any_edge() {
         entity_id: 1,
         viewport_w: 16.0,
         viewport_h: 16.0,
+        zoom: 1.0,
     }));
 
     game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
     bus.dispatch();
 
     // Centered: 32 - 16/2 = 24, well inside [0, 64-16] = [0, 48].
-    assert_eq!(published_camera(&spy), (24.0, 24.0));
+    assert_eq!(published_camera(&spy), (24.0, 24.0, 1.0));
 }
 
 #[test]
@@ -616,6 +617,7 @@ fn camera_clamps_rather_than_overshoot_the_low_edge() {
         entity_id: 1,
         viewport_w: 16.0,
         viewport_h: 16.0,
+        zoom: 1.0,
     }));
 
     game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
@@ -623,7 +625,7 @@ fn camera_clamps_rather_than_overshoot_the_low_edge() {
 
     // Raw centering would be 2 - 8 = -6; clamped to 0 rather than showing
     // past the level's edge.
-    assert_eq!(published_camera(&spy), (0.0, 0.0));
+    assert_eq!(published_camera(&spy), (0.0, 0.0, 1.0));
 }
 
 #[test]
@@ -642,6 +644,7 @@ fn camera_clamps_rather_than_overshoot_the_high_edge() {
         entity_id: 1,
         viewport_w: 16.0,
         viewport_h: 16.0,
+        zoom: 1.0,
     }));
 
     game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
@@ -649,7 +652,37 @@ fn camera_clamps_rather_than_overshoot_the_high_edge() {
 
     // Raw centering would be 62 - 8 = 54; clamped to 64 - 16 = 48 rather
     // than showing past the level's edge.
-    assert_eq!(published_camera(&spy), (48.0, 48.0));
+    assert_eq!(published_camera(&spy), (48.0, 48.0, 1.0));
+}
+
+#[test]
+fn camera_clamps_tighter_when_zoomed_in() {
+    // Same fixture/entity position as the high-edge clamp test above, but
+    // zoomed in 2x: the effective viewport shrinks to 16/2=8, so the clamp
+    // ceiling rises to 64-8=56 instead of 48 - proving zoom actually
+    // changes what "the edge" means, not just decoration on the output.
+    let (mut game_core, bus, spy) = ready_game_core();
+    game_core.handle(&envelope(
+        LoadTilemap::TOPIC,
+        LoadTilemap {
+            tmx_bytes: FIXTURE_TMX,
+            tileset_images: Vec::new(),
+        }
+        .encode(),
+    ));
+    game_core.handle(&entity_op_envelope(spawn_with_id(1, 62.0, 62.0)));
+    game_core.handle(&entity_op_envelope(EntityOp::SetCameraFollow {
+        entity_id: 1,
+        viewport_w: 16.0,
+        viewport_h: 16.0,
+        zoom: 2.0,
+    }));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    bus.dispatch();
+
+    // Raw centering would be 62 - (16/2)/2 = 58; clamped to 64 - 16/2 = 56.
+    assert_eq!(published_camera(&spy), (56.0, 56.0, 2.0));
 }
 
 #[test]
@@ -660,12 +693,13 @@ fn camera_follow_is_unclamped_before_any_tilemap_is_loaded() {
         entity_id: 1,
         viewport_w: 16.0,
         viewport_h: 16.0,
+        zoom: 1.0,
     }));
 
     game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
     bus.dispatch();
 
-    assert_eq!(published_camera(&spy), (92.0, 42.0));
+    assert_eq!(published_camera(&spy), (92.0, 42.0, 1.0));
 }
 
 #[test]
@@ -675,12 +709,13 @@ fn camera_follow_falls_back_to_the_fixed_origin_when_the_target_is_missing() {
         entity_id: 99,
         viewport_w: 16.0,
         viewport_h: 16.0,
+        zoom: 1.0,
     }));
 
     game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
     bus.dispatch();
 
-    assert_eq!(published_camera(&spy), (0.0, 0.0));
+    assert_eq!(published_camera(&spy), (0.0, 0.0, 1.0));
 }
 
 #[test]

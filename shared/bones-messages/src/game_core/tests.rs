@@ -224,6 +224,7 @@ fn set_camera_follow_round_trips() {
         entity_id: 1,
         viewport_w: 800.0,
         viewport_h: 600.0,
+        zoom: 1.5,
     };
     let message = EntityOpMessage(op);
     assert_eq!(
