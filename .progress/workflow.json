@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "flow": "Detailed",
-  "phase": "COMMIT",
+  "phase": "VERIFY",
   "baseBranch": "main",
   "baseCommit": "ac7d35f2e2ab20ed13235462ad476fa1d69a39ac",
   "featureBranch": "feature/game-core-demo-hazards-hud-menu",
@@ -11,8 +11,8 @@
     "done": "Robot hitbox is visibly narrower than its sprite frame; HUD shows live life and score, score increments on purple-box collision, life decrements on red-triangle collision; Esc opens/closes an in-game menu with Settings and Exit entries; Settings lets the user pick big-box color (warm/non-red presets) and small-box color (cold presets) with changes applying live; Exit cleanly closes the running app; new engine surface (exit request, triangle shape) has tests and updated docs (ADR if it's a lasting architectural call).",
     "outOfScope": "The full roadmap shutdown sequence (per-extension shutdown() lifecycle, Stopped event, close-request pub/sub event) - only a minimal-but-clean extension-exit path; retro-world collider support for triangles unless DESIGN finds it's actually needed (obstacles are RAPIER2D-only today); the old PROGRESS.md's leftover solver-stiffness/velocity-clamp tuning items (unrelated, already-stale prior workflow); a real color-picker widget type (stick to preset buttons)."
   },
-  "currentIncrementId": "13d6d8c400c14837945bf5259a57772c",
-  "commitBaseline": "01e5cf771eb8d5d49c1e756520f9bad9f19fa234",
+  "currentIncrementId": "783709322ef94cec9abc73c4e3d81344",
+  "commitBaseline": null,
   "increments": [
     {
       "id": "33c280ba03264f269efe614b7eb478eb",
@@ -94,9 +94,16 @@
     {
       "id": "13d6d8c400c14837945bf5259a57772c",
       "number": 12,
-      "status": "verified",
+      "status": "completed",
       "scope": "game_core_demo: footstep cadence tuned further, to 0.2s",
       "description": "FOOTSTEP_INTERVAL_SECONDS drops from 0.35 to 0.2 - increment 11's 30% cut still read as too slow once heard; user-directed follow-up tuning to a concrete value."
+    },
+    {
+      "id": "783709322ef94cec9abc73c4e3d81344",
+      "number": 13,
+      "status": "in_progress",
+      "scope": "game_core_demo: footstep cadence back to 0.35s",
+      "description": "FOOTSTEP_INTERVAL_SECONDS drops back from 0.2 to 0.35 - 0.2 read as too fast once actually audible (increment 12's dist/ package had been stale, masking the real effect of both 11 and 12 until this session's rebuild); 0.35 is the value that landed right."
     }
   ],
   "approvals": [
@@ -199,18 +206,18 @@
       "approvedAt": "2026-07-23T16:56:17.437937Z"
     },
     {
-      "gate": "split",
-      "phase": "SPLIT",
-      "incrementId": null,
-      "note": "User heard increment 11's result and directed this further tuning value directly in chat.",
-      "approvedAt": "2026-07-23T16:58:54.6070139Z"
-    },
-    {
       "gate": "verify",
       "phase": "VERIFY",
       "incrementId": "13d6d8c400c14837945bf5259a57772c",
       "note": "Self-verified: full workspace test suite green, clippy clean on the wasm extension. Single-constant tuning change.",
       "approvedAt": "2026-07-23T16:59:25.4515906Z"
+    },
+    {
+      "gate": "split",
+      "phase": "SPLIT",
+      "incrementId": null,
+      "note": "User heard the real effect after the stale-dist fix and directed this value directly in chat.",
+      "approvedAt": "2026-07-23T17:02:03.6363333Z"
     }
   ],
   "history": [
@@ -693,8 +700,38 @@
       "at": "2026-07-23T16:59:26.2512913Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-07-23T16:59:27.7547257Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to MR."
+    },
+    {
+      "at": "2026-07-23T17:02:02.8854944Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 13: game_core_demo: footstep cadence back to 0.35s"
+    },
+    {
+      "at": "2026-07-23T17:02:03.6412244Z",
+      "action": "approve",
+      "detail": "Approved split during SPLIT."
+    },
+    {
+      "at": "2026-07-23T17:02:04.4403613Z",
+      "action": "advance",
+      "detail": "Advanced from SPLIT to BRANCH."
+    },
+    {
+      "at": "2026-07-23T17:02:05.3833639Z",
+      "action": "advance",
+      "detail": "Advanced from BRANCH to BUILD."
+    },
+    {
+      "at": "2026-07-23T17:02:47.3199347Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
     }
   ],
   "createdAt": "2026-07-22T16:47:43.8462272Z",
-  "updatedAt": "2026-07-23T16:59:26.2578125Z"
+  "updatedAt": "2026-07-23T17:02:47.3273064Z"
 }

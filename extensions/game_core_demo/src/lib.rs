@@ -69,7 +69,7 @@ const SAMPLE_RATE: u32 = 44_100;
 const FOOTSTEP_SOUND_ID: u32 = 1;
 const HIT_SOUND_ID: u32 = 2;
 // Roughly two steps per second while moving.
-const FOOTSTEP_INTERVAL_SECONDS: f32 = 0.2;
+const FOOTSTEP_INTERVAL_SECONDS: f32 = 0.35;
 
 // `Held` stays with `Component` rather than splitting further: it's purely
 // this extension's own thread-local input state, never constructed or
