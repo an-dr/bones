@@ -11,8 +11,8 @@
     "done": "Robot hitbox is visibly narrower than its sprite frame; HUD shows live life and score, score increments on purple-box collision, life decrements on red-triangle collision; Esc opens/closes an in-game menu with Settings and Exit entries; Settings lets the user pick big-box color (warm/non-red presets) and small-box color (cold presets) with changes applying live; Exit cleanly closes the running app; new engine surface (exit request, triangle shape) has tests and updated docs (ADR if it's a lasting architectural call).",
     "outOfScope": "The full roadmap shutdown sequence (per-extension shutdown() lifecycle, Stopped event, close-request pub/sub event) - only a minimal-but-clean extension-exit path; retro-world collider support for triangles unless DESIGN finds it's actually needed (obstacles are RAPIER2D-only today); the old PROGRESS.md's leftover solver-stiffness/velocity-clamp tuning items (unrelated, already-stale prior workflow); a real color-picker widget type (stick to preset buttons)."
   },
-  "currentIncrementId": "783709322ef94cec9abc73c4e3d81344",
-  "commitBaseline": "5944e2ba5dcfb7d46673817759454ed0cf6a070c",
+  "currentIncrementId": "c22c65d5ad794d91b7b90ff944cc3ff2",
+  "commitBaseline": "073e4ec11013031607a5a011a5d430192d088374",
   "increments": [
     {
       "id": "33c280ba03264f269efe614b7eb478eb",
@@ -101,9 +101,16 @@
     {
       "id": "783709322ef94cec9abc73c4e3d81344",
       "number": 13,
-      "status": "verified",
+      "status": "completed",
       "scope": "game_core_demo: footstep cadence back to 0.35s",
       "description": "FOOTSTEP_INTERVAL_SECONDS drops back from 0.2 to 0.35 - 0.2 read as too fast once actually audible (increment 12's dist/ package had been stale, masking the real effect of both 11 and 12 until this session's rebuild); 0.35 is the value that landed right."
+    },
+    {
+      "id": "c22c65d5ad794d91b7b90ff944cc3ff2",
+      "number": 14,
+      "status": "verified",
+      "scope": "game_core_demo: fix non-seamless brick floor tiling",
+      "description": "level.tmx's brick interior floor picked only 4 of tileset_bricks.png's 16 sub-tiles (local ids 0,3,8,13) via a diagonal dither (col-row) mod 4 - each sub-tile is a real brick-coursing fragment, not an independently tileable swatch, so scrambling their relative position cuts bricks mid-shape at every tile boundary (confirmed by rendering both schemes side by side: the dither produces a broken mosaic, direct reconstruction produces a clean continuous brick wall). This bug originated in the original 38x28 level.tmx (increment 6), just much more visible now across the bigger interior. Fix: the Ground layer's brick placement uses all 16 sub-tiles via direct reconstruction - local_id = (row % 4) * 4 + (col % 4) - which exactly reassembles tileset_bricks.png's real coursing, tiled seamlessly at every boundary. Regenerated level.tmx; the grass margin/wall-band tiles are untouched (already confirmed pixel-uniform, not the source of the seam issue)."
     }
   ],
   "approvals": [
@@ -213,18 +220,25 @@
       "approvedAt": "2026-07-23T16:59:25.4515906Z"
     },
     {
-      "gate": "split",
-      "phase": "SPLIT",
-      "incrementId": null,
-      "note": "User heard the real effect after the stale-dist fix and directed this value directly in chat.",
-      "approvedAt": "2026-07-23T17:02:03.6363333Z"
-    },
-    {
       "gate": "verify",
       "phase": "VERIFY",
       "incrementId": "783709322ef94cec9abc73c4e3d81344",
       "note": "Self-verified: full workspace test suite green, clippy clean. Rebuilt via build.ps1 this time (not just a debug cargo build like increments 11/12 mistakenly did) - confirmed dist/extensions/game_core_demo.wasm's mtime is newer than the lib.rs edit, so the packaged artifact actually reflects this change.",
       "approvedAt": "2026-07-23T17:03:07.7747562Z"
+    },
+    {
+      "gate": "split",
+      "phase": "SPLIT",
+      "incrementId": null,
+      "note": "User flagged a real visual defect (non-seamless tiles) directly in chat; root cause investigated and confirmed via pixel analysis and a rendered side-by-side comparison before fixing.",
+      "approvedAt": "2026-07-23T17:07:18.9444431Z"
+    },
+    {
+      "gate": "verify",
+      "phase": "VERIFY",
+      "incrementId": "c22c65d5ad794d91b7b90ff944cc3ff2",
+      "note": "Root-caused via pixel analysis (found the 3 grass GIDs already pixel-identical solid color, confirming grass wasn't the problem) and confirmed the brick dither bug by rendering both the old and new tiling schemes side by side (old: scrambled mosaic; new: clean continuous coursing) before touching any code. Regenerated level.tmx, independently re-verified the actual generated file's interior + corner transition via a from-scratch reconstruction script, then rebuilt via build.ps1 (confirmed dist wasm mtime newer than the .tmx edit this time) and visually confirmed in the real running app via screenshot - brick floor is now a clean continuous pattern. Full workspace test suite green (no code outside the demo's asset/lib.rs changed).",
+      "approvedAt": "2026-07-23T17:10:25.657531Z"
     }
   ],
   "history": [
@@ -747,8 +761,48 @@
       "at": "2026-07-23T17:03:08.5805699Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-07-23T17:03:25.8580662Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to MR."
+    },
+    {
+      "at": "2026-07-23T17:07:17.9283917Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 14: game_core_demo: fix non-seamless brick floor tiling"
+    },
+    {
+      "at": "2026-07-23T17:07:18.9481449Z",
+      "action": "approve",
+      "detail": "Approved split during SPLIT."
+    },
+    {
+      "at": "2026-07-23T17:07:19.6592622Z",
+      "action": "advance",
+      "detail": "Advanced from SPLIT to BRANCH."
+    },
+    {
+      "at": "2026-07-23T17:07:20.4157524Z",
+      "action": "advance",
+      "detail": "Advanced from BRANCH to BUILD."
+    },
+    {
+      "at": "2026-07-23T17:10:08.5184216Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-07-23T17:10:25.6620853Z",
+      "action": "approve",
+      "detail": "Approved verify during VERIFY."
+    },
+    {
+      "at": "2026-07-23T17:10:26.5210426Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-07-22T16:47:43.8462272Z",
-  "updatedAt": "2026-07-23T17:03:08.5865409Z"
+  "updatedAt": "2026-07-23T17:10:26.5303495Z"
 }
