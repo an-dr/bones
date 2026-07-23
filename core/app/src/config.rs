@@ -2,6 +2,8 @@
 //! (structure.md); every field defaults to today's hardcoded values, so
 //! running with no config file is unchanged.
 
+use std::path::Path;
+
 use serde::Deserialize;
 
 #[derive(Deserialize, Debug)]
@@ -57,13 +59,14 @@ impl Config {
     /// wrong with it (unreadable, malformed TOML, an unknown field — likely
     /// a typo) is, so a broken config a user actually wrote never silently
     /// no-ops.
-    pub fn load(path: &str) -> Result<Self, String> {
+    pub fn load(path: impl AsRef<Path>) -> Result<Self, String> {
+        let path = path.as_ref();
         let contents = match std::fs::read_to_string(path) {
             Ok(contents) => contents,
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(Self::default()),
-            Err(err) => return Err(format!("reading {path}: {err}")),
+            Err(err) => return Err(format!("reading {}: {err}", path.display())),
         };
-        toml::from_str(&contents).map_err(|err| format!("parsing {path}: {err}"))
+        toml::from_str(&contents).map_err(|err| format!("parsing {}: {err}", path.display()))
     }
 }
 
