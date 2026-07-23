@@ -6,7 +6,10 @@ wit_bindgen::generate!({
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use bones::core::host_api::{log, publish, request_exit, subscribe, Level};
+use bones::core::host_api::{
+    list_display_modes, log, native_display_mode, publish, request_exit, subscribe, DisplayMode,
+    Level,
+};
 use bones_messages::audio::{LoadSound, PlaySound};
 use bones_messages::game_core::{
     BodyKind, Collision, EntityOp, EntityOpMessage, LoadTilemap, PhysicsWorlds, Shape, Sprite,
@@ -14,6 +17,7 @@ use bones_messages::game_core::{
 };
 use bones_messages::gfx::{DrawRect, DrawText, LoadSprite, SetDisplay};
 use bones_messages::input::{GamepadAxis, KeyDown, KeyUp, MouseDown};
+use bones_messages::renderer::DisplayChanged;
 use bones_messages::{DecodeMessage, EncodeMessage, Message};
 
 const LEVEL_TMX: &[u8] = include_bytes!("assets/level.tmx");
@@ -129,13 +133,15 @@ const BUTTON_SETTINGS: u32 = 1;
 const BUTTON_EXIT: u32 = 2;
 const BUTTON_BACK: u32 = 3;
 const BUTTON_FULLSCREEN_TOGGLE: u32 = 4;
-// Presets start well clear of the fixed ids above; each preset range is
+const BUTTON_RESOLUTION_TOGGLE: u32 = 5;
+// Presets/options start well clear of the fixed ids above; each range is
 // spaced far enough apart (10 ids each) that none could ever grow into a
-// neighboring one unnoticed.
+// neighboring one unnoticed - `MAX_RESOLUTION_OPTIONS` (below) comfortably
+// fits under 10.
 const BUTTON_BIG_BOX_PRESET_BASE: u32 = 10;
 const BUTTON_SMALL_BOX_PRESET_BASE: u32 = 20;
-const BUTTON_RESOLUTION_PRESET_BASE: u32 = 30;
-const BUTTON_ZOOM_PRESET_BASE: u32 = 40;
+const BUTTON_ZOOM_PRESET_BASE: u32 = 30;
+const BUTTON_RESOLUTION_OPTION_BASE: u32 = 40;
 
 type Preset = (&'static str, (u8, u8, u8, u8));
 
@@ -161,22 +167,42 @@ fn preset_color(id: u32, base: u32, presets: &[Preset]) -> Option<(u8, u8, u8, u
     presets.get(index).map(|&(_, color)| color)
 }
 
-type ResolutionPreset = (&'static str, (u32, u32));
+// Capped so the Settings panel's expanded height stays the same regardless
+// of how many modes a given monitor reports (some report a dozen+) - kept
+// comfortably under the 10-id spacing `BUTTON_RESOLUTION_OPTION_BASE` gets.
+const MAX_RESOLUTION_OPTIONS: usize = 6;
 
-// gfx::SetDisplay's own doc comment: the renderer scales world content and
-// screen_space UI independently to fit whatever size is actually applied,
-// so picking any of these has no ripple effect on game-core's camera math
-// or this demo's HUD layout.
-const RESOLUTION_PRESETS: [ResolutionPreset; 3] = [
-    ("800x600", (800, 600)),
-    ("1024x768", (1024, 768)),
-    ("1280x720", (1280, 720)),
-];
-
-/// `id`'s preset resolution — same addressing convention as `preset_color`.
-fn preset_resolution(id: u32) -> Option<(u32, u32)> {
-    let index = id.checked_sub(BUTTON_RESOLUTION_PRESET_BASE)? as usize;
-    RESOLUTION_PRESETS.get(index).map(|&(_, size)| size)
+/// This session's resolution option list: every mode `list_display_modes`
+/// reports, deduped/sorted ascending, with `native_display_mode` folded in
+/// (so "the max" is always present even if the fullscreen-mode query omits
+/// it on some platform) — falls back to 3 safe hardcoded sizes if the query
+/// itself came back empty (e.g. no display attached). Stride-sampled down
+/// to `MAX_RESOLUTION_OPTIONS` if longer, always keeping the smallest and
+/// largest entries. `gfx::SetDisplay`'s own doc comment: the renderer
+/// scales world content and screen_space UI independently to fit whatever
+/// size is actually applied, so picking any of these has no ripple effect
+/// on game-core's camera math or this demo's HUD layout.
+fn resolution_options() -> Vec<(u32, u32)> {
+    let mut modes: Vec<(u32, u32)> = list_display_modes()
+        .into_iter()
+        .map(|DisplayMode { width, height }| (width, height))
+        .collect();
+    if let Some(DisplayMode { width, height }) = native_display_mode() {
+        modes.push((width, height));
+    }
+    modes.sort_unstable();
+    modes.dedup();
+    if modes.is_empty() {
+        modes = vec![(800, 600), (1024, 768), (1280, 720)];
+    }
+    if modes.len() <= MAX_RESOLUTION_OPTIONS {
+        return modes;
+    }
+    let last = modes.len() - 1;
+    let stride = last as f32 / (MAX_RESOLUTION_OPTIONS - 1) as f32;
+    (0..MAX_RESOLUTION_OPTIONS)
+        .map(|index| modes[((index as f32 * stride).round() as usize).min(last)])
+        .collect()
 }
 
 type ZoomPreset = (&'static str, f32);
@@ -219,14 +245,21 @@ struct State {
     // truth for the initial appearance.
     big_box_color: (u8, u8, u8, u8),
     small_box_color: (u8, u8, u8, u8),
-    // Live display settings, changed by Settings/Display preset clicks and
+    // Live display settings, changed by Settings/Display clicks and
     // republished to the engine (gfx::SetDisplay, EntityOp::SetCameraFollow)
-    // on every change. Starts at (SCREEN_WIDTH, SCREEN_HEIGHT)/false/1.0
+    // on every change. `resolution` starts at (SCREEN_WIDTH, SCREEN_HEIGHT)
     // (see init) — not derivable from Default, same reasoning as the box
-    // colors above.
+    // colors above — but is also kept in sync reactively: on_message
+    // updates it from every renderer/display-changed event, since
+    // fullscreen may not honor whatever was last requested.
     resolution: (u32, u32),
     fullscreen: bool,
     zoom: f32,
+    // Queried once via resolution_options() in init and never changed
+    // after - the Settings/Display resolution dropdown's fixed option list.
+    resolution_options: Vec<(u32, u32)>,
+    // Whether that dropdown is currently showing its option list.
+    resolution_expanded: bool,
 }
 
 const FULL_LIFE: u32 = 3;
@@ -428,11 +461,31 @@ fn draw_hud(score: u32, life: u32) {
 }
 
 const PANEL_W: u32 = 360;
-// Grew from 300 to fit the Display section (resolution/fullscreen/zoom)
-// below the two color sections.
-const PANEL_H: u32 = 480;
 const PANEL_X: i32 = (SCREEN_WIDTH - PANEL_W as i32) / 2;
-const PANEL_Y: i32 = (SCREEN_HEIGHT - PANEL_H as i32) / 2;
+// Fits the title, both color sections, the Display section's fullscreen
+// toggle and zoom presets, and the resolution dropdown collapsed to its one
+// toggle button - the common case. Expanding the dropdown adds one row per
+// option on top of this, so the panel grows (and re-centers) only then;
+// `panel_geometry` is the one place both `draw_menu` and `menu_buttons`
+// compute this from, so they can never drift apart.
+const PANEL_H_COLLAPSED: u32 = 480;
+
+/// `(PANEL_Y, PANEL_H)` for the current Settings panel content — vertically
+/// re-centered around `SCREEN_HEIGHT` so the extra rows an expanded
+/// resolution dropdown adds grow the panel symmetrically instead of just
+/// pushing its bottom edge further down.
+fn panel_geometry(resolution_expanded: bool, num_resolution_options: usize) -> (i32, u32) {
+    let extra = if resolution_expanded {
+        // 3 per row (menu_buttons' own grid) - rows, not raw option count.
+        let rows = num_resolution_options.div_ceil(3) as u32;
+        rows * (BUTTON_H + BUTTON_GAP as u32)
+    } else {
+        0
+    };
+    let height = PANEL_H_COLLAPSED + extra;
+    let y = (SCREEN_HEIGHT - height as i32) / 2;
+    (y, height)
+}
 const PANEL_BG_COLOR: (u8, u8, u8, u8) = (20, 20, 30, 255);
 const PANEL_BORDER_COLOR: (u8, u8, u8, u8) = (110, 110, 140, 255);
 const PANEL_TITLE_COLOR: (u8, u8, u8, u8) = (255, 255, 255, 255);
@@ -456,7 +509,10 @@ struct ButtonLayout {
     y: i32,
     w: u32,
     h: u32,
-    label: &'static str,
+    // `Cow` rather than `&'static str`: most labels are static, but the
+    // resolution toggle's shows the current selection, computed fresh each
+    // call.
+    label: std::borrow::Cow<'static, str>,
 }
 
 impl ButtonLayout {
@@ -469,24 +525,32 @@ impl ButtonLayout {
 }
 
 /// Every button `menu` currently shows, top to bottom — empty for
-/// `Closed`. Pure layout math (`fullscreen` only changes the toggle
-/// button's label text, not its position), no side effects, so both
-/// `draw_menu` and `on_mouse_down` can call it freely every tick/click.
-fn menu_buttons(menu: MenuState, fullscreen: bool) -> Vec<ButtonLayout> {
+/// `Closed`. Pure layout math (`fullscreen`/`resolution` only change label
+/// text, not positions; `resolution_expanded` does change what's laid out
+/// below it), no side effects, so both `draw_menu` and `on_mouse_down` can
+/// call it freely every tick/click.
+fn menu_buttons(
+    menu: MenuState,
+    fullscreen: bool,
+    resolution: (u32, u32),
+    resolution_expanded: bool,
+    resolution_options: &[(u32, u32)],
+) -> Vec<ButtonLayout> {
     let content_x = PANEL_X + BUTTON_MARGIN;
     let content_w = (PANEL_W as i32 - 2 * BUTTON_MARGIN) as u32;
+    let (panel_y, _) = panel_geometry(resolution_expanded, resolution_options.len());
     let mut buttons = Vec::new();
     match menu {
         MenuState::Closed => {}
         MenuState::Main => {
-            let row_y = PANEL_Y + 70;
+            let row_y = panel_y + 70;
             buttons.push(ButtonLayout {
                 id: BUTTON_SETTINGS,
                 x: content_x,
                 y: row_y,
                 w: content_w,
                 h: BUTTON_H,
-                label: "Settings",
+                label: "Settings".into(),
             });
             buttons.push(ButtonLayout {
                 id: BUTTON_EXIT,
@@ -494,12 +558,12 @@ fn menu_buttons(menu: MenuState, fullscreen: bool) -> Vec<ButtonLayout> {
                 y: row_y + BUTTON_H as i32 + BUTTON_GAP,
                 w: content_w,
                 h: BUTTON_H,
-                label: "Exit",
+                label: "Exit".into(),
             });
         }
         MenuState::Settings => {
             let preset_w = ((content_w as i32 - 2 * BUTTON_GAP) / 3) as u32;
-            let big_row_y = PANEL_Y + 70;
+            let big_row_y = panel_y + 70;
             for (index, &(name, _)) in BIG_BOX_PRESETS.iter().enumerate() {
                 buttons.push(ButtonLayout {
                     id: BUTTON_BIG_BOX_PRESET_BASE + index as u32,
@@ -507,7 +571,7 @@ fn menu_buttons(menu: MenuState, fullscreen: bool) -> Vec<ButtonLayout> {
                     y: big_row_y,
                     w: preset_w,
                     h: BUTTON_H,
-                    label: name,
+                    label: name.into(),
                 });
             }
             let small_row_y = big_row_y + BUTTON_H as i32 + SECTION_GAP;
@@ -518,21 +582,10 @@ fn menu_buttons(menu: MenuState, fullscreen: bool) -> Vec<ButtonLayout> {
                     y: small_row_y,
                     w: preset_w,
                     h: BUTTON_H,
-                    label: name,
+                    label: name.into(),
                 });
             }
-            let resolution_row_y = small_row_y + BUTTON_H as i32 + SECTION_GAP;
-            for (index, &(name, _)) in RESOLUTION_PRESETS.iter().enumerate() {
-                buttons.push(ButtonLayout {
-                    id: BUTTON_RESOLUTION_PRESET_BASE + index as u32,
-                    x: content_x + index as i32 * (preset_w as i32 + BUTTON_GAP),
-                    y: resolution_row_y,
-                    w: preset_w,
-                    h: BUTTON_H,
-                    label: name,
-                });
-            }
-            let fullscreen_row_y = resolution_row_y + BUTTON_H as i32 + BUTTON_GAP;
+            let fullscreen_row_y = small_row_y + BUTTON_H as i32 + SECTION_GAP;
             buttons.push(ButtonLayout {
                 id: BUTTON_FULLSCREEN_TOGGLE,
                 x: content_x,
@@ -540,9 +593,9 @@ fn menu_buttons(menu: MenuState, fullscreen: bool) -> Vec<ButtonLayout> {
                 w: content_w,
                 h: BUTTON_H,
                 label: if fullscreen {
-                    "Fullscreen: On"
+                    "Fullscreen: On".into()
                 } else {
-                    "Fullscreen: Off"
+                    "Fullscreen: Off".into()
                 },
             });
             let zoom_row_y = fullscreen_row_y + BUTTON_H as i32 + BUTTON_GAP;
@@ -553,17 +606,55 @@ fn menu_buttons(menu: MenuState, fullscreen: bool) -> Vec<ButtonLayout> {
                     y: zoom_row_y,
                     w: preset_w,
                     h: BUTTON_H,
-                    label: name,
+                    label: name.into(),
                 });
             }
-            let back_y = zoom_row_y + BUTTON_H as i32 + SECTION_GAP;
+            let resolution_toggle_row_y = zoom_row_y + BUTTON_H as i32 + SECTION_GAP;
+            buttons.push(ButtonLayout {
+                id: BUTTON_RESOLUTION_TOGGLE,
+                x: content_x,
+                y: resolution_toggle_row_y,
+                w: content_w,
+                h: BUTTON_H,
+                label: format!(
+                    "Resolution: {}x{} {}",
+                    resolution.0,
+                    resolution.1,
+                    if resolution_expanded { "\u{25B4}" } else { "\u{25BE}" }
+                )
+                .into(),
+            });
+            let mut after_resolution_y = resolution_toggle_row_y + BUTTON_H as i32 + BUTTON_GAP;
+            if resolution_expanded {
+                // 3 per row (same grid the color/zoom presets above use),
+                // not one per row - a one-per-row list of up to
+                // MAX_RESOLUTION_OPTIONS would make the panel taller than
+                // SCREEN_HEIGHT, pushing Back (and the bottom option rows)
+                // off the fixed logical canvas entirely.
+                for (index, &(width, height)) in resolution_options.iter().enumerate() {
+                    let column = index % 3;
+                    if column == 0 && index > 0 {
+                        after_resolution_y += BUTTON_H as i32 + BUTTON_GAP;
+                    }
+                    buttons.push(ButtonLayout {
+                        id: BUTTON_RESOLUTION_OPTION_BASE + index as u32,
+                        x: content_x + column as i32 * (preset_w as i32 + BUTTON_GAP),
+                        y: after_resolution_y,
+                        w: preset_w,
+                        h: BUTTON_H,
+                        label: format!("{width}x{height}").into(),
+                    });
+                }
+                after_resolution_y += BUTTON_H as i32 + BUTTON_GAP;
+            }
+            let back_y = after_resolution_y - BUTTON_GAP + SECTION_GAP;
             buttons.push(ButtonLayout {
                 id: BUTTON_BACK,
                 x: content_x,
                 y: back_y,
                 w: content_w,
                 h: BUTTON_H,
-                label: "Back",
+                label: "Back".into(),
             });
         }
     }
@@ -575,17 +666,24 @@ fn menu_buttons(menu: MenuState, fullscreen: bool) -> Vec<ButtonLayout> {
 /// doesn't blend alpha for filled rects yet, so a translucent overlay
 /// would just render opaque) with a title, section labels for `Settings`,
 /// and every button from `menu_buttons`.
-fn draw_menu(menu: MenuState, fullscreen: bool) {
+fn draw_menu(
+    menu: MenuState,
+    fullscreen: bool,
+    resolution: (u32, u32),
+    resolution_expanded: bool,
+    resolution_options: &[(u32, u32)],
+) {
     if menu == MenuState::Closed {
         return;
     }
+    let (panel_y, panel_h) = panel_geometry(resolution_expanded, resolution_options.len());
     publish(
         DrawRect::TOPIC,
         &DrawRect {
             x: PANEL_X,
-            y: PANEL_Y,
+            y: panel_y,
             w: PANEL_W,
-            h: PANEL_H,
+            h: panel_h,
             filled: true,
             color: PANEL_BG_COLOR,
             layer: MENU_LAYER,
@@ -597,9 +695,9 @@ fn draw_menu(menu: MenuState, fullscreen: bool) {
         DrawRect::TOPIC,
         &DrawRect {
             x: PANEL_X,
-            y: PANEL_Y,
+            y: panel_y,
             w: PANEL_W,
-            h: PANEL_H,
+            h: panel_h,
             filled: false,
             color: PANEL_BORDER_COLOR,
             layer: MENU_LAYER,
@@ -618,7 +716,7 @@ fn draw_menu(menu: MenuState, fullscreen: bool) {
         &DrawText {
             text: title,
             x: PANEL_X + BUTTON_MARGIN,
-            y: PANEL_Y + 20,
+            y: panel_y + 20,
             size: 18,
             color: PANEL_TITLE_COLOR,
             layer: MENU_LAYER,
@@ -633,7 +731,7 @@ fn draw_menu(menu: MenuState, fullscreen: bool) {
             &DrawText {
                 text: "Big box color",
                 x: PANEL_X + BUTTON_MARGIN,
-                y: PANEL_Y + 52,
+                y: panel_y + 52,
                 size: 14,
                 color: SECTION_LABEL_COLOR,
                 layer: MENU_LAYER,
@@ -641,8 +739,8 @@ fn draw_menu(menu: MenuState, fullscreen: bool) {
             }
             .encode(),
         );
-        let small_row_y = PANEL_Y + 70 + BUTTON_H as i32 + SECTION_GAP;
-        let small_label_y = PANEL_Y + 70 + BUTTON_H as i32 + 10;
+        let small_row_y = panel_y + 70 + BUTTON_H as i32 + SECTION_GAP;
+        let small_label_y = panel_y + 70 + BUTTON_H as i32 + 10;
         publish(
             DrawText::TOPIC,
             &DrawText {
@@ -672,7 +770,13 @@ fn draw_menu(menu: MenuState, fullscreen: bool) {
         );
     }
 
-    for button in menu_buttons(menu, fullscreen) {
+    for button in menu_buttons(
+        menu,
+        fullscreen,
+        resolution,
+        resolution_expanded,
+        resolution_options,
+    ) {
         publish(
             DrawRect::TOPIC,
             &DrawRect {
@@ -694,7 +798,7 @@ fn draw_menu(menu: MenuState, fullscreen: bool) {
         publish(
             DrawText::TOPIC,
             &DrawText {
-                text: button.label,
+                text: &button.label,
                 x: text_x,
                 y: text_y,
                 size: 16,
@@ -711,10 +815,17 @@ fn draw_menu(menu: MenuState, fullscreen: bool) {
 /// shows — a no-op while `Closed` (nothing to click) or for any click that
 /// doesn't land inside a button.
 fn on_mouse_down(x: f32, y: f32) {
-    let (menu, fullscreen, resolution) = STATE.with(|state| {
-        let state = state.borrow();
-        (state.menu, state.fullscreen, state.resolution)
-    });
+    let (menu, fullscreen, resolution, resolution_expanded, resolution_options) =
+        STATE.with(|state| {
+            let state = state.borrow();
+            (
+                state.menu,
+                state.fullscreen,
+                state.resolution,
+                state.resolution_expanded,
+                state.resolution_options.clone(),
+            )
+        });
     if menu == MenuState::Closed {
         return;
     }
@@ -722,16 +833,22 @@ fn on_mouse_down(x: f32, y: f32) {
     // concept of the renderer's fixed logical/UI space - see
     // gfx::SetDisplay's own doc comment), but every button position from
     // `menu_buttons` is in that fixed SCREEN_WIDTH/SCREEN_HEIGHT space, the
-    // same one screen_space draws stretch to fill. Converting back by the
-    // resolution this extension itself last requested keeps hit-testing
-    // aligned with what's actually drawn after a resolution change -
-    // approximate in fullscreen, since the OS may not honor the exact
-    // requested size there.
+    // same one screen_space draws stretch to fill. Converting back by
+    // `resolution` keeps hit-testing aligned with what's actually drawn -
+    // `resolution` is the renderer's own confirmed actual size
+    // (renderer/display-changed, see on_message), not a guess, so this
+    // stays correct in fullscreen too.
     let (x, y) = (
         x * SCREEN_WIDTH as f32 / resolution.0 as f32,
         y * SCREEN_HEIGHT as f32 / resolution.1 as f32,
     );
-    for button in menu_buttons(menu, fullscreen) {
+    for button in menu_buttons(
+        menu,
+        fullscreen,
+        resolution,
+        resolution_expanded,
+        &resolution_options,
+    ) {
         if button.contains(x, y) {
             on_button_clicked(button.id);
             break;
@@ -768,7 +885,13 @@ fn on_button_clicked(id: u32) {
     } else if id == BUTTON_EXIT {
         request_exit();
     } else if id == BUTTON_BACK {
-        STATE.with(|state| state.borrow_mut().menu = MenuState::Main);
+        STATE.with(|state| {
+            let mut state = state.borrow_mut();
+            state.menu = MenuState::Main;
+            // So reopening Settings later starts collapsed again, not
+            // wherever this visit happened to leave it.
+            state.resolution_expanded = false;
+        });
     } else if let Some(color) = preset_color(id, BUTTON_BIG_BOX_PRESET_BASE, &BIG_BOX_PRESETS) {
         STATE.with(|state| state.borrow_mut().big_box_color = color);
         for entity_id in BIG_BOX_IDS {
@@ -779,13 +902,6 @@ fn on_button_clicked(id: u32) {
         for entity_id in SMALL_BOX_IDS {
             publish_entity_op(EntityOp::SetColor { entity_id, color });
         }
-    } else if let Some(resolution) = preset_resolution(id) {
-        let fullscreen = STATE.with(|state| {
-            let mut state = state.borrow_mut();
-            state.resolution = resolution;
-            state.fullscreen
-        });
-        publish_display(resolution, fullscreen);
     } else if id == BUTTON_FULLSCREEN_TOGGLE {
         let (resolution, fullscreen) = STATE.with(|state| {
             let mut state = state.borrow_mut();
@@ -801,7 +917,33 @@ fn on_button_clicked(id: u32) {
             viewport_h: SCREEN_HEIGHT as f32,
             zoom,
         });
+    } else if id == BUTTON_RESOLUTION_TOGGLE {
+        STATE.with(|state| {
+            let mut state = state.borrow_mut();
+            state.resolution_expanded = !state.resolution_expanded;
+        });
+    } else {
+        let selected = STATE.with(|state| {
+            let state = state.borrow();
+            resolution_option_at(id, &state.resolution_options)
+        });
+        if let Some(resolution) = selected {
+            let fullscreen = STATE.with(|state| {
+                let mut state = state.borrow_mut();
+                state.resolution = resolution;
+                state.resolution_expanded = false;
+                state.fullscreen
+            });
+            publish_display(resolution, fullscreen);
+        }
     }
+}
+
+/// `id`'s resolution option within `options` — same addressing convention
+/// as `preset_color`.
+fn resolution_option_at(id: u32, options: &[(u32, u32)]) -> Option<(u32, u32)> {
+    let index = id.checked_sub(BUTTON_RESOLUTION_OPTION_BASE)? as usize;
+    options.get(index).copied()
 }
 
 fn publish_display(resolution: (u32, u32), fullscreen: bool) {
@@ -826,6 +968,7 @@ impl Guest for Component {
         subscribe(GamepadAxis::TOPIC);
         subscribe(Collision::TOPIC);
         subscribe(MouseDown::TOPIC);
+        subscribe(DisplayChanged::TOPIC);
         subscribe("core/tick");
 
         let load_sprite = LoadSprite {
@@ -945,6 +1088,8 @@ impl Guest for Component {
             state.resolution = (SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32);
             state.fullscreen = false;
             state.zoom = 1.0;
+            state.resolution_options = resolution_options();
+            state.resolution_expanded = false;
         });
 
         log(
@@ -1015,12 +1160,27 @@ impl Guest for Component {
             });
         });
 
-        let (score, life, menu, fullscreen) = STATE.with(|state| {
-            let state = state.borrow();
-            (state.score, state.life, state.menu, state.fullscreen)
-        });
+        let (score, life, menu, fullscreen, resolution, resolution_expanded, resolution_options) =
+            STATE.with(|state| {
+                let state = state.borrow();
+                (
+                    state.score,
+                    state.life,
+                    state.menu,
+                    state.fullscreen,
+                    state.resolution,
+                    state.resolution_expanded,
+                    state.resolution_options.clone(),
+                )
+            });
         draw_hud(score, life);
-        draw_menu(menu, fullscreen);
+        draw_menu(
+            menu,
+            fullscreen,
+            resolution,
+            resolution_expanded,
+            &resolution_options,
+        );
     }
 
     fn on_message(topic: String, _sender: String, payload: Vec<u8>) -> Option<Vec<u8>> {
@@ -1064,6 +1224,18 @@ impl Guest for Component {
                     if message.button == 1 {
                         on_mouse_down(message.x, message.y);
                     }
+                }
+            }
+            DisplayChanged::TOPIC => {
+                // The renderer's confirmation of what the window's actual
+                // size ended up being - fullscreen especially may not honor
+                // whatever gfx::SetDisplay last requested, so mouse-click
+                // hit-testing (on_mouse_down's own rescale) needs the real
+                // value, not just this extension's own last guess.
+                if let Ok(message) = DisplayChanged::decode(&payload) {
+                    STATE.with(|state| {
+                        state.borrow_mut().resolution = (message.width, message.height);
+                    });
                 }
             }
             _ => {}
