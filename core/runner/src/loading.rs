@@ -12,7 +12,7 @@ use std::time::SystemTime;
 
 use bus::{Bus, Endpoint, Registry};
 use logging::Logger;
-use wasm_extensions::host::Host;
+use wasm_extensions::host::{DisplayInfo, Host};
 
 pub(crate) use shared_host::SharedHost;
 
@@ -24,6 +24,7 @@ pub(crate) const ENGINE_SENDER: &str = "engine";
 /// whatever topics it requested via `subscribe` during `init`. `exit_requested`
 /// is shared with every extension this way — any one of them calling
 /// `request-exit` sets the same flag the caller's own run loop reads.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn attach_extension(
     wasm_engine: &wasmtime::Engine,
     bus: &Bus,
@@ -32,6 +33,7 @@ pub(crate) fn attach_extension(
     path: &Path,
     name: &str,
     exit_requested: &Arc<AtomicBool>,
+    display_info: &DisplayInfo,
 ) -> wasmtime::Result<(Endpoint, SharedHost, Vec<String>)> {
     let mut extension = Host::load(
         wasm_engine,
@@ -41,6 +43,7 @@ pub(crate) fn attach_extension(
         registry.clone(),
         logger.clone(),
         exit_requested.clone(),
+        display_info.clone(),
     )?;
     let topics = extension.requested_topics();
     let shared = SharedHost(Arc::new(Mutex::new(extension)));

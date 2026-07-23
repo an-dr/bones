@@ -14,6 +14,7 @@ use bus::{Module, ModuleContext, Registry, ServiceRegistry};
 use logging::Logger;
 use renderer::Renderer;
 use ui::Ui;
+use wasm_extensions::host::DisplayInfo;
 use wasm_extensions::lifecycle;
 use wasm_extensions::lifecycle::Event;
 use wasm_extensions::persistence::Persistence;
@@ -160,6 +161,16 @@ impl Engine {
             }
             None => None,
         };
+        // Queried once here, independent of the window hand-off below
+        // (`Platform` resolves it at construction, not from the live
+        // window) - every loaded extension gets the same static snapshot.
+        let display_info = match &platform {
+            Some(platform) => DisplayInfo {
+                modes: platform.display_modes().to_vec(),
+                native: platform.native_display_mode(),
+            },
+            None => DisplayInfo::default(),
+        };
 
         // Build-time-only (ADR-017): every module's `init` runs against
         // this. Seeded with `window-surface` unconditionally (not just for
@@ -185,7 +196,7 @@ impl Engine {
             if platform.is_none() {
                 return Err(wasmtime::Error::msg(".renderer() needs .window(...) too"));
             }
-            let shared = Arc::new(Mutex::new(Renderer::new(self.logger.clone())));
+            let shared = Arc::new(Mutex::new(Renderer::new(bus.clone(), self.logger.clone())));
             {
                 let mut renderer = shared.lock().unwrap();
                 let mut ctx = ModuleContext::new(&mut services);
@@ -262,6 +273,7 @@ impl Engine {
                     &path,
                     &name,
                     &exit_requested,
+                    &display_info,
                 ) {
                     Ok((ep, shared, topics)) => {
                         self.logger.info(
@@ -299,6 +311,7 @@ impl Engine {
             self.logger.clone(),
             tracked,
             exit_requested.clone(),
+            display_info,
         );
 
         if let Some(platform) = &mut platform {

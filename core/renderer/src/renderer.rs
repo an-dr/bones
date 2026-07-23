@@ -1,6 +1,8 @@
 use ab_glyph::FontRef;
 use bones_messages::gfx::Command;
-use bus::{Envelope, Handler, Module, ModuleContext};
+use bones_messages::renderer::DisplayChanged;
+use bones_messages::{EncodeMessage, Message};
+use bus::{Bus, Envelope, Handler, Module, ModuleContext};
 use logging::Logger;
 use sdl3::video::Window;
 use send_wrapper::SendWrapper;
@@ -22,6 +24,13 @@ pub struct Renderer(SendWrapper<State>);
 // constructed or named outside this file, never meaningful on its own.
 struct State {
     logger: Logger,
+    // Taken directly rather than through `ServiceRegistry::consume` (design/
+    // modules.md's single-consumer semantics): `Bus` is cheap to clone (an
+    // `Arc` internally, `Engine::build`'s own reasoning for handing it to
+    // `.module(...)`-injected modules too), the same way `Ui::new` already
+    // takes its own clone directly instead of competing for the registry's
+    // one instance. Lets `renderer/display-changed` publish below.
+    bus: Bus,
     // `None` until `Module::init` consumes `window-surface` and builds the
     // real SDL state — every other method panics if called first (a
     // caller/wiring bug, not a runtime condition to recover from).
@@ -37,9 +46,10 @@ impl State {
 }
 
 impl Renderer {
-    pub fn new(logger: Logger) -> Self {
+    pub fn new(bus: Bus, logger: Logger) -> Self {
         Self(SendWrapper::new(State {
             logger,
+            bus,
             inner: None,
         }))
     }
@@ -112,7 +122,24 @@ impl Handler for Renderer {
         // topic here is always a caller mistake (e.g. a typo'd command
         // name) worth surfacing rather than silently dropping.
         let result = match Command::decode(&envelope.topic, &envelope.payload) {
-            Ok(Some(command)) => self.0.inner_mut().record(&envelope.sender, command),
+            Ok(Some(command)) => {
+                // The requested size/fullscreen isn't necessarily what the
+                // OS actually applies (fullscreen especially) - published
+                // after `record` so a caller learns the real outcome
+                // instead of assuming its own request took effect.
+                let is_set_display = matches!(command, Command::SetDisplay(_));
+                let result = self.0.inner_mut().record(&envelope.sender, command);
+                if is_set_display && result.is_ok() {
+                    let (width, height) = self.0.inner_mut().canvas.window().size();
+                    self.0.bus.publish(Envelope {
+                        topic: DisplayChanged::TOPIC.to_string(),
+                        sender: "renderer".to_string(),
+                        correlation: None,
+                        payload: DisplayChanged { width, height }.encode(),
+                    });
+                }
+                result
+            }
             Ok(None) => {
                 self.0.logger.warn(
                     "renderer",

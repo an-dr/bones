@@ -12,7 +12,7 @@ use std::time::Duration;
 use bones_messages::tick::Tick;
 use bones_messages::{DecodeMessage, Message};
 use bus::{Bus, Envelope, Handler, Registry};
-use contract::bones::core::host_api::{Host as HostApiImports, Level, SendError};
+use contract::bones::core::host_api::{DisplayMode, Host as HostApiImports, Level, SendError};
 use contract::Extension;
 use logging::Logger;
 use wasmtime::component::{Component, HasSelf, Linker};
@@ -62,6 +62,18 @@ pub fn new_engine() -> wasmtime::Result<Engine> {
     Ok(engine)
 }
 
+/// Display capability info queried once by `platform::Platform` (before any
+/// window hand-off) and threaded into every `Host::load` call — small,
+/// read-only, static for the process's lifetime, so a plain owned copy per
+/// `Host` is simpler than `exit_requested`'s shared-mutable-flag `Arc`.
+/// Bundled into one struct rather than two more `Host::load` parameters, to
+/// stay clear of `clippy::too_many_arguments`.
+#[derive(Debug, Clone, Default)]
+pub struct DisplayInfo {
+    pub modes: Vec<(u32, u32)>,
+    pub native: Option<(u32, u32)>,
+}
+
 fn read_tick_dt(envelope: &Envelope) -> Option<f32> {
     if envelope.topic != Tick::TOPIC {
         return None;
@@ -84,6 +96,7 @@ struct State {
     /// — set here, read there. Not `Host`'s to act on: closing the app is
     /// the run loop's job, this only signals the request.
     exit_requested: Arc<AtomicBool>,
+    display_info: DisplayInfo,
 }
 
 impl HostApiImports for State {
@@ -119,6 +132,20 @@ impl HostApiImports for State {
     fn request_exit(&mut self) {
         self.exit_requested.store(true, Ordering::Relaxed);
     }
+
+    fn list_display_modes(&mut self) -> Vec<DisplayMode> {
+        self.display_info
+            .modes
+            .iter()
+            .map(|&(width, height)| DisplayMode { width, height })
+            .collect()
+    }
+
+    fn native_display_mode(&mut self) -> Option<DisplayMode> {
+        self.display_info
+            .native
+            .map(|(width, height)| DisplayMode { width, height })
+    }
 }
 
 // wasm32-wasip2 components always import some WASI Preview 2 interfaces
@@ -149,13 +176,16 @@ pub struct Host {
 
 impl Host {
     /// Loads `wasm_path`, links the `log`/`subscribe`/`publish`/`send`/
-    /// `request-exit` imports, and calls `init` once — under the same time
-    /// budget as any other call, so a hanging `init` faults instead of
-    /// blocking `load` forever. `name` is this extension's bus endpoint id
-    /// — the `sender` on envelopes it publishes and the name `send`
-    /// (ADR-010) reaches it by; `bus` is what `publish` reaches, `registry`
-    /// is what `send` reaches, `exit_requested` is what `request-exit` sets
-    /// (the caller's own clone is how it later reads that request).
+    /// `request-exit`/`list-display-modes`/`native-display-mode` imports,
+    /// and calls `init` once — under the same time budget as any other
+    /// call, so a hanging `init` faults instead of blocking `load` forever.
+    /// `name` is this extension's bus endpoint id — the `sender` on
+    /// envelopes it publishes and the name `send` (ADR-010) reaches it by;
+    /// `bus` is what `publish` reaches, `registry` is what `send` reaches,
+    /// `exit_requested` is what `request-exit` sets (the caller's own clone
+    /// is how it later reads that request), `display_info` backs the two
+    /// display-mode query imports.
+    #[allow(clippy::too_many_arguments)]
     pub fn load(
         engine: &Engine,
         wasm_path: &str,
@@ -164,6 +194,7 @@ impl Host {
         registry: Registry,
         logger: Logger,
         exit_requested: Arc<AtomicBool>,
+        display_info: DisplayInfo,
     ) -> wasmtime::Result<Self> {
         let component = Component::from_file(engine, wasm_path)?;
         let mut linker = Linker::new(engine);
@@ -181,6 +212,7 @@ impl Host {
                 table: wasmtime_wasi::ResourceTable::new(),
                 requested_topics: Vec::new(),
                 exit_requested,
+                display_info,
             },
         );
         // Epoch interruption traps immediately on any check once enabled

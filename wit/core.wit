@@ -13,6 +13,11 @@ interface host-api {
         cycle,
     }
 
+    record display-mode {
+        width: u32,
+        height: u32,
+    }
+
     log: func(level: level, message: string);
     subscribe: func(topic: string);
     publish: func(topic: string, payload: list<u8>);
@@ -22,6 +27,17 @@ interface host-api {
     // extensions, no close-request event other extensions can react to).
     // The host obeys after this call returns; there is no confirmation.
     request-exit: func();
+    // Every fullscreen-capable resolution the window's own display reports
+    // (SDL_GetFullscreenDisplayModes - genuinely cross-platform), queried
+    // once at startup before any window hand-off. Empty if the query
+    // itself failed (e.g. no display attached) rather than an error - a
+    // caller building a resolution picker can always fall back to its own
+    // known-good default.
+    list-display-modes: func() -> list<display-mode>;
+    // The desktop's own current resolution (SDL_GetDesktopDisplayMode),
+    // same one-time-query caveat as `list-display-modes`. `none` if the
+    // query failed.
+    native-display-mode: func() -> option<display-mode>;
 }
 
 world extension {

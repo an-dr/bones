@@ -11,8 +11,8 @@
     "done": "Robot hitbox is visibly narrower than its sprite frame; HUD shows live life and score, score increments on purple-box collision, life decrements on red-triangle collision; Esc opens/closes an in-game menu with Settings and Exit entries; Settings lets the user pick big-box color (warm/non-red presets) and small-box color (cold presets) with changes applying live; Exit cleanly closes the running app; new engine surface (exit request, triangle shape) has tests and updated docs (ADR if it's a lasting architectural call).",
     "outOfScope": "The full roadmap shutdown sequence (per-extension shutdown() lifecycle, Stopped event, close-request pub/sub event) - only a minimal-but-clean extension-exit path; retro-world collider support for triangles unless DESIGN finds it's actually needed (obstacles are RAPIER2D-only today); the old PROGRESS.md's leftover solver-stiffness/velocity-clamp tuning items (unrelated, already-stale prior workflow); a real color-picker widget type (stick to preset buttons)."
   },
-  "currentIncrementId": "b5be7af660a64c38a88f26267244f68b",
-  "commitBaseline": "30ce7863971434f31c56f5e6951fba85f055adda",
+  "currentIncrementId": "49c8060f939541d988adf1d897921a18",
+  "commitBaseline": "05816cd903fa71118dd05e19a498351631cb3d09",
   "increments": [
     {
       "id": "33c280ba03264f269efe614b7eb478eb",
@@ -136,14 +136,14 @@
     {
       "id": "b5be7af660a64c38a88f26267244f68b",
       "number": 18,
-      "status": "verified",
+      "status": "completed",
       "scope": "game_core_demo: Display settings section (resolution, fullscreen, zoom presets)",
       "description": "Settings panel gains a Display section below the existing Big/Small box color sections: 3 resolution preset buttons (800x600/1024x768/1280x720), a Fullscreen toggle button (label reflects current state), and 3 zoom preset buttons (1.0x/1.5x/2.0x) - same preset-button idiom as the color pickers, no new widget type. PANEL_H grows to fit the extra rows. State gains resolution: (u32,u32), fullscreen: bool, zoom: f32 (defaults 800x600/false/1.0, matching SCREEN_WIDTH/SCREEN_HEIGHT and SetCameraFollow's current init call). on_button_clicked: a resolution preset updates state and publishes gfx::SetDisplay with the new size and the current fullscreen flag; the fullscreen toggle flips state.fullscreen and republishes gfx::SetDisplay with the current resolution; a zoom preset updates state.zoom and republishes EntityOp::SetCameraFollow with CONTROLLED_ENTITY_ID/SCREEN_WIDTH/SCREEN_HEIGHT unchanged and the new zoom - all cheap idempotent re-publishes, no new engine surface. Rebuild via build.ps1 and visually verify each control in the real running app."
     },
     {
       "id": "49c8060f939541d988adf1d897921a18",
       "number": 19,
-      "status": "planned",
+      "status": "verified",
       "scope": "core: cross-platform display-mode query + a renderer display-changed event",
       "description": "New host-api surface (wit/core.wit): record display-mode { width: u32, height: u32 }; list-display-modes: func() -> list<display-mode> (every fullscreen-capable resolution SDL reports for the window's display, genuinely cross-platform via SDL_GetFullscreenDisplayModes); native-display-mode: func() -> option<display-mode> (the desktop's own resolution, SDL_GetDesktopDisplayMode). core/platform: Platform queries and retains this once at construction (before any window hand-off) via self.sdl.video().displays(), exposed as plain accessor methods - a caller has no other way to reach this OS-level info, matching the 'platform is the only component touching the OS' contract. core/wasm-extensions/host.rs: State carries the two query results (computed once, threaded through Host::load the same way exit_requested already is - shared Arc-wrapped data, not a live handle); implements the two new HostApiImports methods. core/runner: builder.rs computes this once from platform and threads it through loading.rs/supervisor.rs's Host::load call sites. Separately: core/renderer's Renderer::new gains a Bus parameter (bypassing ServiceRegistry's single-consumer consume() the same way Ui::new already does, not fighting it) so it can publish a new bones_messages::renderer::DisplayChanged { width, height } event immediately after applying a gfx::SetDisplay command, carrying the REAL resulting window size (queried post-application) rather than what was requested - fullscreen may not honor the requested size, so this is how a caller learns what actually happened instead of guessing. Unit tests: display-mode round-trips through the WIT boundary is covered by existing contract-test patterns where applicable; DisplayChanged encode/decode round-trips."
     },
@@ -323,6 +323,13 @@
       "incrementId": "b5be7af660a64c38a88f26267244f68b",
       "note": "Self-verified: full workspace test suite green, clippy clean. code-review skill run: found and fixed one real high-severity bug before commit (mouse-click coordinates weren't converted from physical window pixels back to the fixed logical space menu_buttons lays out in - fixed via on_mouse_down rescaling by the extension's own last-requested resolution). Rebuilt via build.ps1. Could not click through the new Display section myself - the session's UI-automation click tool has a persistent validation bug - confirmed instead via an unattended run with no crash/error across its whole log; user is testing interactively themselves and found the fullscreen-click gap this fix doesn't fully cover (root-caused: fullscreen doesn't honor the requested resolution, so the extension's guess is sometimes wrong - properly fixed by increment 19/20's reactive display-changed event).",
       "approvedAt": "2026-07-23T20:02:12.0918807Z"
+    },
+    {
+      "gate": "verify",
+      "phase": "VERIFY",
+      "incrementId": "49c8060f939541d988adf1d897921a18",
+      "note": "Full workspace build (incl. examples) + test suite green; clippy clean on all touched crates. code-review: no critical/high findings, one minor cleanup (unnecessary too_many_arguments allow removed). Summary shown to user in chat before committing, per their request to always surface split/verify content.",
+      "approvedAt": "2026-07-23T20:24:45.2024212Z"
     }
   ],
   "history": [
@@ -1047,11 +1054,31 @@
       "detail": "Approved verify during VERIFY."
     },
     {
-      "at": "2026-07-23T20:02:12.9902800Z",
+      "at": "2026-07-23T20:02:12.99028Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
+    },
+    {
+      "at": "2026-07-23T20:02:48.7357097Z",
+      "action": "advance",
+      "detail": "Advanced from COMMIT to BUILD."
+    },
+    {
+      "at": "2026-07-23T20:24:35.053686Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-07-23T20:24:45.2053818Z",
+      "action": "approve",
+      "detail": "Approved verify during VERIFY."
+    },
+    {
+      "at": "2026-07-23T20:24:46.1237222Z",
       "action": "advance",
       "detail": "Advanced from VERIFY to COMMIT."
     }
   ],
   "createdAt": "2026-07-22T16:47:43.8462272Z",
-  "updatedAt": "2026-07-23T20:02:12.9972183Z"
+  "updatedAt": "2026-07-23T20:24:46.1298873Z"
 }

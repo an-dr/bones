@@ -25,6 +25,18 @@ pub struct Platform {
     // handle stays open (`SDL_OpenGamepad`) — closed automatically (`Drop`)
     // when removed here on `ControllerDeviceRemoved`.
     gamepads: HashMap<u32, sdl3::gamepad::Gamepad>,
+    // Queried once here (the window's own display, before any hand-off) —
+    // deduped/sorted unique (width, height) pairs from every fullscreen-
+    // capable mode SDL reports (`SDL_GetFullscreenDisplayModes`, genuinely
+    // cross-platform), collapsing the refresh-rate/pixel-density variants
+    // a single resolution usually has several of. Empty if the query
+    // itself failed (e.g. no display attached), not an error - a caller
+    // building a resolution picker can always fall back to its own known
+    // default instead.
+    display_modes: Vec<(u32, u32)>,
+    // The desktop's own current resolution (`SDL_GetDesktopDisplayMode`),
+    // same query-time and failure-is-`None` caveats as `display_modes`.
+    native_display_mode: Option<(u32, u32)>,
 }
 
 impl Platform {
@@ -45,6 +57,19 @@ impl Platform {
         let events = sdl.event_pump().map_err(|e| e.to_string())?;
         let gamepad_subsystem = sdl.gamepad().map_err(|e| e.to_string())?;
 
+        let display = window.get_display().ok();
+        let mut display_modes: Vec<(u32, u32)> = display
+            .as_ref()
+            .and_then(|display| display.get_fullscreen_modes().ok())
+            .map(|modes| modes.iter().map(|mode| (mode.w as u32, mode.h as u32)).collect())
+            .unwrap_or_default();
+        display_modes.sort_unstable();
+        display_modes.dedup();
+        let native_display_mode = display
+            .as_ref()
+            .and_then(|display| display.get_mode().ok())
+            .map(|mode| (mode.w as u32, mode.h as u32));
+
         Ok(Self {
             sdl,
             window: Some(window),
@@ -52,7 +77,21 @@ impl Platform {
             quit_requested: false,
             gamepad_subsystem,
             gamepads: HashMap::new(),
+            display_modes,
+            native_display_mode,
         })
+    }
+
+    /// Every fullscreen-capable resolution the window's own display
+    /// reports, deduped and ascending — see this struct's own field doc
+    /// comment. Empty, not an error, if the query failed.
+    pub fn display_modes(&self) -> &[(u32, u32)] {
+        &self.display_modes
+    }
+
+    /// The desktop's own current resolution, `None` if the query failed.
+    pub fn native_display_mode(&self) -> Option<(u32, u32)> {
+        self.native_display_mode
     }
 
     /// Hands the window over (e.g. to a renderer needing it for a `Canvas`).
