@@ -38,3 +38,36 @@ fn relative_to_exe_anchors_onto_the_test_binarys_own_directory() {
     assert!(resolved.is_absolute());
     assert!(resolved.ends_with("extensions"));
 }
+
+#[test]
+fn config_path_defaults_to_bones_toml_next_to_the_exe_with_no_override() {
+    let resolved = resolve_config_path(None);
+
+    assert!(resolved.is_absolute());
+    assert!(resolved.ends_with("bones.toml"));
+}
+
+#[test]
+fn config_path_honors_an_explicit_override() {
+    let resolved = resolve_config_path(Some(PathBuf::from("/somewhere/custom.toml")));
+
+    assert_eq!(resolved, PathBuf::from("/somewhere/custom.toml"));
+}
+
+#[test]
+fn config_relative_resolves_against_the_overrides_own_directory() {
+    let resolved = resolve_config_relative(
+        Path::new("extensions"),
+        Some(PathBuf::from("/somewhere/custom.toml")),
+    );
+
+    assert_eq!(resolved, PathBuf::from("/somewhere/extensions"));
+}
+
+#[test]
+fn config_relative_falls_back_to_the_exe_dir_with_no_override() {
+    let resolved = resolve_config_relative(Path::new("extensions"), None);
+
+    assert!(resolved.is_absolute());
+    assert!(resolved.ends_with("extensions"));
+}

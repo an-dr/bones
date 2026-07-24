@@ -20,6 +20,13 @@ exe-relative resolution applies to `extensions_dir` and `saves_dir`, so a
 launched from. Every field is optional and defaults to the values below; an
 unknown field or invalid TOML is a startup error rather than a silent no-op.
 
+Set `BONES_CONFIG=<path>` to read the config from somewhere else entirely —
+`extensions_dir`/`saves_dir` then resolve against *that* file's own
+directory instead of the exe's. For an embedder running `cargo run -p app`
+straight against a vendored `bones` checkout (exe buried in a `target/`
+directory, no `dist/` involved), this points the engine at a project-root
+`bones.toml` and its own `extensions/` without copying anything there first.
+
 ```toml
 extensions_dir = "extensions"
 window_title = "bones"
