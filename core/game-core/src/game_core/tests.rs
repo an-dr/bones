@@ -2,7 +2,8 @@ use std::sync::{Arc, Mutex};
 
 use super::*;
 use bones_messages::game_core::{
-    BodyKind, Collision, EntityOp, EntityOpMessage, LoadTilemap, Sprite,
+    BodyKind, Collision, EntityOp, EntityOpMessage, LoadTilemap, PhysicsWorlds, Shape as WireShape,
+    Sprite,
 };
 use bones_messages::gfx;
 use bones_messages::EncodeMessage;
@@ -74,9 +75,11 @@ fn spawn_with_id(entity_id: u32, x: f32, y: f32) -> EntityOp {
         y,
         sprite: Some(sprite()),
         square_color: (0, 0, 0, 0),
+        shape: WireShape::Rect,
         collider_half_w: 0.0,
         collider_half_h: 0.0,
         body_kind: BodyKind::Dynamic,
+        worlds: PhysicsWorlds::default(),
     }
 }
 
@@ -97,9 +100,33 @@ fn spawn_with_collider_and_id(
         y,
         sprite: Some(sprite()),
         square_color: (0, 0, 0, 0),
+        shape: WireShape::Rect,
         collider_half_w: half_w,
         collider_half_h: half_h,
         body_kind: BodyKind::Dynamic,
+        worlds: PhysicsWorlds::default(),
+    }
+}
+
+fn spawn_with_collider_in_worlds(
+    entity_id: u32,
+    x: f32,
+    y: f32,
+    half_w: f32,
+    half_h: f32,
+    worlds: PhysicsWorlds,
+) -> EntityOp {
+    EntityOp::Spawn {
+        entity_id,
+        x,
+        y,
+        sprite: Some(sprite()),
+        square_color: (0, 0, 0, 0),
+        shape: WireShape::Rect,
+        collider_half_w: half_w,
+        collider_half_h: half_h,
+        body_kind: BodyKind::Dynamic,
+        worlds,
     }
 }
 
@@ -116,9 +143,11 @@ fn spawn_kinematic_with_collider(
         y,
         sprite: Some(sprite()),
         square_color: (0, 0, 0, 0),
+        shape: WireShape::Rect,
         collider_half_w: half_w,
         collider_half_h: half_h,
         body_kind: BodyKind::Kinematic,
+        worlds: PhysicsWorlds::default(),
     }
 }
 
@@ -135,9 +164,11 @@ fn spawn_frictionless_with_collider(
         y,
         sprite: Some(sprite()),
         square_color: (0, 0, 0, 0),
+        shape: WireShape::Rect,
         collider_half_w: half_w,
         collider_half_h: half_h,
         body_kind: BodyKind::Frictionless,
+        worlds: PhysicsWorlds::default(),
     }
 }
 
@@ -154,9 +185,32 @@ fn spawn_square_with_collider(
         y,
         sprite: None,
         square_color: (200, 40, 40, 255),
+        shape: WireShape::Rect,
         collider_half_w: half_w,
         collider_half_h: half_h,
         body_kind: BodyKind::Dynamic,
+        worlds: PhysicsWorlds::default(),
+    }
+}
+
+fn spawn_triangle_with_collider(
+    entity_id: u32,
+    x: f32,
+    y: f32,
+    half_w: f32,
+    half_h: f32,
+) -> EntityOp {
+    EntityOp::Spawn {
+        entity_id,
+        x,
+        y,
+        sprite: None,
+        square_color: (200, 40, 40, 255),
+        shape: WireShape::Triangle,
+        collider_half_w: half_w,
+        collider_half_h: half_h,
+        body_kind: BodyKind::Dynamic,
+        worlds: PhysicsWorlds::default(),
     }
 }
 
@@ -282,7 +336,7 @@ fn despawn_removes_the_entity_and_its_collider() {
     game_core.handle(&entity_op_envelope(EntityOp::Despawn { entity_id: 1 }));
 
     assert_eq!(game_core.world.len(), 0);
-    assert_eq!(game_core.physics.bodies.len(), 0);
+    assert_eq!(game_core.rapier2d.body_count(), 0);
 }
 
 #[test]
@@ -400,10 +454,11 @@ fn load_tilemap_inserts_a_fixed_collider_per_collision_rect() {
     let mut game_core = GameCore::new();
     let load = LoadTilemap {
         tmx_bytes: FIXTURE_TMX,
+        tileset_images: Vec::new(),
     };
     game_core.handle(&envelope(LoadTilemap::TOPIC, load.encode()));
 
-    assert_eq!(game_core.physics.bodies.len(), 1);
+    assert_eq!(game_core.rapier2d.body_count(), 1);
 }
 
 #[test]
@@ -414,6 +469,7 @@ fn load_tilemap_publishes_a_visible_square_for_its_collider() {
     let (mut game_core, bus, spy) = ready_game_core();
     let load = LoadTilemap {
         tmx_bytes: FIXTURE_TMX,
+        tileset_images: Vec::new(),
     };
     game_core.handle(&envelope(LoadTilemap::TOPIC, load.encode()));
 
@@ -439,6 +495,7 @@ fn a_tilemap_collider_blocks_an_overlapping_dynamic_entity() {
     let mut game_core = GameCore::new();
     let load = LoadTilemap {
         tmx_bytes: FIXTURE_TMX,
+        tileset_images: Vec::new(),
     };
     game_core.handle(&envelope(LoadTilemap::TOPIC, load.encode()));
     // Overlaps the fixture's collider rect centered at (8, 8), half-extent 8.
@@ -496,6 +553,171 @@ fn tick_publishes_a_clear_a_camera_and_one_draw_sprite_per_sprite_entity() {
     assert_eq!((sprites[0].dst_x, sprites[0].dst_y), (-5, -4));
 }
 
+fn published_camera(spy: &Spy) -> (f32, f32, f32) {
+    let published = spy.0.lock().unwrap();
+    let camera = published
+        .iter()
+        .rfind(|e| e.topic == gfx::SetCamera::TOPIC)
+        .map(|e| gfx::SetCamera::decode(&e.payload).unwrap())
+        .expect("publish_gfx always publishes a camera");
+    (camera.x, camera.y, camera.zoom)
+}
+
+#[test]
+fn camera_stays_fixed_at_the_origin_without_a_follow_target() {
+    let (mut game_core, bus, spy) = ready_game_core();
+    game_core.handle(&entity_op_envelope(spawn_with_id(1, 500.0, 500.0)));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    bus.dispatch();
+
+    assert_eq!(published_camera(&spy), (0.0, 0.0, 1.0));
+}
+
+#[test]
+fn camera_centers_on_the_followed_entity_away_from_any_edge() {
+    // FIXTURE_TMX is a 4x4 tile, 16px-tile map: 64x64 world pixels.
+    let (mut game_core, bus, spy) = ready_game_core();
+    game_core.handle(&envelope(
+        LoadTilemap::TOPIC,
+        LoadTilemap {
+            tmx_bytes: FIXTURE_TMX,
+            tileset_images: Vec::new(),
+        }
+        .encode(),
+    ));
+    game_core.handle(&entity_op_envelope(spawn_with_id(1, 32.0, 32.0)));
+    game_core.handle(&entity_op_envelope(EntityOp::SetCameraFollow {
+        entity_id: 1,
+        viewport_w: 16.0,
+        viewport_h: 16.0,
+        zoom: 1.0,
+    }));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    bus.dispatch();
+
+    // Centered: 32 - 16/2 = 24, well inside [0, 64-16] = [0, 48].
+    assert_eq!(published_camera(&spy), (24.0, 24.0, 1.0));
+}
+
+#[test]
+fn camera_clamps_rather_than_overshoot_the_low_edge() {
+    let (mut game_core, bus, spy) = ready_game_core();
+    game_core.handle(&envelope(
+        LoadTilemap::TOPIC,
+        LoadTilemap {
+            tmx_bytes: FIXTURE_TMX,
+            tileset_images: Vec::new(),
+        }
+        .encode(),
+    ));
+    game_core.handle(&entity_op_envelope(spawn_with_id(1, 2.0, 2.0)));
+    game_core.handle(&entity_op_envelope(EntityOp::SetCameraFollow {
+        entity_id: 1,
+        viewport_w: 16.0,
+        viewport_h: 16.0,
+        zoom: 1.0,
+    }));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    bus.dispatch();
+
+    // Raw centering would be 2 - 8 = -6; clamped to 0 rather than showing
+    // past the level's edge.
+    assert_eq!(published_camera(&spy), (0.0, 0.0, 1.0));
+}
+
+#[test]
+fn camera_clamps_rather_than_overshoot_the_high_edge() {
+    let (mut game_core, bus, spy) = ready_game_core();
+    game_core.handle(&envelope(
+        LoadTilemap::TOPIC,
+        LoadTilemap {
+            tmx_bytes: FIXTURE_TMX,
+            tileset_images: Vec::new(),
+        }
+        .encode(),
+    ));
+    game_core.handle(&entity_op_envelope(spawn_with_id(1, 62.0, 62.0)));
+    game_core.handle(&entity_op_envelope(EntityOp::SetCameraFollow {
+        entity_id: 1,
+        viewport_w: 16.0,
+        viewport_h: 16.0,
+        zoom: 1.0,
+    }));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    bus.dispatch();
+
+    // Raw centering would be 62 - 8 = 54; clamped to 64 - 16 = 48 rather
+    // than showing past the level's edge.
+    assert_eq!(published_camera(&spy), (48.0, 48.0, 1.0));
+}
+
+#[test]
+fn camera_clamps_tighter_when_zoomed_in() {
+    // Same fixture/entity position as the high-edge clamp test above, but
+    // zoomed in 2x: the effective viewport shrinks to 16/2=8, so the clamp
+    // ceiling rises to 64-8=56 instead of 48 - proving zoom actually
+    // changes what "the edge" means, not just decoration on the output.
+    let (mut game_core, bus, spy) = ready_game_core();
+    game_core.handle(&envelope(
+        LoadTilemap::TOPIC,
+        LoadTilemap {
+            tmx_bytes: FIXTURE_TMX,
+            tileset_images: Vec::new(),
+        }
+        .encode(),
+    ));
+    game_core.handle(&entity_op_envelope(spawn_with_id(1, 62.0, 62.0)));
+    game_core.handle(&entity_op_envelope(EntityOp::SetCameraFollow {
+        entity_id: 1,
+        viewport_w: 16.0,
+        viewport_h: 16.0,
+        zoom: 2.0,
+    }));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    bus.dispatch();
+
+    // Raw centering would be 62 - (16/2)/2 = 58; clamped to 64 - 16/2 = 56.
+    assert_eq!(published_camera(&spy), (56.0, 56.0, 2.0));
+}
+
+#[test]
+fn camera_follow_is_unclamped_before_any_tilemap_is_loaded() {
+    let (mut game_core, bus, spy) = ready_game_core();
+    game_core.handle(&entity_op_envelope(spawn_with_id(1, 100.0, 50.0)));
+    game_core.handle(&entity_op_envelope(EntityOp::SetCameraFollow {
+        entity_id: 1,
+        viewport_w: 16.0,
+        viewport_h: 16.0,
+        zoom: 1.0,
+    }));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    bus.dispatch();
+
+    assert_eq!(published_camera(&spy), (92.0, 42.0, 1.0));
+}
+
+#[test]
+fn camera_follow_falls_back_to_the_fixed_origin_when_the_target_is_missing() {
+    let (mut game_core, bus, spy) = ready_game_core();
+    game_core.handle(&entity_op_envelope(EntityOp::SetCameraFollow {
+        entity_id: 99,
+        viewport_w: 16.0,
+        viewport_h: 16.0,
+        zoom: 1.0,
+    }));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    bus.dispatch();
+
+    assert_eq!(published_camera(&spy), (0.0, 0.0, 1.0));
+}
+
 #[test]
 fn a_sprite_entitys_drawn_position_is_centered_on_its_collider() {
     // Regression test: DrawSprite previously used the collider's center
@@ -543,6 +765,37 @@ fn tick_publishes_a_draw_rect_for_a_square_entity() {
     assert_eq!(rects.len(), 1);
     assert_eq!(rects[0].color, (200, 40, 40, 255));
     assert_eq!((rects[0].w, rects[0].h), (16, 16));
+}
+
+#[test]
+fn tick_publishes_a_draw_triangle_for_a_triangle_shaped_entity() {
+    let (mut game_core, bus, spy) = ready_game_core();
+    game_core.handle(&entity_op_envelope(spawn_triangle_with_collider(
+        1, 10.0, 10.0, 8.0, 8.0,
+    )));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    bus.dispatch();
+
+    let published = spy.0.lock().unwrap();
+    let rects = published
+        .iter()
+        .filter(|e| e.topic == gfx::DrawRect::TOPIC)
+        .count();
+    let triangles: Vec<_> = published
+        .iter()
+        .filter(|e| e.topic == gfx::DrawTriangle::TOPIC)
+        .map(|e| gfx::DrawTriangle::decode(&e.payload).unwrap())
+        .collect();
+
+    assert_eq!(rects, 0, "a triangle-shaped entity should not draw a rect");
+    assert_eq!(triangles.len(), 1);
+    assert_eq!(triangles[0].color, (200, 40, 40, 255));
+    // Apex centered on top, base along the bottom of the 8.0 half-extents
+    // box around (10, 10).
+    assert_eq!((triangles[0].x1, triangles[0].y1), (10, 2));
+    assert_eq!((triangles[0].x2, triangles[0].y2), (2, 18));
+    assert_eq!((triangles[0].x3, triangles[0].y3), (18, 18));
 }
 
 #[test]
@@ -623,6 +876,88 @@ fn disabling_debug_hitboxes_stops_the_outline() {
 }
 
 #[test]
+fn pausing_freezes_a_moving_entity_in_place() {
+    let mut game_core = GameCore::new();
+    game_core.handle(&entity_op_envelope(spawn_with_collider_and_id(
+        1, 0.0, 0.0, 1.0, 1.0,
+    )));
+    game_core.handle(&entity_op_envelope(EntityOp::SetVelocity {
+        entity_id: 1,
+        vx: 10.0,
+        vy: 0.0,
+    }));
+    game_core.handle(&entity_op_envelope(EntityOp::SetPaused { paused: true }));
+
+    for _ in 0..60 {
+        game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    }
+
+    let (_, transform) = game_core
+        .world
+        .query_mut::<&Transform>()
+        .into_iter()
+        .next()
+        .expect("the spawned entity should still exist");
+    assert_eq!(
+        *transform,
+        Transform { x: 0.0, y: 0.0 },
+        "a paused tick must not step physics at all, even for an entity under commanded velocity"
+    );
+}
+
+#[test]
+fn a_paused_tick_still_publishes_gfx() {
+    let (mut game_core, bus, spy) = ready_game_core();
+    game_core.handle(&entity_op_envelope(EntityOp::SetPaused { paused: true }));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    bus.dispatch();
+
+    let published = spy.0.lock().unwrap();
+    let clears = published
+        .iter()
+        .filter(|e| e.topic == gfx::Clear::TOPIC)
+        .count();
+    assert_eq!(
+        clears, 1,
+        "a paused tick should still redraw the frame, not go stale or blank"
+    );
+}
+
+#[test]
+fn unpausing_resumes_movement() {
+    let mut game_core = GameCore::new();
+    game_core.handle(&entity_op_envelope(spawn_with_collider_and_id(
+        1, 0.0, 0.0, 1.0, 1.0,
+    )));
+    game_core.handle(&entity_op_envelope(EntityOp::SetVelocity {
+        entity_id: 1,
+        vx: 10.0,
+        vy: 0.0,
+    }));
+    game_core.handle(&entity_op_envelope(EntityOp::SetPaused { paused: true }));
+    for _ in 0..30 {
+        game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    }
+    game_core.handle(&entity_op_envelope(EntityOp::SetPaused { paused: false }));
+    for _ in 0..30 {
+        game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    }
+
+    let (_, transform) = game_core
+        .world
+        .query_mut::<&Transform>()
+        .into_iter()
+        .next()
+        .expect("the spawned entity should still exist");
+    assert!(
+        transform.x > 0.0,
+        "unpausing should let physics step again, got x={}",
+        transform.x
+    );
+}
+
+#[test]
 fn a_module_with_no_bus_service_never_panics_on_tick() {
     // `GameCore::new()` directly, bypassing `init` — `bus` stays `None`,
     // exercising the same silent-no-op path a caller that skips `init`
@@ -659,6 +994,82 @@ fn set_velocity_moves_a_collider_bearing_entity_over_time() {
         transform.x > 5.0,
         "a 10 units/sec x velocity for 1 second should have moved the entity, got x={}",
         transform.x
+    );
+}
+
+#[test]
+fn continuous_driving_into_an_obstacle_settles_at_shallow_penetration() {
+    let mut game_core = GameCore::new();
+    game_core.handle(&entity_op_envelope(spawn_square_with_collider(
+        1, 3.0, 0.0, 1.0, 1.0,
+    )));
+    game_core.handle(&entity_op_envelope(spawn_with_collider_and_id(
+        2, 0.0, 0.0, 1.0, 1.0,
+    )));
+
+    // Same pattern game_core_demo actually uses: re-publish SetVelocity
+    // every tick from "held input," continuing to command the pusher
+    // straight into the obstacle for two full seconds — long enough that
+    // the pre-increment-3 bug (velocity re-driven every tick, fighting the
+    // solver) would have produced clearly visible overlap.
+    for _ in 0..120 {
+        game_core.handle(&entity_op_envelope(EntityOp::SetVelocity {
+            entity_id: 2,
+            vx: 5.0,
+            vy: 0.0,
+        }));
+        game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    }
+
+    let obstacle_entity = *game_core.entities.get(&1).unwrap();
+    let obstacle_transform = *game_core.world.get::<&Transform>(obstacle_entity).unwrap();
+    let pusher_entity = *game_core.entities.get(&2).unwrap();
+    let pusher_transform = *game_core.world.get::<&Transform>(pusher_entity).unwrap();
+
+    // Half-extents sum to 2.0 (centers 2.0 apart is exactly touching, no
+    // overlap); the backend's own tuning is verified in isolation by
+    // physics::rapier2d_backend's `sustained_driving_velocity_settles_to_
+    // shallow_penetration` — this test only checks game-core's
+    // contact-clamping logic doesn't reintroduce visible overlap on top
+    // of that.
+    let separation = obstacle_transform.x - pusher_transform.x;
+    assert!(
+        separation > 1.99,
+        "continuous held-input-style driving into an obstacle should settle at shallow \
+         penetration instead of visibly overlapping, got center separation {separation}"
+    );
+}
+
+#[test]
+fn continuous_diagonal_driving_against_a_wall_still_slides_along_it() {
+    let mut game_core = GameCore::new();
+    // A vertical wall to the right of the pusher's path.
+    game_core.handle(&entity_op_envelope(spawn_square_with_collider(
+        1, 3.0, 0.0, 1.0, 10.0,
+    )));
+    game_core.handle(&entity_op_envelope(spawn_with_collider_and_id(
+        2, 0.0, 0.0, 1.0, 1.0,
+    )));
+
+    // Driven diagonally (right and down) into the wall every tick — the
+    // rightward component should get blocked once touching, but the
+    // downward component (along the wall's free axis) should keep moving
+    // the entity, the same "push and slide" a player expects.
+    for _ in 0..60 {
+        game_core.handle(&entity_op_envelope(EntityOp::SetVelocity {
+            entity_id: 2,
+            vx: 5.0,
+            vy: 5.0,
+        }));
+        game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    }
+
+    let pusher_entity = *game_core.entities.get(&2).unwrap();
+    let transform = *game_core.world.get::<&Transform>(pusher_entity).unwrap();
+    assert!(
+        transform.y > 2.0,
+        "driving diagonally against a wall should still slide along its free axis, got y={}",
+        transform.y
     );
 }
 
@@ -848,10 +1259,43 @@ fn a_non_overlapping_pair_publishes_no_collision_event() {
 }
 
 #[test]
+fn colliders_within_the_speculative_margin_but_not_touching_publish_no_collision_event() {
+    let (mut game_core, bus, spy) = ready_game_core();
+    // rapier2d's default IntegrationParameters::prediction_distance is
+    // 0.002 units: two half-extent-1.0 colliders centered 2.0 + 0.001
+    // apart have a real gap of 0.001 (inside the speculative margin, so
+    // rapier2d's CollisionEvent::Started fires for them) but are not
+    // actually touching. Without has_real_contact filtering, this used to
+    // publish a phantom Collision.
+    game_core.handle(&entity_op_envelope(spawn_with_collider_and_id(
+        1, 0.0, 0.0, 1.0, 1.0,
+    )));
+    game_core.handle(&entity_op_envelope(spawn_with_collider_and_id(
+        2, 2.001, 0.0, 1.0, 1.0,
+    )));
+
+    for _ in 0..5 {
+        game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    }
+    bus.dispatch();
+
+    let published = spy.0.lock().unwrap();
+    let collisions = published
+        .iter()
+        .filter(|e| e.topic == Collision::TOPIC)
+        .count();
+    assert_eq!(
+        collisions, 0,
+        "a speculative-only contact (close but not touching) should not publish a Collision"
+    );
+}
+
+#[test]
 fn a_tilemap_collider_never_publishes_a_collision_event() {
     let (mut game_core, bus, spy) = ready_game_core();
     let load = LoadTilemap {
         tmx_bytes: FIXTURE_TMX,
+        tileset_images: Vec::new(),
     };
     game_core.handle(&envelope(LoadTilemap::TOPIC, load.encode()));
     // Overlaps the fixture's collider rect centered at (8, 8), half-extent 8.
@@ -915,4 +1359,145 @@ fn set_color_for_an_unknown_entity_id_is_a_no_op() {
         color: (0, 255, 0, 255),
     }));
     // Reaching here without panicking is the assertion.
+}
+
+#[test]
+fn a_retro_only_entity_registers_no_rapier2d_body() {
+    let mut game_core = GameCore::new();
+    game_core.handle(&entity_op_envelope(spawn_with_collider_in_worlds(
+        1,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        PhysicsWorlds::RETRO,
+    )));
+
+    assert_eq!(game_core.rapier2d.body_count(), 0);
+    assert_eq!(game_core.retro.body_count(), 1);
+}
+
+#[test]
+fn a_retro_only_entity_moves_via_the_retro_backend() {
+    let mut game_core = GameCore::new();
+    game_core.handle(&entity_op_envelope(spawn_with_collider_in_worlds(
+        1,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        PhysicsWorlds::RETRO,
+    )));
+    game_core.handle(&entity_op_envelope(EntityOp::SetVelocity {
+        entity_id: 1,
+        vx: 10.0,
+        vy: 0.0,
+    }));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 }.encode()));
+
+    let entity = *game_core.entities.get(&1).unwrap();
+    let transform = *game_core.world.get::<&Transform>(entity).unwrap();
+    assert_eq!(transform, Transform { x: 10.0, y: 0.0 });
+}
+
+#[test]
+fn a_dual_world_entitys_transform_is_read_from_the_higher_priority_retro_world() {
+    let mut game_core = GameCore::new();
+    game_core.handle(&entity_op_envelope(spawn_with_collider_in_worlds(
+        1,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        PhysicsWorlds::BOTH,
+    )));
+    game_core.handle(&entity_op_envelope(EntityOp::SetVelocity {
+        entity_id: 1,
+        vx: 10.0,
+        vy: 0.0,
+    }));
+
+    // One tick: retro moves exactly `velocity * dt` (10.0 for dt=1.0);
+    // rapier2d's dynamic body under the same commanded velocity integrates
+    // through its own solver and would not land on exactly the same value
+    // — if the drawn transform came from rapier2d instead of retro, this
+    // would not match `10.0` exactly.
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 }.encode()));
+
+    let entity = *game_core.entities.get(&1).unwrap();
+    let transform = *game_core.world.get::<&Transform>(entity).unwrap();
+    assert_eq!(
+        transform,
+        Transform { x: 10.0, y: 0.0 },
+        "the drawn transform should match retro's exact velocity*dt integration, \
+         proving it was read from retro (the higher-priority world), not rapier2d"
+    );
+}
+
+#[test]
+fn a_dual_world_entitys_lower_priority_rapier2d_copy_is_snapped_to_the_retro_position() {
+    let mut game_core = GameCore::new();
+    game_core.handle(&entity_op_envelope(spawn_with_collider_in_worlds(
+        1,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        PhysicsWorlds::BOTH,
+    )));
+    game_core.handle(&entity_op_envelope(EntityOp::SetVelocity {
+        entity_id: 1,
+        vx: 10.0,
+        vy: 0.0,
+    }));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 }.encode()));
+
+    let entity = *game_core.entities.get(&1).unwrap();
+    let collider = game_core.world.get::<&Collider>(entity).unwrap();
+    let rapier2d_body = collider.in_world(PhysicsWorldKind::Rapier2d).unwrap().body;
+    let retro_body = collider.in_world(PhysicsWorldKind::Retro).unwrap().body;
+    drop(collider);
+
+    assert_eq!(
+        game_core.rapier2d.body_translation(rapier2d_body),
+        game_core.retro.body_translation(retro_body),
+        "the lower-priority rapier2d copy should have been snapped to retro's position"
+    );
+}
+
+#[test]
+fn two_overlapping_retro_only_entities_publish_a_collision_event() {
+    let (mut game_core, bus, spy) = ready_game_core();
+    game_core.handle(&entity_op_envelope(spawn_with_collider_in_worlds(
+        1,
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+        PhysicsWorlds::RETRO,
+    )));
+    game_core.handle(&entity_op_envelope(spawn_with_collider_in_worlds(
+        2,
+        0.5,
+        0.0,
+        1.0,
+        1.0,
+        PhysicsWorlds::RETRO,
+    )));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    bus.dispatch();
+
+    let published = spy.0.lock().unwrap();
+    let collisions: Vec<_> = published
+        .iter()
+        .filter(|e| e.topic == Collision::TOPIC)
+        .map(|e| Collision::decode(&e.payload).unwrap())
+        .collect();
+
+    assert_eq!(collisions.len(), 1, "got {collisions:?}");
+    let ids = [collisions[0].entity_id_a, collisions[0].entity_id_b];
+    assert!(ids.contains(&1) && ids.contains(&2), "got {ids:?}");
 }

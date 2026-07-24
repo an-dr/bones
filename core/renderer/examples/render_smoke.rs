@@ -10,13 +10,13 @@ fn main() -> Result<(), String> {
     let mut platform = Platform::new("renderer smoke test", 320, 240)?;
     let window = platform.take_window().expect("window should be available");
 
-    let mut renderer = Renderer::new(Logger::default());
+    let bus = Bus::new();
+    let mut renderer = Renderer::new(bus.clone(), Logger::default());
     let mut services = ServiceRegistry::new();
     services.provide(window)?;
     let mut ctx = ModuleContext::new(&mut services);
     renderer.init(&mut ctx)?;
 
-    let bus = Bus::new();
     for _ in 0..60 {
         renderer.handle(&Envelope {
             topic: "gfx/clear".to_string(),

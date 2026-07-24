@@ -1,5 +1,7 @@
 use crate::{DecodeError, Reader, Writer};
 
+use super::PhysicsWorlds;
+
 /// The rapier2d rigid-body type a spawned entity's collider gets, when it
 /// has one at all (`collider_half_w`/`collider_half_h` both `> 0.0`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -20,6 +22,22 @@ pub enum BodyKind {
     /// rest almost immediately once nothing is pushing it, instead of
     /// coasting or drifting, and it never spins from an off-center hit.
     Frictionless,
+}
+
+/// The collider/visual shape a spawned entity's `square_color` draws and
+/// collides as (meaningless for a `sprite` entity, which is always drawn
+/// as its sprite frame regardless). `Rect` is every caller's behavior from
+/// before this field existed — an axis-aligned box at the collider's
+/// `half_w`/`half_h` extent. `Triangle` is an isoceles triangle inscribed
+/// in that same extent (apex centered on top, base along the bottom),
+/// collided against as a real triangle in the rapier2d world; the retro
+/// world has no non-rectangular collision concept, so it approximates a
+/// `Triangle` collider as its own `half_w`/`half_h` AABB bounding box.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Shape {
+    #[default]
+    Rect,
+    Triangle,
 }
 
 /// The drawable appearance of a spawned entity: either an animated sprite
@@ -67,9 +85,17 @@ pub enum EntityOp {
         y: f32,
         sprite: Option<Sprite>,
         square_color: (u8, u8, u8, u8),
+        /// Only meaningful for a `square_color` entity (`sprite: None`) —
+        /// see `Shape`.
+        shape: Shape,
         collider_half_w: f32,
         collider_half_h: f32,
         body_kind: BodyKind,
+        /// Which physics world(s) (ADR-021) this entity's body registers
+        /// in, when it has a body at all. `PhysicsWorlds::default()`
+        /// (rapier2d only) matches every caller's behavior before this
+        /// field existed.
+        worlds: PhysicsWorlds,
     },
     /// Sets a spawned entity's rapier2d linear velocity directly — the
     /// mechanism a caller (an extension reading `input/*`) drives movement
@@ -94,6 +120,39 @@ pub enum EntityOp {
     /// visible sprite/square lines up with what it actually collides as.
     /// Not addressed by `entity_id`: applies to the whole simulation.
     SetDebugHitboxes { enabled: bool },
+    /// Globally freezes the simulation while `paused` is `true`: neither
+    /// physics world steps, no contact-clamping or multi-world position
+    /// resolution runs, and no `game-core/collision` event can fire — every
+    /// entity holds exactly the position/velocity it had on the last
+    /// unpaused tick, including one still settling from a recent push, not
+    /// just entities a caller happens to be driving with `SetVelocity`.
+    /// `gfx/*` is still published every tick regardless, so the frame stays
+    /// visible (frozen) rather than going stale or blank. Not addressed by
+    /// `entity_id`: applies to the whole simulation, the same as
+    /// `SetDebugHitboxes`.
+    SetPaused { paused: bool },
+    /// Has `game-core` auto-follow `entity_id`'s `Transform` every tick,
+    /// replacing the fixed `(0, 0)` camera it publishes by default: the
+    /// camera centers on that entity, clamped per axis to
+    /// `[0, level_size - viewport_size / zoom]` so it stops panning once
+    /// the level edge would come into view (a no-op/unclamped center if
+    /// the level is smaller than the effective viewport). `viewport_w`/
+    /// `viewport_h` are the caller's own known *logical* resolution (the
+    /// renderer's fixed reference size, `gfx::SetDisplay`'s doc comment) —
+    /// `game-core` has no rendering authority and doesn't otherwise know
+    /// it, but this stays valid across a `gfx::SetDisplay` resize since
+    /// the renderer scales actual window changes to fit that same fixed
+    /// logical space. `zoom` (`1.0` is unscaled) is republished as
+    /// `gfx::SetCamera`'s own `zoom`, and also shrinks the clamp's
+    /// effective viewport, since zooming in shows less world per pixel.
+    /// A no-op each tick the followed `entity_id` doesn't exist (falls
+    /// back to the fixed camera), not a caller-visible error.
+    SetCameraFollow {
+        entity_id: u32,
+        viewport_w: f32,
+        viewport_h: f32,
+        zoom: f32,
+    },
 }
 
 const TAG_SPAWN: u8 = 0;
@@ -101,6 +160,8 @@ const TAG_SET_VELOCITY: u8 = 1;
 const TAG_DESPAWN: u8 = 2;
 const TAG_SET_COLOR: u8 = 3;
 const TAG_SET_DEBUG_HITBOXES: u8 = 4;
+const TAG_SET_PAUSED: u8 = 5;
+const TAG_SET_CAMERA_FOLLOW: u8 = 6;
 
 impl EntityOp {
     pub(super) fn encode_into(&self, writer: Writer) -> Writer {
@@ -111,9 +172,11 @@ impl EntityOp {
                 y,
                 sprite,
                 square_color,
+                shape,
                 collider_half_w,
                 collider_half_h,
                 body_kind,
+                worlds,
             } => {
                 let (r, g, b, a) = *square_color;
                 let writer = writer.u8(TAG_SPAWN).u32(*entity_id).f32(*x).f32(*y);
@@ -132,6 +195,10 @@ impl EntityOp {
                     .u8(g)
                     .u8(b)
                     .u8(a)
+                    .u8(match shape {
+                        Shape::Rect => 0,
+                        Shape::Triangle => 1,
+                    })
                     .f32(*collider_half_w)
                     .f32(*collider_half_h)
                     .u8(match body_kind {
@@ -139,6 +206,7 @@ impl EntityOp {
                         BodyKind::Kinematic => 1,
                         BodyKind::Frictionless => 2,
                     })
+                    .u8(worlds.to_bits())
             }
             EntityOp::SetVelocity { entity_id, vx, vy } => writer
                 .u8(TAG_SET_VELOCITY)
@@ -159,6 +227,20 @@ impl EntityOp {
             EntityOp::SetDebugHitboxes { enabled } => writer
                 .u8(TAG_SET_DEBUG_HITBOXES)
                 .u8(if *enabled { 1 } else { 0 }),
+            EntityOp::SetPaused { paused } => {
+                writer.u8(TAG_SET_PAUSED).u8(if *paused { 1 } else { 0 })
+            }
+            EntityOp::SetCameraFollow {
+                entity_id,
+                viewport_w,
+                viewport_h,
+                zoom,
+            } => writer
+                .u8(TAG_SET_CAMERA_FOLLOW)
+                .u32(*entity_id)
+                .f32(*viewport_w)
+                .f32(*viewport_h)
+                .f32(*zoom),
         }
     }
 
@@ -188,6 +270,10 @@ impl EntityOp {
                     reader.read_u8()?,
                     reader.read_u8()?,
                 );
+                let shape = match reader.read_u8()? {
+                    1 => Shape::Triangle,
+                    _ => Shape::Rect,
+                };
                 let collider_half_w = reader.read_f32()?;
                 let collider_half_h = reader.read_f32()?;
                 let body_kind = match reader.read_u8()? {
@@ -195,15 +281,18 @@ impl EntityOp {
                     2 => BodyKind::Frictionless,
                     _ => BodyKind::Dynamic,
                 };
+                let worlds = PhysicsWorlds::from_bits(reader.read_u8()?);
                 Ok(EntityOp::Spawn {
                     entity_id,
                     x,
                     y,
                     sprite,
                     square_color,
+                    shape,
                     collider_half_w,
                     collider_half_h,
                     body_kind,
+                    worlds,
                 })
             }
             TAG_SET_VELOCITY => Ok(EntityOp::SetVelocity {
@@ -226,6 +315,15 @@ impl EntityOp {
             }
             TAG_SET_DEBUG_HITBOXES => Ok(EntityOp::SetDebugHitboxes {
                 enabled: reader.read_u8()? != 0,
+            }),
+            TAG_SET_PAUSED => Ok(EntityOp::SetPaused {
+                paused: reader.read_u8()? != 0,
+            }),
+            TAG_SET_CAMERA_FOLLOW => Ok(EntityOp::SetCameraFollow {
+                entity_id: reader.read_u32()?,
+                viewport_w: reader.read_f32()?,
+                viewport_h: reader.read_f32()?,
+                zoom: reader.read_f32()?,
             }),
             _ => Err(DecodeError::InvalidTag {
                 message: "game-core entity op",

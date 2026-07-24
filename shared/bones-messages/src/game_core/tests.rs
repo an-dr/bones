@@ -14,9 +14,11 @@ fn spawn_with_sprite() -> EntityOp {
             frame_duration: 0.1,
         }),
         square_color: (0, 0, 0, 0),
+        shape: Shape::Rect,
         collider_half_w: 8.0,
         collider_half_h: 8.0,
         body_kind: BodyKind::Dynamic,
+        worlds: PhysicsWorlds::default(),
     }
 }
 
@@ -27,9 +29,11 @@ fn spawn_square() -> EntityOp {
         y: 0.0,
         sprite: None,
         square_color: (200, 40, 40, 255),
+        shape: Shape::Rect,
         collider_half_w: 8.0,
         collider_half_h: 8.0,
         body_kind: BodyKind::Kinematic,
+        worlds: PhysicsWorlds::default(),
     }
 }
 
@@ -61,9 +65,74 @@ fn spawn_with_frictionless_body_kind_round_trips() {
         y: 0.0,
         sprite: None,
         square_color: (60, 120, 220, 255),
+        shape: Shape::Rect,
         collider_half_w: 8.0,
         collider_half_h: 8.0,
         body_kind: BodyKind::Frictionless,
+        worlds: PhysicsWorlds::default(),
+    };
+    let message = EntityOpMessage(op);
+    assert_eq!(
+        EntityOpMessage::decode(&message.encode()),
+        Ok(EntityOpMessage(op))
+    );
+}
+
+#[test]
+fn spawn_registered_in_both_physics_worlds_round_trips() {
+    let op = EntityOp::Spawn {
+        entity_id: 5,
+        x: 1.0,
+        y: 2.0,
+        sprite: None,
+        square_color: (10, 20, 30, 255),
+        shape: Shape::Rect,
+        collider_half_w: 4.0,
+        collider_half_h: 4.0,
+        body_kind: BodyKind::Dynamic,
+        worlds: PhysicsWorlds::BOTH,
+    };
+    let message = EntityOpMessage(op);
+    assert_eq!(
+        EntityOpMessage::decode(&message.encode()),
+        Ok(EntityOpMessage(op))
+    );
+}
+
+#[test]
+fn spawn_registered_in_retro_only_round_trips() {
+    let op = EntityOp::Spawn {
+        entity_id: 6,
+        x: 0.0,
+        y: 0.0,
+        sprite: None,
+        square_color: (0, 0, 0, 255),
+        shape: Shape::Rect,
+        collider_half_w: 2.0,
+        collider_half_h: 2.0,
+        body_kind: BodyKind::Dynamic,
+        worlds: PhysicsWorlds::RETRO,
+    };
+    let message = EntityOpMessage(op);
+    assert_eq!(
+        EntityOpMessage::decode(&message.encode()),
+        Ok(EntityOpMessage(op))
+    );
+}
+
+#[test]
+fn spawn_with_triangle_shape_round_trips() {
+    let op = EntityOp::Spawn {
+        entity_id: 8,
+        x: 3.0,
+        y: 4.0,
+        sprite: None,
+        square_color: (200, 60, 60, 255),
+        shape: Shape::Triangle,
+        collider_half_w: 20.0,
+        collider_half_h: 20.0,
+        body_kind: BodyKind::Kinematic,
+        worlds: PhysicsWorlds::default(),
     };
     let message = EntityOpMessage(op);
     assert_eq!(
@@ -130,6 +199,41 @@ fn set_debug_hitboxes_disabled_round_trips() {
 }
 
 #[test]
+fn set_paused_enabled_round_trips() {
+    let op = EntityOp::SetPaused { paused: true };
+    let message = EntityOpMessage(op);
+    assert_eq!(
+        EntityOpMessage::decode(&message.encode()),
+        Ok(EntityOpMessage(op))
+    );
+}
+
+#[test]
+fn set_paused_disabled_round_trips() {
+    let op = EntityOp::SetPaused { paused: false };
+    let message = EntityOpMessage(op);
+    assert_eq!(
+        EntityOpMessage::decode(&message.encode()),
+        Ok(EntityOpMessage(op))
+    );
+}
+
+#[test]
+fn set_camera_follow_round_trips() {
+    let op = EntityOp::SetCameraFollow {
+        entity_id: 1,
+        viewport_w: 800.0,
+        viewport_h: 600.0,
+        zoom: 1.5,
+    };
+    let message = EntityOpMessage(op);
+    assert_eq!(
+        EntityOpMessage::decode(&message.encode()),
+        Ok(EntityOpMessage(op))
+    );
+}
+
+#[test]
 fn an_invalid_tag_is_rejected() {
     assert_eq!(
         EntityOpMessage::decode(&[255]),
@@ -152,6 +256,27 @@ fn truncated_payload_is_rejected() {
 fn load_tilemap_round_trips() {
     let load = LoadTilemap {
         tmx_bytes: b"<map></map>",
+        tileset_images: Vec::new(),
+    };
+    assert_eq!(LoadTilemap::decode(&load.encode()), Ok(load));
+}
+
+#[test]
+fn load_tilemap_with_tileset_images_round_trips() {
+    let load = LoadTilemap {
+        tmx_bytes: b"<map></map>",
+        tileset_images: vec![
+            TilesetImage {
+                name: "grass",
+                sprite_id: 2,
+                png_bytes: b"not-really-a-png",
+            },
+            TilesetImage {
+                name: "bricks",
+                sprite_id: 3,
+                png_bytes: b"also-not-really-a-png",
+            },
+        ],
     };
     assert_eq!(LoadTilemap::decode(&load.encode()), Ok(load));
 }

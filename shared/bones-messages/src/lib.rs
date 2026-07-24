@@ -9,6 +9,7 @@ pub mod gfx;
 pub mod input;
 pub mod lifecycle;
 pub mod persistence;
+pub mod renderer;
 pub mod tick;
 pub mod ui;
 

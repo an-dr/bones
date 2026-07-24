@@ -49,6 +49,17 @@ impl<'a> Reader<'a> {
         std::str::from_utf8(slice).map_err(|_| DecodeError::InvalidUtf8)
     }
 
+    /// Reads a `u32`-length-prefixed byte blob written by `Writer::blob`.
+    pub fn read_blob(&mut self) -> Result<&'a [u8], DecodeError> {
+        let len = self.read_u32()? as usize;
+        if self.bytes.len() - self.pos < len {
+            return Err(DecodeError::Truncated);
+        }
+        let slice = &self.bytes[self.pos..self.pos + len];
+        self.pos += len;
+        Ok(slice)
+    }
+
     /// Every remaining byte, regardless of length.
     pub fn read_rest(&mut self) -> &'a [u8] {
         let rest = &self.bytes[self.pos..];

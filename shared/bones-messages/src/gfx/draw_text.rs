@@ -15,6 +15,10 @@ pub struct DrawText<'a> {
     pub color: (u8, u8, u8, u8),
     /// Composite order: layers draw bottom-up, ties broken by publish order.
     pub layer: u8,
+    /// Skips the camera transform (`gfx/set-camera`) entirely when `true` —
+    /// see `DrawRect::screen_space`. `false` is every caller's behavior
+    /// from before this field existed.
+    pub screen_space: bool,
 }
 
 impl Message for DrawText<'_> {
@@ -34,6 +38,7 @@ impl EncodeMessage for DrawText<'_> {
             .u8(b)
             .u8(a)
             .u8(self.layer)
+            .u8(self.screen_space as u8)
             .finish()
     }
 }
@@ -53,6 +58,7 @@ impl<'a> DecodeMessage<'a> for DrawText<'a> {
                 reader.read_u8()?,
             ),
             layer: reader.read_u8()?,
+            screen_space: reader.read_u8()? != 0,
         };
         reader.finish()?;
         Ok(message)

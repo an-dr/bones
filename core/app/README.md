@@ -7,14 +7,25 @@ Package is `app`, built binary is `bones`.
 
 Opens one window (800x600 by default), feeds keyboard events onto `input/*`,
 and renders `gfx/*` draw commands (`core/renderer`). Drop `.wasm` extensions
-into an `extensions/` directory next to where you run it; `cargo run -p app`
-(or the built binary) discovers and runs them.
+into an `extensions/` directory next to the executable file itself (not the
+shell's current directory — the binary can be launched from anywhere and
+still finds its own `extensions/`); `cargo run -p app` (or the built binary)
+discovers and runs them.
 
 ## Configuration
 
-Reads `bones.toml` next to wherever it runs, if present. Every field is
-optional and defaults to the values below; an unknown field or invalid TOML
-is a startup error rather than a silent no-op.
+Reads `bones.toml` next to the executable file, if present — the same
+exe-relative resolution applies to `extensions_dir` and `saves_dir`, so a
+`dist/` build stays self-contained regardless of what directory it's
+launched from. Every field is optional and defaults to the values below; an
+unknown field or invalid TOML is a startup error rather than a silent no-op.
+
+Set `BONES_CONFIG=<path>` to read the config from somewhere else entirely —
+`extensions_dir`/`saves_dir` then resolve against *that* file's own
+directory instead of the exe's. For an embedder running `cargo run -p app`
+straight against a vendored `bones` checkout (exe buried in a `target/`
+directory, no `dist/` involved), this points the engine at a project-root
+`bones.toml` and its own `extensions/` without copying anything there first.
 
 ```toml
 extensions_dir = "extensions"

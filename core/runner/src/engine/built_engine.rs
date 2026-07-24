@@ -1,3 +1,4 @@
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 use bus::Module;
@@ -19,4 +20,7 @@ pub struct BuiltEngine {
     pub ui: Option<Arc<Mutex<Ui>>>,
     pub modules: Vec<Arc<Mutex<Box<dyn Module>>>>,
     pub supervisor: Supervisor,
+    /// Set by any loaded extension's `request-exit` host-api call; `run`'s
+    /// loop breaks once true, the same as `Platform::quit_requested()`.
+    pub exit_requested: Arc<AtomicBool>,
 }

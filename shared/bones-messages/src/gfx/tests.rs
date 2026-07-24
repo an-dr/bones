@@ -60,6 +60,16 @@ fn every_command_round_trips() {
         Ok(Some(Command::SetCamera(camera)))
     );
 
+    let display = SetDisplay {
+        width: 1280,
+        height: 720,
+        fullscreen: true,
+    };
+    assert_eq!(
+        Command::decode(SetDisplay::TOPIC, &display.encode()),
+        Ok(Some(Command::SetDisplay(display)))
+    );
+
     let rect = DrawRect {
         x: 10,
         y: 20,
@@ -68,6 +78,7 @@ fn every_command_round_trips() {
         filled: true,
         color: (255, 0, 0, 255),
         layer: 2,
+        screen_space: false,
     };
     assert_eq!(
         Command::decode(DrawRect::TOPIC, &rect.encode()),
@@ -107,6 +118,55 @@ fn every_command_round_trips() {
         size: 16,
         color: (255, 255, 255, 255),
         layer: 9,
+        screen_space: false,
+    };
+    assert_eq!(
+        Command::decode(DrawText::TOPIC, &text.encode()),
+        Ok(Some(Command::DrawText(text)))
+    );
+
+    let triangle = DrawTriangle {
+        x1: 10,
+        y1: 0,
+        x2: 0,
+        y2: 20,
+        x3: 20,
+        y3: 20,
+        filled: true,
+        color: (128, 0, 255, 255),
+        layer: 5,
+    };
+    assert_eq!(
+        Command::decode(DrawTriangle::TOPIC, &triangle.encode()),
+        Ok(Some(Command::DrawTriangle(triangle)))
+    );
+}
+
+#[test]
+fn screen_space_draws_round_trip() {
+    let rect = DrawRect {
+        x: 10,
+        y: 20,
+        w: 30,
+        h: 40,
+        filled: true,
+        color: (255, 0, 0, 255),
+        layer: 2,
+        screen_space: true,
+    };
+    assert_eq!(
+        Command::decode(DrawRect::TOPIC, &rect.encode()),
+        Ok(Some(Command::DrawRect(rect)))
+    );
+
+    let text = DrawText {
+        text: "score: 0",
+        x: 8,
+        y: 8,
+        size: 16,
+        color: (255, 255, 255, 255),
+        layer: 9,
+        screen_space: true,
     };
     assert_eq!(
         Command::decode(DrawText::TOPIC, &text.encode()),

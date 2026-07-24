@@ -15,3 +15,8 @@ pwsh build.ps1
 
 Requires PowerShell 7+ (`pwsh`). Output:
 `target/wasm32-wasip2/release/audio_demo.wasm`.
+
+The same script also builds the `bones` engine and assembles a runnable
+`dist/` next to this README — `dist/bones(.exe)`, `dist/extensions/
+audio_demo.wasm`, and a `dist/bones.toml` with `audio = true` already set
+(`audio` defaults off — see `core/app`'s config), ready to run directly.

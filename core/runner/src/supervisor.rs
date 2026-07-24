@@ -4,10 +4,13 @@
 
 mod tracked_extension;
 
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use bus::{Bus, Registry};
 use logging::Logger;
+use wasm_extensions::host::DisplayInfo;
 use wasm_extensions::lifecycle;
 use wasm_extensions::lifecycle::Event;
 
@@ -36,6 +39,8 @@ pub struct Supervisor {
     logger: Logger,
     tracked: Vec<TrackedExtension>,
     last_mtime_sweep: Option<Instant>,
+    exit_requested: Arc<AtomicBool>,
+    display_info: DisplayInfo,
 }
 
 impl Supervisor {
@@ -45,6 +50,8 @@ impl Supervisor {
         registry: Registry,
         logger: Logger,
         tracked: Vec<TrackedExtension>,
+        exit_requested: Arc<AtomicBool>,
+        display_info: DisplayInfo,
     ) -> Self {
         Self {
             wasm_engine,
@@ -53,6 +60,8 @@ impl Supervisor {
             logger,
             tracked,
             last_mtime_sweep: None,
+            exit_requested,
+            display_info,
         }
     }
 
@@ -104,6 +113,8 @@ impl Supervisor {
                 &self.logger,
                 &extension.path,
                 &extension.name,
+                &self.exit_requested,
+                &self.display_info,
             ) {
                 Ok((ep, shared, topics)) => {
                     if !extension.quarantined {

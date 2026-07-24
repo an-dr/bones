@@ -42,6 +42,11 @@ pub(crate) struct Inner {
     // viewport for the scene), retained like `clear_color` — last writer
     // wins. Defaults to an identity transform.
     camera: (f32, f32, f32),
+    // The window's size at construction (`Engine::window(...)`/`bones.toml`)
+    // — every `gfx/*` coordinate stays expressed in this fixed logical
+    // space forever after, regardless of `gfx::SetDisplay` resizing the
+    // actual window; `composite` scales to fit. Never updated post-`new`.
+    reference_size: (u32, u32),
     // Pure-Rust rasterization (ab_glyph) rather than SDL3's `ttf` feature:
     // that feature links `sdl3-ttf-sys`, which bundles HarfBuzz, which
     // fails to link in this workspace's dev profile on this toolchain
@@ -61,6 +66,7 @@ impl Inner {
         texture_creator: TextureCreator<WindowContext>,
         font: FontRef<'static>,
     ) -> Self {
+        let reference_size = canvas.window().size();
         Self {
             canvas,
             texture_creator,
@@ -71,6 +77,7 @@ impl Inner {
             retained_draws: HashMap::new(),
             sender_order: Vec::new(),
             camera: (0.0, 0.0, 1.0),
+            reference_size,
             font,
         }
     }
@@ -102,6 +109,26 @@ impl Inner {
             Command::SetCamera(camera) => {
                 self.camera = (camera.x, camera.y, camera.zoom);
             }
+            Command::SetDisplay(display) => {
+                // SDL can ignore an explicit resize while the window is
+                // still fullscreen, so a windowed target size must be
+                // applied only after leaving fullscreen — reversed for the
+                // opposite direction, where the windowed size is set first
+                // (fullscreen entry ignores it, but it's what the window
+                // returns to on the next windowed SetDisplay).
+                let window = self.canvas.window_mut();
+                if display.fullscreen {
+                    window
+                        .set_size(display.width, display.height)
+                        .map_err(|e| e.to_string())?;
+                    window.set_fullscreen(true).map_err(|e| e.to_string())?;
+                } else {
+                    window.set_fullscreen(false).map_err(|e| e.to_string())?;
+                    window
+                        .set_size(display.width, display.height)
+                        .map_err(|e| e.to_string())?;
+                }
+            }
             Command::DrawRect(draw) => {
                 self.pending_draws
                     .entry(sender.to_string())
@@ -120,6 +147,12 @@ impl Inner {
                     .or_default()
                     .push(RetainedDraw::Circle(draw));
             }
+            Command::DrawTriangle(draw) => {
+                self.pending_draws
+                    .entry(sender.to_string())
+                    .or_default()
+                    .push(RetainedDraw::Triangle(draw));
+            }
             Command::DrawText(draw) => {
                 self.pending_draws
                     .entry(sender.to_string())
@@ -131,6 +164,7 @@ impl Inner {
                         size: draw.size,
                         color: draw.color,
                         layer: draw.layer,
+                        screen_space: draw.screen_space,
                     });
             }
         }
@@ -165,13 +199,32 @@ impl Inner {
         }
         ordered.sort_by_key(|draw| draw.layer());
 
+        // Two independent scale factors, both relative to `reference_size`
+        // (the fixed logical space every `gfx/*` coordinate is expressed
+        // in): `game_scale` preserves aspect ratio (letterboxed/pillarboxed
+        // if the window's aspect ratio differs) so world content is never
+        // stretched or distorted; `ui_scale_x`/`ui_scale_y` stretch to fill
+        // the window exactly, independent of the game's letterboxing, so a
+        // `screen_space` HUD stays anchored to the actual window's corners/
+        // edges rather than shrinking into unused letterbox space.
+        let (win_w, win_h) = self.canvas.window().size();
+        let (ref_w, ref_h) = self.reference_size;
+        let game_scale = (win_w as f32 / ref_w as f32).min(win_h as f32 / ref_h as f32);
+        let game_offset_x = (win_w as f32 - ref_w as f32 * game_scale) / 2.0;
+        let game_offset_y = (win_h as f32 - ref_h as f32 * game_scale) / 2.0;
+        let ui_scale_x = win_w as f32 / ref_w as f32;
+        let ui_scale_y = win_h as f32 / ref_h as f32;
+
         let (camera_x, camera_y, zoom) = self.camera;
         let to_screen = |x: i32, y: i32| -> (i32, i32) {
+            let logical_x = (x as f32 - camera_x) * zoom;
+            let logical_y = (y as f32 - camera_y) * zoom;
             (
-                ((x as f32 - camera_x) * zoom).round() as i32,
-                ((y as f32 - camera_y) * zoom).round() as i32,
+                (logical_x * game_scale + game_offset_x).round() as i32,
+                (logical_y * game_scale + game_offset_y).round() as i32,
             )
         };
+        let world_scale = zoom * game_scale;
         for draw in &ordered {
             match draw {
                 RetainedDraw::Sprite(draw) => {
@@ -185,8 +238,8 @@ impl Inner {
 
                     let src = Rect::new(draw.src_x, draw.src_y, draw.src_w, draw.src_h);
                     let (screen_x, screen_y) = to_screen(draw.dst_x, draw.dst_y);
-                    let screen_w = (draw.dst_w as f32 * zoom).round().max(0.0) as u32;
-                    let screen_h = (draw.dst_h as f32 * zoom).round().max(0.0) as u32;
+                    let screen_w = (draw.dst_w as f32 * world_scale).round().max(0.0) as u32;
+                    let screen_h = (draw.dst_h as f32 * world_scale).round().max(0.0) as u32;
                     let dst = Rect::new(screen_x, screen_y, screen_w, screen_h);
                     self.canvas
                         .copy_ex(
@@ -203,9 +256,25 @@ impl Inner {
                 RetainedDraw::Rect(draw) => {
                     let (r, g, b, a) = draw.color;
                     self.canvas.set_draw_color(Color::RGBA(r, g, b, a));
-                    let (screen_x, screen_y) = to_screen(draw.x, draw.y);
-                    let screen_w = (draw.w as f32 * zoom).round().max(0.0) as u32;
-                    let screen_h = (draw.h as f32 * zoom).round().max(0.0) as u32;
+                    // `screen_space` draws bypass the camera transform and
+                    // the game's letterboxed scale entirely, stretching to
+                    // fill the window instead — see `ui_scale_x`/`ui_scale_y`
+                    // above — for HUD/menu content that must stay anchored
+                    // to the actual window as the camera pans or the window
+                    // resizes.
+                    let (screen_x, screen_y, scale_x, scale_y) = if draw.screen_space {
+                        (
+                            (draw.x as f32 * ui_scale_x).round() as i32,
+                            (draw.y as f32 * ui_scale_y).round() as i32,
+                            ui_scale_x,
+                            ui_scale_y,
+                        )
+                    } else {
+                        let (x, y) = to_screen(draw.x, draw.y);
+                        (x, y, world_scale, world_scale)
+                    };
+                    let screen_w = (draw.w as f32 * scale_x).round().max(0.0) as u32;
+                    let screen_h = (draw.h as f32 * scale_y).round().max(0.0) as u32;
                     let rect = Rect::new(screen_x, screen_y, screen_w, screen_h);
                     let result = if draw.filled {
                         self.canvas.fill_rect(rect)
@@ -230,7 +299,7 @@ impl Inner {
                     let (r, g, b, a) = draw.color;
                     self.canvas.set_draw_color(Color::RGBA(r, g, b, a));
                     let (cx, cy) = to_screen(draw.x, draw.y);
-                    let radius = (draw.radius as f32 * zoom).round().max(0.0) as i32;
+                    let radius = (draw.radius as f32 * world_scale).round().max(0.0) as i32;
                     if draw.filled {
                         for (p1, p2) in circle_fill_lines(cx, cy, radius) {
                             self.canvas.draw_line(p1, p2).map_err(|e| e.to_string())?;
@@ -242,12 +311,53 @@ impl Inner {
                             .map_err(|e| e.to_string())?;
                     }
                 }
+                RetainedDraw::Triangle(draw) => {
+                    let (r, g, b, a) = draw.color;
+                    let color = FColor {
+                        r: r as f32 / 255.0,
+                        g: g as f32 / 255.0,
+                        b: b as f32 / 255.0,
+                        a: a as f32 / 255.0,
+                    };
+                    let (x1, y1) = to_screen(draw.x1, draw.y1);
+                    let (x2, y2) = to_screen(draw.x2, draw.y2);
+                    let (x3, y3) = to_screen(draw.x3, draw.y3);
+                    let points = [
+                        FPoint::new(x1 as f32, y1 as f32),
+                        FPoint::new(x2 as f32, y2 as f32),
+                        FPoint::new(x3 as f32, y3 as f32),
+                    ];
+                    if draw.filled {
+                        // No texture: `render_geometry` only needs
+                        // `tex_coord` when a texture is passed, so an
+                        // arbitrary placeholder is fine here.
+                        let vertices: Vec<Vertex> = points
+                            .iter()
+                            .map(|&position| Vertex {
+                                position,
+                                color,
+                                tex_coord: FPoint::new(0.0, 0.0),
+                            })
+                            .collect();
+                        self.canvas
+                            .render_geometry(&vertices, None, &[0u32, 1, 2][..])
+                            .map_err(|e| e.to_string())?;
+                    } else {
+                        self.canvas.set_draw_color(Color::RGBA(r, g, b, a));
+                        for [start, end] in
+                            [[points[0], points[1]], [points[1], points[2]], [points[2], points[0]]]
+                        {
+                            self.canvas.draw_line(start, end).map_err(|e| e.to_string())?;
+                        }
+                    }
+                }
                 RetainedDraw::Text {
                     text,
                     x,
                     y,
                     size,
                     color,
+                    screen_space,
                     ..
                 } => {
                     if text.is_empty() {
@@ -264,9 +374,19 @@ impl Inner {
                         .update(None, &rgba, width as usize * 4)
                         .map_err(|e| e.to_string())?;
 
-                    let (screen_x, screen_y) = to_screen(*x, *y);
-                    let screen_w = (width as f32 * zoom).round().max(0.0) as u32;
-                    let screen_h = (height as f32 * zoom).round().max(0.0) as u32;
+                    let (screen_x, screen_y, scale_x, scale_y) = if *screen_space {
+                        (
+                            (*x as f32 * ui_scale_x).round() as i32,
+                            (*y as f32 * ui_scale_y).round() as i32,
+                            ui_scale_x,
+                            ui_scale_y,
+                        )
+                    } else {
+                        let (sx, sy) = to_screen(*x, *y);
+                        (sx, sy, world_scale, world_scale)
+                    };
+                    let screen_w = (width as f32 * scale_x).round().max(0.0) as u32;
+                    let screen_h = (height as f32 * scale_y).round().max(0.0) as u32;
                     self.canvas
                         .copy(
                             &texture,

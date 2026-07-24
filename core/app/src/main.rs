@@ -1,9 +1,12 @@
 //! The engine executable (structure.md): default composition, built solely
 //! on runner's public builder API (ADR-011) — no access an embedder lacks.
-//! Reads `bones.toml` next to wherever it runs (config.rs); every field
-//! defaults to what was previously hardcoded.
+//! Reads `bones.toml` next to wherever the executable itself lives by
+//! default, or from `BONES_CONFIG` when set (paths.rs) — never the
+//! process's current working directory; every field defaults to what was
+//! previously hardcoded.
 
 mod config;
+mod paths;
 
 use config::Config;
 
@@ -15,16 +18,16 @@ fn main() {
 }
 
 fn run() -> Result<(), String> {
-    let config = Config::load("bones.toml")?;
+    let config = Config::load(paths::config_path())?;
 
     let mut engine = runner::Engine::new()
-        .extensions_dir(config.extensions_dir)
+        .extensions_dir(paths::config_relative(&config.extensions_dir))
         .window(
             config.window_title,
             config.window_width,
             config.window_height,
         )
-        .saves_dir(config.saves_dir);
+        .saves_dir(paths::config_relative(&config.saves_dir));
     if config.renderer {
         engine = engine.renderer();
     }

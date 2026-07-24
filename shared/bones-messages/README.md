@@ -14,7 +14,8 @@ guests in other languages to reproduce without Rust or serde.
 - `tick` — `Tick` on `core/tick`.
 - `lifecycle` — `LifecycleEvent` and `Event` on `core/lifecycle`.
 - `input` — `KeyDown` and `KeyUp` keyboard events.
-- `gfx` — `Clear`, `LoadSprite`, and `DrawSprite`, plus the wildcard-friendly
+- `gfx` — `Clear`, `LoadSprite`, `DrawSprite`, `DrawRect`, `DrawLine`,
+  `DrawCircle`, `DrawTriangle`, and `DrawText`, plus the wildcard-friendly
   `Command` dispatcher used by the renderer.
 
 This is a standalone workspace, like each `extensions/*` crate, so both the

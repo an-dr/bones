@@ -4,4 +4,4 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-wasmtime = { version = "46.0.1", features = ["component-model"] }
+wasmtime = { version = "47.0.0", features = ["component-model"] }

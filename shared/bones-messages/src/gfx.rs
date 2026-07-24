@@ -7,8 +7,10 @@ mod draw_line;
 mod draw_rect;
 mod draw_sprite;
 mod draw_text;
+mod draw_triangle;
 mod load_sprite;
 mod set_camera;
+mod set_display;
 
 pub use clear::Clear;
 pub use command::Command;
@@ -17,8 +19,10 @@ pub use draw_line::DrawLine;
 pub use draw_rect::DrawRect;
 pub use draw_sprite::DrawSprite;
 pub use draw_text::DrawText;
+pub use draw_triangle::DrawTriangle;
 pub use load_sprite::LoadSprite;
 pub use set_camera::SetCamera;
+pub use set_display::SetDisplay;
 
 #[cfg(test)]
 mod tests;

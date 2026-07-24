@@ -4,7 +4,8 @@
 //! as `runner::Engine` until a top-level facade crate exists to re-export
 //! it.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -13,6 +14,7 @@ use bus::{Module, ModuleContext, Registry, ServiceRegistry};
 use logging::Logger;
 use renderer::Renderer;
 use ui::Ui;
+use wasm_extensions::host::DisplayInfo;
 use wasm_extensions::lifecycle;
 use wasm_extensions::lifecycle::Event;
 use wasm_extensions::persistence::Persistence;
@@ -31,6 +33,28 @@ use super::shared::Shared;
 
 const DEFAULT_TICK_HZ: f64 = 60.0;
 const GFX_TOPICS: &str = "gfx/*";
+
+/// A relative `extensions_dir`/`saves_dir` resolves against the running
+/// executable's own directory, not the process's current working
+/// directory -- so a shipped build behaves the same whether launched by
+/// double-click, shortcut, or from an arbitrary shell. Absolute paths
+/// pass through unchanged.
+fn resolve_relative_to_exe(path: PathBuf) -> PathBuf {
+    if path.is_absolute() {
+        return path;
+    }
+    match exe_dir() {
+        Some(dir) => dir.join(path),
+        None => path,
+    }
+}
+
+fn exe_dir() -> Option<PathBuf> {
+    std::env::current_exe()
+        .ok()?
+        .parent()
+        .map(Path::to_path_buf)
+}
 
 pub struct Engine {
     extensions_dir: Option<PathBuf>,
@@ -59,6 +83,11 @@ impl Engine {
         }
     }
 
+    /// Where `.wasm` extensions are discovered (`build`'s own doc comment).
+    /// A relative path resolves against the running executable's own
+    /// directory, not the process's cwd (`resolve_relative_to_exe`) -- the
+    /// same convention `saves_dir` uses. No default: unset means no
+    /// extensions load.
     pub fn extensions_dir(mut self, path: impl Into<PathBuf>) -> Self {
         self.extensions_dir = Some(path.into());
         self
@@ -121,8 +150,10 @@ impl Engine {
 
     /// Where `persistence` (unconditional, see its own doc comment) keeps
     /// `<sender>.bin` save files. Defaults to `"saves"`, relative to the
-    /// process's cwd if not absolute — the same convention
-    /// `extensions_dir` already uses.
+    /// running executable's own directory if not absolute
+    /// (`resolve_relative_to_exe`) -- the same convention `extensions_dir`
+    /// uses, not the process's cwd (which a double-clicked or
+    /// shortcut-launched binary can't control).
     pub fn saves_dir(mut self, path: impl Into<PathBuf>) -> Self {
         self.saves_dir = path.into();
         self
@@ -151,12 +182,23 @@ impl Engine {
         let bus = bus::Bus::new();
         let registry = Registry::new();
         let wasm_engine = wasm_extensions::host::new_engine()?;
+        let exit_requested = Arc::new(AtomicBool::new(false));
 
         let mut platform = match window {
             Some((title, width, height)) => {
                 Some(platform::Platform::new(&title, width, height).map_err(wasmtime::Error::msg)?)
             }
             None => None,
+        };
+        // Queried once here, independent of the window hand-off below
+        // (`Platform` resolves it at construction, not from the live
+        // window) - every loaded extension gets the same static snapshot.
+        let display_info = match &platform {
+            Some(platform) => DisplayInfo {
+                modes: platform.display_modes().to_vec(),
+                native: platform.native_display_mode(),
+            },
+            None => DisplayInfo::default(),
         };
 
         // Build-time-only (ADR-017): every module's `init` runs against
@@ -183,7 +225,7 @@ impl Engine {
             if platform.is_none() {
                 return Err(wasmtime::Error::msg(".renderer() needs .window(...) too"));
             }
-            let shared = Arc::new(Mutex::new(Renderer::new(self.logger.clone())));
+            let shared = Arc::new(Mutex::new(Renderer::new(bus.clone(), self.logger.clone())));
             {
                 let mut renderer = shared.lock().unwrap();
                 let mut ctx = ModuleContext::new(&mut services);
@@ -226,7 +268,8 @@ impl Engine {
         // Unconditional (persistence's own doc comment explains why) —
         // registered here, not through `self.modules`, so there's no
         // `.persistence()`-style opt-in to forget.
-        let persistence = Persistence::new(self.saves_dir.clone(), self.persistence_read_only);
+        let saves_dir = resolve_relative_to_exe(self.saves_dir.clone());
+        let persistence = Persistence::new(saves_dir, self.persistence_read_only);
         register_module(
             &bus,
             &registry,
@@ -240,7 +283,8 @@ impl Engine {
         let mut loaded_names = std::collections::HashSet::new();
 
         if let Some(dir) = &self.extensions_dir {
-            for path in find_wasm_files(dir) {
+            let dir = resolve_relative_to_exe(dir.clone());
+            for path in find_wasm_files(&dir) {
                 let name = derive_extension_name(&path);
                 if !is_first_occurrence(&mut loaded_names, &name) {
                     self.logger.error(
@@ -252,7 +296,16 @@ impl Engine {
                     );
                     continue;
                 }
-                match attach_extension(&wasm_engine, &bus, &registry, &self.logger, &path, &name) {
+                match attach_extension(
+                    &wasm_engine,
+                    &bus,
+                    &registry,
+                    &self.logger,
+                    &path,
+                    &name,
+                    &exit_requested,
+                    &display_info,
+                ) {
                     Ok((ep, shared, topics)) => {
                         self.logger.info(
                             "engine",
@@ -288,6 +341,8 @@ impl Engine {
             registry,
             self.logger.clone(),
             tracked,
+            exit_requested.clone(),
+            display_info,
         );
 
         if let Some(platform) = &mut platform {
@@ -301,6 +356,7 @@ impl Engine {
             ui,
             modules,
             supervisor,
+            exit_requested,
         })
     }
 
@@ -320,6 +376,7 @@ impl Engine {
             ui,
             modules,
             mut supervisor,
+            exit_requested,
         } = self.build()?;
 
         let mut last = std::time::Instant::now() - period;
@@ -340,6 +397,13 @@ impl Engine {
                 if platform.quit_requested() {
                     break;
                 }
+            }
+            // Same minimal-shutdown-slice stance as quit_requested() above,
+            // just extension-triggered instead of OS-triggered: an
+            // extension's own `request-exit` host-api call, not the full
+            // shutdown sequence.
+            if exit_requested.load(Ordering::Relaxed) {
+                break;
             }
 
             supervisor.check();

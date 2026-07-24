@@ -1,5 +1,6 @@
 use super::*;
 use logging::RecordingSink;
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 // Built by extensions/hello/build.ps1 (see its README).
@@ -15,8 +16,17 @@ const RUNAWAY_WASM: &str = concat!(
 
 fn load_hello(bus: Bus, logger: Logger) -> Host {
     let engine = new_engine().unwrap();
-    Host::load(&engine, HELLO_WASM, "hello", bus, Registry::new(), logger)
-        .expect("build extensions/hello first: pwsh extensions/hello/build.ps1")
+    Host::load(
+        &engine,
+        HELLO_WASM,
+        "hello",
+        bus,
+        Registry::new(),
+        logger,
+        Arc::new(AtomicBool::new(false)),
+        DisplayInfo::default(),
+    )
+    .expect("build extensions/hello first: pwsh extensions/hello/build.ps1")
 }
 
 fn test_state(name: &str, registry: Registry) -> State {
@@ -28,6 +38,8 @@ fn test_state(name: &str, registry: Registry) -> State {
         wasi: wasmtime_wasi::WasiCtxBuilder::new().build(),
         table: wasmtime_wasi::ResourceTable::new(),
         requested_topics: Vec::new(),
+        exit_requested: Arc::new(AtomicBool::new(false)),
+        display_info: DisplayInfo::default(),
     }
 }
 
@@ -57,6 +69,17 @@ fn send_to_an_unknown_endpoint_maps_to_the_wit_error() {
         state.send("nobody".to_string(), Vec::new()),
         Err(SendError::UnknownEndpoint)
     );
+}
+
+#[test]
+fn request_exit_sets_the_shared_flag() {
+    let mut state = test_state("caller", Registry::new());
+    let exit_requested = state.exit_requested.clone();
+    assert!(!exit_requested.load(std::sync::atomic::Ordering::Relaxed));
+
+    state.request_exit();
+
+    assert!(exit_requested.load(std::sync::atomic::Ordering::Relaxed));
 }
 
 #[test]
@@ -207,6 +230,8 @@ fn a_call_that_never_returns_traps_and_faults_instead_of_hanging_forever() {
         Bus::new(),
         Registry::new(),
         Logger::new(Arc::new(sink.clone())),
+        Arc::new(AtomicBool::new(false)),
+        DisplayInfo::default(),
     )
     .expect("build extensions/runaway_demo first: pwsh extensions/runaway_demo/build.ps1");
     assert!(!host.is_faulted(), "must not start out faulted");
@@ -236,6 +261,8 @@ fn a_faulted_host_ignores_further_deliveries_instead_of_hanging_again() {
         Bus::new(),
         Registry::new(),
         Logger::default(),
+        Arc::new(AtomicBool::new(false)),
+        DisplayInfo::default(),
     )
     .expect("build extensions/runaway_demo first: pwsh extensions/runaway_demo/build.ps1");
     host.handle(&tick_envelope());

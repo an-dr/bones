@@ -4,11 +4,14 @@
 //! Build the extension first: pwsh extensions/hello/build.ps1
 //! Then: cargo run -p wasm-extensions --example hello_extension
 
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
+
 use bones_messages::tick::Tick;
 use bones_messages::{EncodeMessage, Message};
 use bus::{Bus, Envelope, Registry};
 use logging::Logger;
-use wasm_extensions::host::Host;
+use wasm_extensions::host::{DisplayInfo, Host};
 
 const HELLO_WASM: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -37,6 +40,8 @@ fn main() -> wasmtime::Result<()> {
         bus.clone(),
         Registry::new(),
         Logger::default(),
+        Arc::new(AtomicBool::new(false)),
+        DisplayInfo::default(),
     )?;
     let topics = hello.requested_topics();
     let ep = bus.register("hello", hello);

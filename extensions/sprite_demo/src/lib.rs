@@ -97,6 +97,7 @@ impl Guest for Component {
             filled: false,
             color: (80, 200, 255, 255),
             layer: 0,
+            screen_space: false,
         };
         publish(DrawRect::TOPIC, &outline.encode());
 
@@ -110,9 +111,9 @@ impl Guest for Component {
         };
         publish(DrawCircle::TOPIC, &marker.encode());
 
-        // Nameplate text, world-space like everything else here (the
-        // camera transform applies uniformly — no separate screen-space
-        // HUD layer exists yet), on the topmost layer so it's never
+        // Nameplate text, deliberately world-space (screen_space: false)
+        // like everything else here, so it stays anchored to the sprite
+        // rather than the screen — on the topmost layer so it's never
         // occluded by the shapes or sprites below it.
         let nameplate = DrawText {
             text: "William",
@@ -121,6 +122,7 @@ impl Guest for Component {
             size: 14,
             color: (255, 255, 255, 255),
             layer: 3,
+            screen_space: false,
         };
         publish(DrawText::TOPIC, &nameplate.encode());
     }

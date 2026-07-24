@@ -1,15 +1,12 @@
-mod collider;
 mod game_core;
+mod graphics;
 mod physics;
-mod sprite_animation;
-mod square_color;
-mod tilemap;
-mod transform;
+mod tiles;
 
-pub use collider::Collider;
 pub use game_core::GameCore;
-pub use physics::Physics;
-pub use sprite_animation::SpriteAnimation;
-pub use square_color::SquareColor;
-pub use tilemap::{load_collision_rects, CollisionRect};
-pub use transform::Transform;
+pub use graphics::{SpriteAnimation, SquareColor, Transform};
+pub use physics::{
+    BodyHandle, BodyKind, Collider, ColliderHandle, PhysicsBackend, PhysicsWorldKind,
+    Rapier2dBackend, RetroBackend, WorldBody,
+};
+pub use tiles::{load_collision_rects, CollisionRect};

@@ -1,7 +1,8 @@
 use crate::{DecodeError, DecodeMessage, Message};
 
 use super::{
-    Clear, DrawCircle, DrawLine, DrawRect, DrawSprite, DrawText, LoadSprite, SetCamera,
+    Clear, DrawCircle, DrawLine, DrawRect, DrawSprite, DrawText, DrawTriangle, LoadSprite,
+    SetCamera, SetDisplay,
 };
 
 /// Any currently supported `gfx/*` command, decoded by exact topic.
@@ -12,10 +13,12 @@ pub enum Command<'a> {
     LoadSprite(LoadSprite<'a>),
     DrawSprite(DrawSprite),
     SetCamera(SetCamera),
+    SetDisplay(SetDisplay),
     DrawRect(DrawRect),
     DrawLine(DrawLine),
     DrawCircle(DrawCircle),
     DrawText(DrawText<'a>),
+    DrawTriangle(DrawTriangle),
 }
 
 impl<'a> Command<'a> {
@@ -33,12 +36,18 @@ impl<'a> Command<'a> {
             SetCamera::TOPIC => {
                 SetCamera::decode(payload).map(|value| Some(Self::SetCamera(value)))
             }
+            SetDisplay::TOPIC => {
+                SetDisplay::decode(payload).map(|value| Some(Self::SetDisplay(value)))
+            }
             DrawRect::TOPIC => DrawRect::decode(payload).map(|value| Some(Self::DrawRect(value))),
             DrawLine::TOPIC => DrawLine::decode(payload).map(|value| Some(Self::DrawLine(value))),
             DrawCircle::TOPIC => {
                 DrawCircle::decode(payload).map(|value| Some(Self::DrawCircle(value)))
             }
             DrawText::TOPIC => DrawText::decode(payload).map(|value| Some(Self::DrawText(value))),
+            DrawTriangle::TOPIC => {
+                DrawTriangle::decode(payload).map(|value| Some(Self::DrawTriangle(value)))
+            }
             _ => Ok(None),
         }
     }
