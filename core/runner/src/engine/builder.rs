@@ -4,7 +4,7 @@
 //! as `runner::Engine` until a top-level facade crate exists to re-export
 //! it.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -34,6 +34,28 @@ use super::shared::Shared;
 const DEFAULT_TICK_HZ: f64 = 60.0;
 const GFX_TOPICS: &str = "gfx/*";
 
+/// A relative `extensions_dir`/`saves_dir` resolves against the running
+/// executable's own directory, not the process's current working
+/// directory -- so a shipped build behaves the same whether launched by
+/// double-click, shortcut, or from an arbitrary shell. Absolute paths
+/// pass through unchanged.
+fn resolve_relative_to_exe(path: PathBuf) -> PathBuf {
+    if path.is_absolute() {
+        return path;
+    }
+    match exe_dir() {
+        Some(dir) => dir.join(path),
+        None => path,
+    }
+}
+
+fn exe_dir() -> Option<PathBuf> {
+    std::env::current_exe()
+        .ok()?
+        .parent()
+        .map(Path::to_path_buf)
+}
+
 pub struct Engine {
     extensions_dir: Option<PathBuf>,
     logger: Logger,
@@ -61,6 +83,11 @@ impl Engine {
         }
     }
 
+    /// Where `.wasm` extensions are discovered (`build`'s own doc comment).
+    /// A relative path resolves against the running executable's own
+    /// directory, not the process's cwd (`resolve_relative_to_exe`) -- the
+    /// same convention `saves_dir` uses. No default: unset means no
+    /// extensions load.
     pub fn extensions_dir(mut self, path: impl Into<PathBuf>) -> Self {
         self.extensions_dir = Some(path.into());
         self
@@ -123,8 +150,10 @@ impl Engine {
 
     /// Where `persistence` (unconditional, see its own doc comment) keeps
     /// `<sender>.bin` save files. Defaults to `"saves"`, relative to the
-    /// process's cwd if not absolute — the same convention
-    /// `extensions_dir` already uses.
+    /// running executable's own directory if not absolute
+    /// (`resolve_relative_to_exe`) -- the same convention `extensions_dir`
+    /// uses, not the process's cwd (which a double-clicked or
+    /// shortcut-launched binary can't control).
     pub fn saves_dir(mut self, path: impl Into<PathBuf>) -> Self {
         self.saves_dir = path.into();
         self
@@ -239,7 +268,8 @@ impl Engine {
         // Unconditional (persistence's own doc comment explains why) —
         // registered here, not through `self.modules`, so there's no
         // `.persistence()`-style opt-in to forget.
-        let persistence = Persistence::new(self.saves_dir.clone(), self.persistence_read_only);
+        let saves_dir = resolve_relative_to_exe(self.saves_dir.clone());
+        let persistence = Persistence::new(saves_dir, self.persistence_read_only);
         register_module(
             &bus,
             &registry,
@@ -253,7 +283,8 @@ impl Engine {
         let mut loaded_names = std::collections::HashSet::new();
 
         if let Some(dir) = &self.extensions_dir {
-            for path in find_wasm_files(dir) {
+            let dir = resolve_relative_to_exe(dir.clone());
+            for path in find_wasm_files(&dir) {
                 let name = derive_extension_name(&path);
                 if !is_first_occurrence(&mut loaded_names, &name) {
                     self.logger.error(
