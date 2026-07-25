@@ -9,8 +9,8 @@
 use std::collections::HashMap;
 
 use bones_messages::game_core::{
-    BodyKind as WireBodyKind, Collision, EntityOp, EntityOpMessage, LoadTilemap, PhysicsWorlds,
-    Shape as WireShape,
+    BodyKind as WireBodyKind, Collision, EntityOp, EntityOpMessage, EntityTransform, LoadTilemap,
+    PhysicsWorlds, Shape as WireShape,
 };
 use bones_messages::gfx::{Clear, DrawRect, DrawSprite, DrawTriangle, LoadSprite};
 use bones_messages::tick::Tick;
@@ -415,15 +415,15 @@ impl GameCore {
     }
 
     /// Runs one simulation step, then publishes the resulting frame. While
-    /// `paused` (`EntityOp::SetPaused`), skips straight to `publish_gfx`:
-    /// neither physics world steps, nothing settles or keeps drifting under
-    /// residual velocity, and no `game-core/collision` can fire — every
-    /// entity holds exactly its last-unpaused state. `publish_gfx` still
-    /// runs regardless, so the frame stays visible (frozen) instead of
-    /// going stale or blank.
+    /// `paused` (`EntityOp::SetPaused`), neither physics world steps, nothing
+    /// settles or keeps drifting under residual velocity, and no
+    /// `game-core/collision` can fire. Frozen transform snapshots and gfx
+    /// still publish so observers and the visible frame retain the exact
+    /// last-unpaused state.
     fn tick(&mut self, dt: f32) {
         if self.paused {
             self.advance_camera(dt);
+            self.publish_entity_transforms();
             self.publish_gfx();
             return;
         }
@@ -481,8 +481,30 @@ impl GameCore {
         }
 
         self.advance_camera(dt);
+        self.publish_entity_transforms();
         self.publish_collisions();
         self.publish_gfx();
+    }
+
+    /// Publishes one deterministic snapshot for every entity created through
+    /// `EntityOp::Spawn`; tilemap-internal entities have no caller id.
+    fn publish_entity_transforms(&self) {
+        let mut snapshots = self
+            .entities
+            .iter()
+            .filter_map(|(&entity_id, &entity)| {
+                let transform = self.world.get::<&Transform>(entity).ok()?;
+                Some(EntityTransform {
+                    entity_id,
+                    x: transform.x,
+                    y: transform.y,
+                })
+            })
+            .collect::<Vec<_>>();
+        snapshots.sort_unstable_by_key(|snapshot| snapshot.entity_id);
+        for snapshot in snapshots {
+            self.publish(snapshot);
+        }
     }
 
     /// For every entity registered in more than one physics world

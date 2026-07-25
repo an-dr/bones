@@ -77,3 +77,4 @@ Immutable ADRs in [adr/](adr/):
 - [ADR-023](adr/ADR-023-evolve-game-core-entity-operations-additively.md) — evolve game-core entity operations additively
 - [ADR-024](adr/ADR-024-runtime-managed-extension-activation.md) — runtime-managed extension activation
 - [ADR-025](adr/ADR-025-game-ui-is-a-theme-free-guest-toolkit.md) — game UI is a theme-free guest toolkit
+- [ADR-026](adr/ADR-026-game-core-publishes-authoritative-entity-transform-snapshots.md) — game-core publishes authoritative entity transform snapshots

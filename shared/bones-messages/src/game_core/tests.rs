@@ -385,3 +385,13 @@ fn collision_round_trips() {
     };
     assert_eq!(Collision::decode(&collision.encode()), Ok(collision));
 }
+
+#[test]
+fn entity_transform_round_trips() {
+    let transform = EntityTransform {
+        entity_id: 42,
+        x: -13.5,
+        y: 27.25,
+    };
+    assert_eq!(EntityTransform::decode(&transform.encode()), Ok(transform));
+}

@@ -2,8 +2,8 @@ use std::sync::{Arc, Mutex};
 
 use super::*;
 use bones_messages::game_core::{
-    BodyKind, Collision, EntityOp, EntityOpMessage, LoadTilemap, PhysicsWorlds, Shape as WireShape,
-    Sprite, SpritePresentation,
+    BodyKind, Collision, EntityOp, EntityOpMessage, EntityTransform, LoadTilemap, PhysicsWorlds,
+    Shape as WireShape, Sprite, SpritePresentation,
 };
 use bones_messages::gfx;
 use bones_messages::EncodeMessage;
@@ -723,6 +723,89 @@ fn tick_publishes_a_clear_a_camera_and_one_draw_sprite_per_sprite_entity() {
     // Spawned at (3, 4); the sprite fixture is 16x16, so its top-left
     // corner (Transform is the entity's center) is offset by half that.
     assert_eq!((sprites[0].dst_x, sprites[0].dst_y), (-5, -4));
+}
+
+#[test]
+fn tick_publishes_authoritative_transforms_in_entity_id_order_before_gfx() {
+    let (mut game_core, bus, spy) = ready_game_core();
+    game_core.handle(&entity_op_envelope(spawn_with_id(7, 30.0, 40.0)));
+    game_core.handle(&entity_op_envelope(spawn_with_id(3, 10.0, 20.0)));
+    game_core.handle(&entity_op_envelope(EntityOp::SetVelocity {
+        entity_id: 3,
+        vx: 60.0,
+        vy: 0.0,
+    }));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 / 60.0 }.encode()));
+    bus.dispatch();
+
+    let published = spy.0.lock().unwrap();
+    let snapshots = published
+        .iter()
+        .filter(|event| event.topic == EntityTransform::TOPIC)
+        .map(|event| EntityTransform::decode(&event.payload).unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        snapshots
+            .iter()
+            .map(|snapshot| snapshot.entity_id)
+            .collect::<Vec<_>>(),
+        vec![3, 7]
+    );
+    let entity = game_core.entities[&3];
+    let transform = *game_core.world.get::<&Transform>(entity).unwrap();
+    assert_eq!((snapshots[0].x, snapshots[0].y), (transform.x, transform.y));
+    let snapshot_index = published
+        .iter()
+        .position(|event| event.topic == EntityTransform::TOPIC)
+        .unwrap();
+    let clear_index = published
+        .iter()
+        .position(|event| event.topic == gfx::Clear::TOPIC)
+        .unwrap();
+    assert!(snapshot_index < clear_index);
+}
+
+#[test]
+fn paused_ticks_repeat_the_last_authoritative_transform() {
+    let (mut game_core, bus, spy) = ready_game_core();
+    game_core.handle(&entity_op_envelope(spawn_with_id(4, 12.0, 18.0)));
+    game_core.handle(&entity_op_envelope(EntityOp::SetPaused { paused: true }));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 }.encode()));
+    bus.dispatch();
+
+    let published = spy.0.lock().unwrap();
+    let snapshot = published
+        .iter()
+        .find(|event| event.topic == EntityTransform::TOPIC)
+        .map(|event| EntityTransform::decode(&event.payload).unwrap())
+        .unwrap();
+    assert_eq!(
+        snapshot,
+        EntityTransform {
+            entity_id: 4,
+            x: 12.0,
+            y: 18.0
+        }
+    );
+}
+
+#[test]
+fn despawned_entities_stop_publishing_transform_snapshots() {
+    let (mut game_core, bus, spy) = ready_game_core();
+    game_core.handle(&entity_op_envelope(spawn_with_id(4, 12.0, 18.0)));
+    game_core.handle(&entity_op_envelope(EntityOp::Despawn { entity_id: 4 }));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 }.encode()));
+    bus.dispatch();
+
+    assert!(spy
+        .0
+        .lock()
+        .unwrap()
+        .iter()
+        .all(|event| event.topic != EntityTransform::TOPIC));
 }
 
 #[test]
