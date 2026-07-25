@@ -19,4 +19,6 @@ through a generic module trait (see docs/structure.md).
 Raw SDL input is translated into egui input via `Ui::feed_event`, which
 returns whether this layer claims the event (ADR-008: top layer
 consumes) — the platform layer uses this to decide whether the event
-still reaches `input/*`.
+still reaches `input/*`. Escape is always passed through after egui sees
+it so an application-level pause menu remains reachable regardless of
+widget focus.
