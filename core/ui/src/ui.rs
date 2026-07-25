@@ -120,7 +120,7 @@ impl Ui {
                     repeat: *repeat,
                     modifiers: self.modifiers,
                 });
-                mapped != egui::Key::Escape && self.wants_keyboard_input()
+                self.wants_keyboard_input()
             }
             _ => false,
         }
@@ -246,9 +246,6 @@ impl Ui {
         }
     }
 }
-
-#[cfg(test)]
-mod tests;
 
 impl Handler for Ui {
     fn handle(&mut self, envelope: &Envelope) {
