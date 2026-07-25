@@ -122,6 +122,9 @@ case.
     every entity holds exactly its last-unpaused state. `gfx/*` still
     publishes every tick regardless, so the frame stays visible (frozen)
     rather than going stale or blank.
+  - `Reset` — clears all entities, physics bodies, loaded tilemap state,
+    camera settings, debug state, and pause state while keeping game-core
+    initialized and ready for the next level session.
 - Every `core/tick`: both physics worlds step once each, in full,
   independently. A collider-bearing entity's `Transform` is then
   overwritten from its primary world's post-step position (retro before

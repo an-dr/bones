@@ -184,7 +184,15 @@ impl GameCore {
             EntityOp::SetCameraSmoothing { responsiveness } => {
                 self.camera.set_responsiveness(responsiveness)
             }
+            EntityOp::Reset => self.reset_session(),
         }
+    }
+
+    /// Restores session state without disconnecting the module from its bus.
+    fn reset_session(&mut self) {
+        let bus = self.bus.take();
+        *self = Self::new();
+        self.bus = bus;
     }
 
     /// A no-op if `entity_id` names no entity, or one with no

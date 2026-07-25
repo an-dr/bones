@@ -83,6 +83,44 @@ fn presentation() -> SpritePresentation {
     }
 }
 
+#[test]
+fn reset_clears_session_state_and_keeps_the_module_connected() {
+    let (mut game_core, bus, spy) = ready_game_core();
+    game_core.handle(&entity_op_envelope(spawn_at(30.0, 40.0)));
+    game_core.handle(&entity_op_envelope(EntityOp::SetDebugHitboxes {
+        enabled: true,
+    }));
+    game_core.handle(&entity_op_envelope(EntityOp::SetCameraFollow {
+        entity_id: 0,
+        viewport_w: 800.0,
+        viewport_h: 600.0,
+        zoom: 2.0,
+    }));
+    game_core.handle(&entity_op_envelope(EntityOp::SetPaused { paused: true }));
+
+    game_core.handle(&entity_op_envelope(EntityOp::Reset));
+
+    assert!(game_core.entities.is_empty());
+    assert!(game_core.entity_ids_by_collider.is_empty());
+    assert_eq!(game_core.world.len(), 0);
+    assert!(!game_core.debug_hitboxes);
+    assert!(!game_core.paused);
+    assert!(game_core.tile_draws.is_empty());
+    assert_eq!(game_core.level_size_px, None);
+    assert_eq!(game_core.camera.get_followed_entity_id(), None);
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 0.016 }.encode()));
+    bus.dispatch();
+    assert!(
+        spy.0
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|message| message.topic == gfx::Clear::TOPIC),
+        "reset must preserve the bus connection so an empty frame is published"
+    );
+}
+
 fn spawn_at(x: f32, y: f32) -> EntityOp {
     spawn_with_id(0, x, y)
 }

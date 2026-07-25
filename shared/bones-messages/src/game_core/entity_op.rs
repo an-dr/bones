@@ -164,6 +164,10 @@ pub enum EntityOp {
     /// established immediate-follow behavior; positive values ease toward the
     /// target on each tick before applying the level-edge clamp.
     SetCameraSmoothing { responsiveness: f32 },
+    /// Clears every entity, physics body, loaded tilemap, camera setting,
+    /// debug toggle, and paused state. The module remains initialized and
+    /// subscribed, ready for a new level session.
+    Reset,
 }
 
 const TAG_SPAWN: u8 = 0;
@@ -175,6 +179,7 @@ const TAG_SET_PAUSED: u8 = 5;
 const TAG_SET_CAMERA_FOLLOW: u8 = 6;
 const TAG_SET_SPRITE: u8 = 7;
 const TAG_SET_CAMERA_SMOOTHING: u8 = 8;
+const TAG_RESET: u8 = 9;
 
 impl EntityOp {
     pub(super) fn encode_into(&self, writer: Writer) -> Writer {
@@ -275,6 +280,7 @@ impl EntityOp {
             EntityOp::SetCameraSmoothing { responsiveness } => {
                 writer.u8(TAG_SET_CAMERA_SMOOTHING).f32(*responsiveness)
             }
+            EntityOp::Reset => writer.u8(TAG_RESET),
         }
     }
 
@@ -386,6 +392,7 @@ impl EntityOp {
             TAG_SET_CAMERA_SMOOTHING => Ok(EntityOp::SetCameraSmoothing {
                 responsiveness: reader.read_f32()?,
             }),
+            TAG_RESET => Ok(EntityOp::Reset),
             _ => Err(DecodeError::InvalidTag {
                 message: "game-core entity op",
                 tag,

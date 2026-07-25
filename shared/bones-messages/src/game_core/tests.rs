@@ -219,6 +219,15 @@ fn set_paused_disabled_round_trips() {
 }
 
 #[test]
+fn reset_round_trips() {
+    let message = EntityOpMessage(EntityOp::Reset);
+    assert_eq!(
+        EntityOpMessage::decode(&message.encode()),
+        Ok(EntityOpMessage(EntityOp::Reset))
+    );
+}
+
+#[test]
 fn set_camera_follow_round_trips() {
     let op = EntityOp::SetCameraFollow {
         entity_id: 1,
