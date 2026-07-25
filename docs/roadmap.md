@@ -13,7 +13,7 @@ registry are all done.
 
 | # | Increment | Demo that proves it |
 | - | --------- | ------------------- |
-| 1 | Full shutdown sequence: WIT `shutdown` export, close-request published as an event extensions can react to, `Stopped` lifecycle event (design/platform.md) | Closing the window runs every extension's `shutdown()` before the process exits |
+| 1 | Full application shutdown sequence: publish close-request as an event, then call each running extension's existing `shutdown()` hook and emit `Stopped` (design/platform.md) | Closing the window performs the same orderly cleanup as a runtime unload before the process exits |
 | 2 | ADR-007's queue budget: bounded inbound queue, per-frame publish allowance, drop counters (only the time budget is enforced today) | A flooding extension is faulted instead of starving its peers |
 | 3 | web module (wry) + `web/*` vocabulary | The "dashboard" example ([examples/web-app.md](examples/web-app.md)) runs |
 

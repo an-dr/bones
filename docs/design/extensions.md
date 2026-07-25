@@ -11,8 +11,8 @@ per engine instance; the host rejects a duplicate at load.
 
 The contract, at concept level:
 
-- **Extension exports:** `init()`, `on-message(msg)`, `on-tick(dt)`.
-  TODO: no `shutdown()` export yet — see roadmap.md.
+- **Extension exports:** `init()`, `shutdown()`, `on-message(msg)`,
+  `on-tick(dt)`.
 - **Host imports:** `subscribe(topic)`, `publish(topic, payload)`,
   `send(endpoint, payload) → reply`, `log(level, text)`.
 
@@ -25,6 +25,7 @@ Extensions never own a thread or loop. The host calls their exports:
 
 - `on-message` for every delivered bus message and direct request.
 - `on-tick(dt)` each frame — only for extensions subscribed to `core/tick`.
+- `shutdown()` once before an orderly runtime unload or reload.
 - Handler calls for one extension never overlap: `on-message` and `on-tick`
   are serialized per extension, so extension authors need no internal locking.
 
@@ -76,8 +77,9 @@ an automatic retry loop.
 
 ## Hot reload
 
-Reload = drop the old instance, instantiate the new binary, run `init`,
-re-register subscriptions. Two consequences extension authors must know:
+Reload = call `shutdown`, drop the old instance, instantiate the new binary,
+run `init`, and re-register subscriptions. Two consequences extension authors
+must know:
 
 - **In-memory state does not survive reload.** Persistence is the extension's
   own concern (e.g. writing state out on `shutdown` or on demand). A state
