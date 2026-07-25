@@ -72,9 +72,10 @@ case.
     bounding box. A nonzero `collider_half_w`/`collider_half_h` also gives
     it a collider (`0.0` spawns a purely visual entity, no physics body)
     of the given `body_kind`: `Dynamic` (pushed by other bodies, carries
-    momentum, the default), `Kinematic` (moves exactly as `SetVelocity` commands it and
-    pushes `Dynamic` bodies out of its way, but is never itself pushed —
-    the standard "platform/mover" body type), or `Frictionless` (a
+    momentum, the default), `Kinematic` (moves exactly as `SetVelocity`
+    commands it and pushes `Dynamic` bodies out of its way, but is never
+    itself pushed — the standard "platform/mover" body type), `Fixed`
+    (never moves, for walls and level obstacles), or `Frictionless` (a
     `Dynamic` body that carries no momentum — it settles to rest almost
     immediately once nothing is pushing it, rather than coasting or
     drifting). `worlds` (`PhysicsWorlds`, ADR-021) picks which physics

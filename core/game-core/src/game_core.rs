@@ -269,6 +269,7 @@ impl GameCore {
                 WireBodyKind::Dynamic => physics::BodyKind::Dynamic,
                 WireBodyKind::Kinematic => physics::BodyKind::Kinematic,
                 WireBodyKind::Frictionless => physics::BodyKind::Frictionless,
+                WireBodyKind::Fixed => physics::BodyKind::Fixed,
             };
             let physics_shape = match shape {
                 WireShape::Rect => Shape::Rect,
@@ -556,8 +557,11 @@ impl GameCore {
                         clamped_velocity -= normal * inward;
                     }
                 }
-                (clamped_velocity != velocity)
-                    .then_some((world_body.world, world_body.body, clamped_velocity))
+                (clamped_velocity != velocity).then_some((
+                    world_body.world,
+                    world_body.body,
+                    clamped_velocity,
+                ))
             })
             .collect();
         for (world, body, velocity) in clamped {

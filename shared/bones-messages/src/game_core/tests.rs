@@ -219,6 +219,27 @@ fn set_paused_disabled_round_trips() {
 }
 
 #[test]
+fn spawn_with_fixed_body_kind_round_trips() {
+    let op = EntityOp::Spawn {
+        entity_id: 7,
+        x: 10.0,
+        y: 20.0,
+        sprite: None,
+        square_color: (90, 90, 90, 255),
+        shape: Shape::Rect,
+        collider_half_w: 12.0,
+        collider_half_h: 14.0,
+        body_kind: BodyKind::Fixed,
+        worlds: PhysicsWorlds::RETRO,
+    };
+    let message = EntityOpMessage(op);
+    assert_eq!(
+        EntityOpMessage::decode(&message.encode()),
+        Ok(EntityOpMessage(op))
+    );
+}
+
+#[test]
 fn reset_round_trips() {
     let message = EntityOpMessage(EntityOp::Reset);
     assert_eq!(

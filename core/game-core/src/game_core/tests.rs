@@ -496,6 +496,36 @@ fn tick_steps_physics_and_syncs_transforms_for_colliding_entities() {
 }
 
 #[test]
+fn a_fixed_wire_body_ignores_velocity_and_stays_in_place() {
+    let mut game_core = GameCore::new();
+    game_core.handle(&entity_op_envelope(EntityOp::Spawn {
+        entity_id: 1,
+        x: 20.0,
+        y: 30.0,
+        sprite: None,
+        square_color: (90, 90, 90, 255),
+        shape: WireShape::Rect,
+        collider_half_w: 10.0,
+        collider_half_h: 10.0,
+        body_kind: BodyKind::Fixed,
+        worlds: PhysicsWorlds::RETRO,
+    }));
+    game_core.handle(&entity_op_envelope(EntityOp::SetVelocity {
+        entity_id: 1,
+        vx: 100.0,
+        vy: 100.0,
+    }));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 }.encode()));
+
+    let entity = game_core.entities[&1];
+    assert_eq!(
+        *game_core.world.get::<&Transform>(entity).unwrap(),
+        Transform { x: 20.0, y: 30.0 }
+    );
+}
+
+#[test]
 fn an_entity_with_no_collider_never_animates() {
     // No collider means nothing to check velocity on, so it never counts
     // as "moving" — a purely visual entity's animation stays frozen.
