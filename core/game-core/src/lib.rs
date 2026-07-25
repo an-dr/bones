@@ -1,3 +1,4 @@
+mod camera;
 mod game_core;
 mod graphics;
 mod physics;

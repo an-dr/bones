@@ -95,6 +95,20 @@ case.
     back) without `game-core` itself needing to know about flash timing.
     A no-op for an unknown `entity_id`, or one with no `SquareColor` (a
     sprite entity has none).
+  - `SetSprite` — replaces only an entity's presentation, preserving its
+    transform, collider, velocity, body kind, and physics-world membership.
+    `SpritePresentation` supports row-wrapped sprite sheets, destination
+    scaling independent of source-frame size, horizontal/vertical mirroring,
+    looping or one-shot playback, and opt-in animation while stopped. An
+    unknown `entity_id` is a no-op; applying it to a colored square replaces
+    that square visual without replacing the entity.
+  - `SetCameraFollow` — follows one entity at a caller-supplied logical
+    viewport and zoom, clamped to the loaded tilemap's pixel bounds. Without
+    a loaded tilemap the follow is centered but unclamped.
+  - `SetCameraSmoothing` — sets optional follow responsiveness in inverse
+    seconds. Zero (the default) and negative values follow immediately;
+    positive values ease using tick time, capped so a long frame cannot
+    overshoot, then apply the same level clamp.
   - `SetDebugHitboxes { enabled }` — not addressed by `entity_id`: a
     global toggle (default off) for a yellow unfilled outline drawn over
     every collider-bearing entity's actual physics extent — sprite
@@ -116,8 +130,9 @@ case.
   registered in more than one world, every other world's copy is snapped
   to that same position/velocity before the next tick. A sprite entity's
   animation only advances while its primary world's velocity is above a
-  small threshold — an entity with no collider, or one at rest, freezes on
-  its current frame instead of animating in place. Ground tiles (see
+  small threshold by default — an entity with no collider, or one at rest,
+  freezes on its current frame. A `SetSprite` presentation can opt into
+  advancing while stopped for idle and action animations. Ground tiles (see
   `game-core/load-tilemap` below) publish first, on layer `0`; then
   `gfx::Clear` + `gfx::SetCamera` + one `gfx::DrawSprite`/`gfx::DrawRect`
   per entity, all on layer `1`. The `Clear` matters: without it, the

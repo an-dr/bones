@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use super::*;
 use bones_messages::game_core::{
     BodyKind, Collision, EntityOp, EntityOpMessage, LoadTilemap, PhysicsWorlds, Shape as WireShape,
-    Sprite,
+    Sprite, SpritePresentation,
 };
 use bones_messages::gfx;
 use bones_messages::EncodeMessage;
@@ -61,6 +61,25 @@ fn sprite() -> Sprite {
         frame_h: 16,
         frame_count: 4,
         frame_duration: 0.1,
+    }
+}
+
+fn presentation() -> SpritePresentation {
+    SpritePresentation {
+        sprite: Sprite {
+            sprite_id: 9,
+            frame_w: 64,
+            frame_h: 64,
+            frame_count: 5,
+            frame_duration: 0.1,
+        },
+        frames_per_row: 4,
+        draw_w: 128,
+        draw_h: 96,
+        looping: false,
+        advance_while_stopped: true,
+        flip_h: true,
+        flip_v: false,
     }
 }
 
@@ -327,6 +346,70 @@ fn spawning_with_an_id_already_in_use_replaces_the_entity() {
 }
 
 #[test]
+fn set_sprite_preserves_transform_and_collider() {
+    let mut game_core = GameCore::new();
+    game_core.handle(&entity_op_envelope(spawn_with_collider_and_id(
+        1, 100.0, 120.0, 5.0, 6.0,
+    )));
+
+    game_core.handle(&entity_op_envelope(EntityOp::SetSprite {
+        entity_id: 1,
+        presentation: presentation(),
+    }));
+
+    assert_eq!(game_core.world.len(), 1);
+    assert_eq!(game_core.rapier2d.body_count(), 1);
+    let (_, (transform, animation, _collider)) = game_core
+        .world
+        .query_mut::<(&Transform, &SpriteAnimation, &Collider)>()
+        .into_iter()
+        .next()
+        .expect("the same entity should retain simulation components");
+    assert_eq!(*transform, Transform { x: 100.0, y: 120.0 });
+    assert_eq!(animation.sprite_id, 9);
+}
+
+#[test]
+fn set_sprite_for_an_unknown_entity_is_a_no_op() {
+    let mut game_core = GameCore::new();
+    game_core.handle(&entity_op_envelope(EntityOp::SetSprite {
+        entity_id: 99,
+        presentation: presentation(),
+    }));
+    assert_eq!(game_core.world.len(), 0);
+}
+
+#[test]
+fn set_sprite_replaces_a_square_visual_without_replacing_its_collider() {
+    let mut game_core = GameCore::new();
+    game_core.handle(&entity_op_envelope(spawn_square_with_collider(
+        1, 20.0, 30.0, 5.0, 6.0,
+    )));
+    game_core.handle(&entity_op_envelope(EntityOp::SetSprite {
+        entity_id: 1,
+        presentation: presentation(),
+    }));
+
+    assert_eq!(game_core.rapier2d.body_count(), 1);
+    assert_eq!(
+        game_core
+            .world
+            .query_mut::<&SquareColor>()
+            .into_iter()
+            .count(),
+        0
+    );
+    assert_eq!(
+        game_core
+            .world
+            .query_mut::<(&SpriteAnimation, &Collider)>()
+            .into_iter()
+            .count(),
+        1
+    );
+}
+
+#[test]
 fn despawn_removes_the_entity_and_its_collider() {
     let mut game_core = GameCore::new();
     game_core.handle(&entity_op_envelope(spawn_with_collider_and_id(
@@ -410,6 +493,27 @@ fn a_stationary_collider_bearing_entity_does_not_animate() {
     assert_eq!(animation.current_frame(), 0);
 }
 
+#[test]
+fn a_presentation_can_animate_while_stationary() {
+    let mut game_core = GameCore::new();
+    game_core.handle(&entity_op_envelope(spawn_with_collider_and_id(
+        1, 0.0, 0.0, 1.0, 1.0,
+    )));
+    game_core.handle(&entity_op_envelope(EntityOp::SetSprite {
+        entity_id: 1,
+        presentation: presentation(),
+    }));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 0.15 }.encode()));
+
+    let (_, animation) = game_core
+        .world
+        .query_mut::<&SpriteAnimation>()
+        .into_iter()
+        .next()
+        .unwrap();
+    assert_eq!(animation.current_frame(), 1);
+}
 #[test]
 fn a_moving_collider_bearing_entity_animates() {
     let mut game_core = GameCore::new();
@@ -553,6 +657,32 @@ fn tick_publishes_a_clear_a_camera_and_one_draw_sprite_per_sprite_entity() {
     assert_eq!((sprites[0].dst_x, sprites[0].dst_y), (-5, -4));
 }
 
+#[test]
+fn set_sprite_changes_the_published_grid_frame_size_and_mirroring() {
+    let (mut game_core, bus, spy) = ready_game_core();
+    game_core.handle(&entity_op_envelope(spawn_with_id(1, 100.0, 100.0)));
+    game_core.handle(&entity_op_envelope(EntityOp::SetSprite {
+        entity_id: 1,
+        presentation: presentation(),
+    }));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 0.41 }.encode()));
+    bus.dispatch();
+
+    let published = spy.0.lock().unwrap();
+    let draw = published
+        .iter()
+        .rfind(|event| event.topic == gfx::DrawSprite::TOPIC)
+        .map(|event| gfx::DrawSprite::decode(&event.payload).unwrap())
+        .unwrap();
+    assert_eq!(draw.id, 9);
+    assert_eq!((draw.dst_x, draw.dst_y), (36, 52));
+    assert_eq!((draw.dst_w, draw.dst_h), (128, 96));
+    assert_eq!((draw.src_x, draw.src_y), (0, 64));
+    assert!(draw.flip_h);
+    assert!(!draw.flip_v);
+}
+
 fn published_camera(spy: &Spy) -> (f32, f32, f32) {
     let published = spy.0.lock().unwrap();
     let camera = published
@@ -599,6 +729,117 @@ fn camera_centers_on_the_followed_entity_away_from_any_edge() {
 
     // Centered: 32 - 16/2 = 24, well inside [0, 64-16] = [0, 48].
     assert_eq!(published_camera(&spy), (24.0, 24.0, 1.0));
+}
+
+#[test]
+fn camera_smoothing_eases_toward_the_followed_entity() {
+    let (mut game_core, bus, spy) = ready_game_core();
+    game_core.handle(&entity_op_envelope(spawn_with_id(1, 100.0, 50.0)));
+    game_core.handle(&entity_op_envelope(EntityOp::SetCameraFollow {
+        entity_id: 1,
+        viewport_w: 16.0,
+        viewport_h: 16.0,
+        zoom: 1.0,
+    }));
+    game_core.handle(&entity_op_envelope(EntityOp::SetCameraSmoothing {
+        responsiveness: 5.0,
+    }));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 0.1 }.encode()));
+    bus.dispatch();
+
+    // Raw centered target is (92, 42); responsiveness * dt = 0.5.
+    assert_eq!(published_camera(&spy), (46.0, 21.0, 1.0));
+}
+
+#[test]
+fn camera_smoothing_never_overshoots_on_a_long_tick() {
+    let (mut game_core, bus, spy) = ready_game_core();
+    game_core.handle(&entity_op_envelope(spawn_with_id(1, 100.0, 50.0)));
+    game_core.handle(&entity_op_envelope(EntityOp::SetCameraFollow {
+        entity_id: 1,
+        viewport_w: 16.0,
+        viewport_h: 16.0,
+        zoom: 1.0,
+    }));
+    game_core.handle(&entity_op_envelope(EntityOp::SetCameraSmoothing {
+        responsiveness: 5.0,
+    }));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 1.0 }.encode()));
+    bus.dispatch();
+
+    assert_eq!(published_camera(&spy), (92.0, 42.0, 1.0));
+}
+
+#[test]
+fn a_smoothed_camera_still_clamps_to_the_level_edge() {
+    let (mut game_core, bus, spy) = ready_game_core();
+    game_core.handle(&envelope(
+        LoadTilemap::TOPIC,
+        LoadTilemap {
+            tmx_bytes: FIXTURE_TMX,
+            tileset_images: Vec::new(),
+        }
+        .encode(),
+    ));
+    game_core.handle(&entity_op_envelope(spawn_with_id(1, 62.0, 62.0)));
+    game_core.handle(&entity_op_envelope(EntityOp::SetCameraFollow {
+        entity_id: 1,
+        viewport_w: 16.0,
+        viewport_h: 16.0,
+        zoom: 1.0,
+    }));
+    game_core.handle(&entity_op_envelope(EntityOp::SetCameraSmoothing {
+        responsiveness: 1.0,
+    }));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 0.9 }.encode()));
+    bus.dispatch();
+
+    // Easing reaches 54 * 0.9 = 48.6, then clamps to 64 - 16 = 48.
+    assert_eq!(published_camera(&spy), (48.0, 48.0, 1.0));
+}
+
+#[test]
+fn negative_camera_smoothing_preserves_immediate_follow() {
+    let (mut game_core, bus, spy) = ready_game_core();
+    game_core.handle(&entity_op_envelope(spawn_with_id(1, 100.0, 50.0)));
+    game_core.handle(&entity_op_envelope(EntityOp::SetCameraFollow {
+        entity_id: 1,
+        viewport_w: 16.0,
+        viewport_h: 16.0,
+        zoom: 1.0,
+    }));
+    game_core.handle(&entity_op_envelope(EntityOp::SetCameraSmoothing {
+        responsiveness: -2.0,
+    }));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 0.1 }.encode()));
+    bus.dispatch();
+
+    assert_eq!(published_camera(&spy), (92.0, 42.0, 1.0));
+}
+
+#[test]
+fn camera_smoothing_advances_while_simulation_is_paused() {
+    let (mut game_core, bus, spy) = ready_game_core();
+    game_core.handle(&entity_op_envelope(spawn_with_id(1, 100.0, 50.0)));
+    game_core.handle(&entity_op_envelope(EntityOp::SetCameraFollow {
+        entity_id: 1,
+        viewport_w: 16.0,
+        viewport_h: 16.0,
+        zoom: 1.0,
+    }));
+    game_core.handle(&entity_op_envelope(EntityOp::SetCameraSmoothing {
+        responsiveness: 5.0,
+    }));
+    game_core.handle(&entity_op_envelope(EntityOp::SetPaused { paused: true }));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 0.1 }.encode()));
+    bus.dispatch();
+
+    assert_eq!(published_camera(&spy), (46.0, 21.0, 1.0));
 }
 
 #[test]

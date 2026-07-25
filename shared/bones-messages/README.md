@@ -17,6 +17,11 @@ guests in other languages to reproduce without Rust or serde.
 - `gfx` — `Clear`, `LoadSprite`, `DrawSprite`, `DrawRect`, `DrawLine`,
   `DrawCircle`, `DrawTriangle`, and `DrawText`, plus the wildcard-friendly
   `Command` dispatcher used by the renderer.
+- `game_core` — `EntityOp` simulation/presentation operations, tilemap loads,
+  and collision events. Existing operation tags and payloads remain stable;
+  richer behavior is added with new tags (ADR-023). Its non-wire
+  `ObjectFacing` helper classifies 2D velocity into either four cardinal or
+  eight octagonal directions for host and guest gameplay code.
 
 This is a standalone workspace, like each `extensions/*` crate, so both the
 main workspace and separately built extensions can depend on it.

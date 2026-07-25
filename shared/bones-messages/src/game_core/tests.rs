@@ -234,6 +234,72 @@ fn set_camera_follow_round_trips() {
 }
 
 #[test]
+fn the_original_sprite_spawn_wire_format_stays_stable() {
+    let encoded = EntityOpMessage(spawn_with_sprite()).encode();
+    assert_eq!(
+        encoded,
+        vec![
+            0, // Spawn tag.
+            1, 0, 0, 0, // entity_id
+            0, 0, 40, 65, // x = 10.5
+            0, 0, 128, 192, // y = -4.0
+            1,   // sprite present
+            3, 0, 0, 0, // sprite_id
+            16, 0, 0, 0, // frame_w
+            16, 0, 0, 0, // frame_h
+            4, 0, 0, 0, // frame_count
+            205, 204, 204, 61, // frame_duration = 0.1
+            0, 0, 0, 0, // square_color
+            0, // rectangular shape
+            0, 0, 0, 65, // collider_half_w = 8.0
+            0, 0, 0, 65, // collider_half_h = 8.0
+            0,  // dynamic body
+            1,  // rapier2d world
+        ]
+    );
+}
+
+#[test]
+fn set_sprite_round_trips() {
+    let op = EntityOp::SetSprite {
+        entity_id: 4,
+        presentation: SpritePresentation {
+            sprite: Sprite {
+                sprite_id: 9,
+                frame_w: 64,
+                frame_h: 64,
+                frame_count: 5,
+                frame_duration: 0.125,
+            },
+            frames_per_row: 4,
+            draw_w: 128,
+            draw_h: 128,
+            looping: false,
+            advance_while_stopped: true,
+            flip_h: true,
+            flip_v: false,
+        },
+    };
+    let message = EntityOpMessage(op);
+    assert_eq!(
+        EntityOpMessage::decode(&message.encode()),
+        Ok(EntityOpMessage(op))
+    );
+}
+
+#[test]
+fn set_camera_smoothing_round_trips() {
+    let op = EntityOp::SetCameraSmoothing {
+        responsiveness: 5.0,
+    };
+    let message = EntityOpMessage(op);
+    assert_eq!(
+        EntityOpMessage::decode(&message.encode()),
+        Ok(EntityOpMessage(op))
+    );
+}
+
+#[test]
 fn an_invalid_tag_is_rejected() {
     assert_eq!(
         EntityOpMessage::decode(&[255]),

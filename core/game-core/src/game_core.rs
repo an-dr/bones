@@ -12,12 +12,13 @@ use bones_messages::game_core::{
     BodyKind as WireBodyKind, Collision, EntityOp, EntityOpMessage, LoadTilemap, PhysicsWorlds,
     Shape as WireShape,
 };
-use bones_messages::gfx::{Clear, DrawRect, DrawSprite, DrawTriangle, LoadSprite, SetCamera};
+use bones_messages::gfx::{Clear, DrawRect, DrawSprite, DrawTriangle, LoadSprite};
 use bones_messages::tick::Tick;
 use bones_messages::{DecodeMessage, EncodeMessage, Message};
 use bus::{Bus, Envelope, Handler, Module, ModuleContext};
 use glam::Vec2;
 
+use crate::camera::Camera;
 use crate::graphics::{SpriteAnimation, SquareColor, Transform};
 use crate::physics::{
     self, BodyHandle, Collider, ColliderHandle, PhysicsBackend, PhysicsWorldKind, Rapier2dBackend,
@@ -92,18 +93,7 @@ pub struct GameCore {
     // couldn't be parsed, in which case a camera-follow centers on its
     // target unclamped rather than pinning to `(0, 0)`.
     level_size_px: Option<(f32, f32)>,
-    // `EntityOp::SetCameraFollow` state — `None` is the original fixed
-    // `(0, 0)` camera every caller got before this existed.
-    camera_follow: Option<CameraFollow>,
-}
-
-// Purely `GameCore`'s own internal camera-follow state, never constructed
-// or matched outside this file — no independent identity of its own.
-struct CameraFollow {
-    entity_id: u32,
-    viewport_w: f32,
-    viewport_h: f32,
-    zoom: f32,
+    camera: Camera,
 }
 
 impl GameCore {
@@ -118,7 +108,7 @@ impl GameCore {
             debug_hitboxes: false,
             tile_draws: Vec::new(),
             level_size_px: None,
-            camera_follow: None,
+            camera: Camera::new(),
             paused: false,
         }
     }
@@ -184,13 +174,15 @@ impl GameCore {
                 viewport_w,
                 viewport_h,
                 zoom,
-            } => {
-                self.camera_follow = Some(CameraFollow {
-                    entity_id,
-                    viewport_w,
-                    viewport_h,
-                    zoom,
-                })
+            } => self
+                .camera
+                .set_follow(entity_id, viewport_w, viewport_h, zoom),
+            EntityOp::SetSprite {
+                entity_id,
+                presentation,
+            } => self.set_sprite(entity_id, presentation),
+            EntityOp::SetCameraSmoothing { responsiveness } => {
+                self.camera.set_responsiveness(responsiveness)
             }
         }
     }
@@ -203,6 +195,24 @@ impl GameCore {
         };
         if let Ok(mut square_color) = self.world.get::<&mut SquareColor>(entity) {
             square_color.0 = color;
+        }
+    }
+
+    fn set_sprite(
+        &mut self,
+        entity_id: u32,
+        presentation: bones_messages::game_core::SpritePresentation,
+    ) {
+        let Some(&entity) = self.entities.get(&entity_id) else {
+            return;
+        };
+        let animation = SpriteAnimation::from_presentation(presentation);
+        if let Ok(mut current) = self.world.get::<&mut SpriteAnimation>(entity) {
+            *current = animation;
+            return;
+        }
+        if self.world.insert_one(entity, animation).is_ok() {
+            let _ = self.world.remove_one::<SquareColor>(entity);
         }
     }
 
@@ -404,6 +414,7 @@ impl GameCore {
     /// going stale or blank.
     fn tick(&mut self, dt: f32) {
         if self.paused {
+            self.advance_camera(dt);
             self.publish_gfx();
             return;
         }
@@ -438,7 +449,7 @@ impl GameCore {
             })
             .collect();
         for (entity, animation) in self.world.query_mut::<&mut SpriteAnimation>() {
-            if moving.get(&entity).copied().unwrap_or(false) {
+            if animation.advance_while_stopped || moving.get(&entity).copied().unwrap_or(false) {
                 animation.advance(dt);
             }
         }
@@ -460,6 +471,7 @@ impl GameCore {
             }
         }
 
+        self.advance_camera(dt);
         self.publish_collisions();
         self.publish_gfx();
     }
@@ -607,12 +619,7 @@ impl GameCore {
             b: 20,
             a: 255,
         });
-        let (camera_x, camera_y, zoom) = self.camera_position();
-        self.publish(SetCamera {
-            x: camera_x,
-            y: camera_y,
-            zoom,
-        });
+        self.publish(self.camera.build_gfx_command());
         // Ground tiles first, on BACKGROUND_LAYER — resolved once by
         // `load_tilemap`, replayed unchanged every tick (see
         // `tile_draws`'s own field doc comment).
@@ -644,18 +651,18 @@ impl GameCore {
             // wrong even though the physics underneath is already correct.
             self.publish(DrawSprite {
                 id: animation.sprite_id,
-                dst_x: (transform.x - animation.frame_w as f32 / 2.0) as i32,
-                dst_y: (transform.y - animation.frame_h as f32 / 2.0) as i32,
-                dst_w: animation.frame_w,
-                dst_h: animation.frame_h,
+                dst_x: (transform.x - animation.draw_w as f32 / 2.0) as i32,
+                dst_y: (transform.y - animation.draw_h as f32 / 2.0) as i32,
+                dst_w: animation.draw_w,
+                dst_h: animation.draw_h,
                 src_x: animation.current_src_x(),
-                src_y: 0,
+                src_y: animation.current_src_y(),
                 src_w: animation.frame_w,
                 src_h: animation.frame_h,
                 layer: ENTITY_LAYER,
                 angle: 0.0,
-                flip_h: false,
-                flip_v: false,
+                flip_h: animation.flip_h,
+                flip_v: animation.flip_v,
                 tint: (255, 255, 255, 255),
             });
         }
@@ -678,45 +685,15 @@ impl GameCore {
         }
     }
 
-    /// The `gfx::SetCamera` `publish_gfx` publishes every tick: `(0, 0,
-    /// 1.0)` (the original fixed unzoomed camera) with no active
-    /// `EntityOp::SetCameraFollow`, or if the followed entity doesn't
-    /// exist (already despawned, or never spawned) — otherwise centered on
-    /// that entity's `Transform` at `follow.zoom`, clamped per axis to
-    /// `[0, level_size - viewport_size / zoom]` once `level_size_px` is
-    /// known (`load_tilemap` having run), so the camera stops panning once
-    /// the level edge would come into view — zooming in shows less world
-    /// per pixel, shrinking the effective viewport the clamp uses.
-    /// Unclamped (just centered) if no tilemap has been loaded yet, rather
-    /// than pinning to `(0, 0)`.
-    fn camera_position(&self) -> (f32, f32, f32) {
-        let Some(follow) = &self.camera_follow else {
-            return (0.0, 0.0, 1.0);
-        };
-        let Some(&entity) = self.entities.get(&follow.entity_id) else {
-            return (0.0, 0.0, 1.0);
-        };
-        let Ok(transform) = self.world.get::<&Transform>(entity) else {
-            return (0.0, 0.0, 1.0);
-        };
-        let (level_w, level_h) = match self.level_size_px {
-            Some((w, h)) => (Some(w), Some(h)),
-            None => (None, None),
-        };
-        let clamp_axis = |center: f32, viewport: f32, level: Option<f32>| -> f32 {
-            let raw = center - viewport / 2.0;
-            match level {
-                Some(level) => raw.clamp(0.0, (level - viewport).max(0.0)),
-                None => raw,
-            }
-        };
-        let effective_viewport_w = follow.viewport_w / follow.zoom;
-        let effective_viewport_h = follow.viewport_h / follow.zoom;
-        (
-            clamp_axis(transform.x, effective_viewport_w, level_w),
-            clamp_axis(transform.y, effective_viewport_h, level_h),
-            follow.zoom,
-        )
+    /// Resolves the followed entity from ECS and advances the camera state.
+    fn advance_camera(&mut self, dt: f32) {
+        let target_center = self
+            .camera
+            .get_followed_entity_id()
+            .and_then(|entity_id| self.entities.get(&entity_id))
+            .and_then(|&entity| self.world.get::<&Transform>(entity).ok())
+            .map(|transform| Vec2::new(transform.x, transform.y));
+        self.camera.advance(target_center, self.level_size_px, dt);
     }
 
     /// Publishes one `gfx::DrawRect` or `gfx::DrawTriangle` for `collider`'s

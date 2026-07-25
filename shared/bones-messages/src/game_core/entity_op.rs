@@ -1,6 +1,6 @@
 use crate::{DecodeError, Reader, Writer};
 
-use super::PhysicsWorlds;
+use super::{PhysicsWorlds, SpritePresentation};
 
 /// The rapier2d rigid-body type a spawned entity's collider gets, when it
 /// has one at all (`collider_half_w`/`collider_half_h` both `> 0.0`).
@@ -153,6 +153,17 @@ pub enum EntityOp {
         viewport_h: f32,
         zoom: f32,
     },
+    /// Replaces only an existing entity's sprite presentation. Its transform,
+    /// colliders, velocities, body kinds, and physics-world registrations stay
+    /// untouched. A no-op if `entity_id` does not exist.
+    SetSprite {
+        entity_id: u32,
+        presentation: SpritePresentation,
+    },
+    /// Sets camera-follow responsiveness in inverse seconds. `0.0` keeps the
+    /// established immediate-follow behavior; positive values ease toward the
+    /// target on each tick before applying the level-edge clamp.
+    SetCameraSmoothing { responsiveness: f32 },
 }
 
 const TAG_SPAWN: u8 = 0;
@@ -162,6 +173,8 @@ const TAG_SET_COLOR: u8 = 3;
 const TAG_SET_DEBUG_HITBOXES: u8 = 4;
 const TAG_SET_PAUSED: u8 = 5;
 const TAG_SET_CAMERA_FOLLOW: u8 = 6;
+const TAG_SET_SPRITE: u8 = 7;
+const TAG_SET_CAMERA_SMOOTHING: u8 = 8;
 
 impl EntityOp {
     pub(super) fn encode_into(&self, writer: Writer) -> Writer {
@@ -241,6 +254,27 @@ impl EntityOp {
                 .f32(*viewport_w)
                 .f32(*viewport_h)
                 .f32(*zoom),
+            EntityOp::SetSprite {
+                entity_id,
+                presentation,
+            } => writer
+                .u8(TAG_SET_SPRITE)
+                .u32(*entity_id)
+                .u32(presentation.sprite.sprite_id)
+                .u32(presentation.sprite.frame_w)
+                .u32(presentation.sprite.frame_h)
+                .u32(presentation.sprite.frame_count)
+                .f32(presentation.sprite.frame_duration)
+                .u32(presentation.frames_per_row)
+                .u32(presentation.draw_w)
+                .u32(presentation.draw_h)
+                .u8(presentation.looping as u8)
+                .u8(presentation.advance_while_stopped as u8)
+                .u8(presentation.flip_h as u8)
+                .u8(presentation.flip_v as u8),
+            EntityOp::SetCameraSmoothing { responsiveness } => {
+                writer.u8(TAG_SET_CAMERA_SMOOTHING).f32(*responsiveness)
+            }
         }
     }
 
@@ -324,6 +358,33 @@ impl EntityOp {
                 viewport_w: reader.read_f32()?,
                 viewport_h: reader.read_f32()?,
                 zoom: reader.read_f32()?,
+            }),
+            TAG_SET_SPRITE => {
+                let entity_id = reader.read_u32()?;
+                let sprite = Sprite {
+                    sprite_id: reader.read_u32()?,
+                    frame_w: reader.read_u32()?,
+                    frame_h: reader.read_u32()?,
+                    frame_count: reader.read_u32()?,
+                    frame_duration: reader.read_f32()?,
+                };
+                let presentation = SpritePresentation {
+                    sprite,
+                    frames_per_row: reader.read_u32()?,
+                    draw_w: reader.read_u32()?,
+                    draw_h: reader.read_u32()?,
+                    looping: reader.read_u8()? != 0,
+                    advance_while_stopped: reader.read_u8()? != 0,
+                    flip_h: reader.read_u8()? != 0,
+                    flip_v: reader.read_u8()? != 0,
+                };
+                Ok(EntityOp::SetSprite {
+                    entity_id,
+                    presentation,
+                })
+            }
+            TAG_SET_CAMERA_SMOOTHING => Ok(EntityOp::SetCameraSmoothing {
+                responsiveness: reader.read_f32()?,
             }),
             _ => Err(DecodeError::InvalidTag {
                 message: "game-core entity op",
