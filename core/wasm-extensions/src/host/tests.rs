@@ -123,6 +123,20 @@ fn init_logs_through_the_engine() {
 }
 
 #[test]
+fn shutdown_calls_the_guest_cleanup_hook() {
+    let sink = RecordingSink::new();
+    let mut host = load_hello(Bus::new(), Logger::new(Arc::new(sink.clone())));
+
+    host.shutdown().unwrap();
+
+    let records = sink.records();
+    assert!(
+        records.iter().any(|(_, _, msg)| msg.contains("shutdown")),
+        "expected the shutdown export to run, got {records:?}"
+    );
+}
+
+#[test]
 fn requested_topics_reflects_what_init_subscribed_to() {
     let mut host = load_hello(Bus::new(), Logger::default());
     assert_eq!(host.requested_topics(), vec![Tick::TOPIC.to_string()]);

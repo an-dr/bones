@@ -8,6 +8,10 @@ use bones::core::host_api::{log, publish, subscribe, Level};
 struct Component;
 
 impl Guest for Component {
+    fn shutdown() {
+        log(Level::Info, "shutdown");
+    }
+
     fn init() {
         subscribe("core/tick");
         log(Level::Info, "init");

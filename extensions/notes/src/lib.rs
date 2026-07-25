@@ -28,6 +28,8 @@ thread_local! {
 struct Component;
 
 impl Guest for Component {
+    fn shutdown() {}
+
     fn init() {
         subscribe("core/tick");
         subscribe(Clicked::TOPIC);

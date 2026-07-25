@@ -237,6 +237,31 @@ impl Host {
         std::mem::take(&mut self.store.get_mut().unwrap().data_mut().requested_topics)
     }
 
+    /// Calls the extension's final cleanup hook under the normal call budget.
+    ///
+    /// A trap faults the instance but does not decide whether its owner may
+    /// still release registrations and drop it.
+    pub fn shutdown(&mut self) -> wasmtime::Result<()> {
+        if self.is_faulted() {
+            return Err(wasmtime::Error::msg(
+                "cannot call shutdown on a faulted extension",
+            ));
+        }
+        let store = self.store.get_mut().unwrap();
+        store.set_epoch_deadline(CALL_TIMEOUT_TICKS);
+        match self.bindings.call_shutdown(&mut *store) {
+            Ok(()) => Ok(()),
+            Err(err) => {
+                store
+                    .data()
+                    .logger
+                    .error("host", &format!("shutdown trapped: {err}"));
+                self.faulted.store(true, Ordering::Relaxed);
+                Err(err)
+            }
+        }
+    }
+
     /// Whether a call has ever trapped or exceeded its time budget
     /// (ADR-007). Sticky — checked before every later call so a faulted
     /// extension is never called into again.

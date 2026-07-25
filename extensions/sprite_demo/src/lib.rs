@@ -17,6 +17,8 @@ const DST_Y: i32 = 268;
 struct Component;
 
 impl Guest for Component {
+    fn shutdown() {}
+
     fn init() {
         subscribe("core/tick");
         let load = LoadSprite {

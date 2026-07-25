@@ -1189,6 +1189,8 @@ fn publish_display(resolution: (u32, u32), fullscreen: bool) {
 struct Component;
 
 impl Guest for Component {
+    fn shutdown() {}
+
     fn init() {
         subscribe(KeyDown::TOPIC);
         subscribe(KeyUp::TOPIC);

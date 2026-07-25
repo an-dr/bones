@@ -44,6 +44,8 @@ world extension {
     import host-api;
 
     export init: func();
+    // Called once before a running extension is unloaded.
+    export shutdown: func();
     export on-tick: func(dt: f32);
     // Topic is empty for a direct send (ADR-010) - it has no topic, only a
     // sender and payload. The returned payload is the reply; only read for

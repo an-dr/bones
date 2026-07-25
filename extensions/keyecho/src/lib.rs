@@ -13,6 +13,8 @@ use bones_messages::{DecodeMessage, Message};
 struct Component;
 
 impl Guest for Component {
+    fn shutdown() {}
+
     fn init() {
         subscribe(KeyDown::TOPIC);
         subscribe(MouseDown::TOPIC);

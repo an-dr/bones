@@ -12,6 +12,8 @@ const VERSION: &str = "v1";
 struct Component;
 
 impl Guest for Component {
+    fn shutdown() {}
+
     fn init() {
         subscribe("core/tick");
         log(Level::Info, &format!("{VERSION}: loaded"));
