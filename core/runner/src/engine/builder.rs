@@ -20,8 +20,7 @@ use wasm_extensions::lifecycle::Event;
 use wasm_extensions::persistence::Persistence;
 
 use crate::loading::{
-    attach_extension, derive_extension_name, find_wasm_files, is_first_occurrence, read_file_mtime,
-    ENGINE_SENDER,
+    attach_extension, derive_extension_name, find_wasm_files, read_file_mtime, ENGINE_SENDER,
 };
 use crate::supervisor::TrackedExtension;
 use crate::Runner;
@@ -58,6 +57,8 @@ fn exe_dir() -> Option<PathBuf> {
 
 pub struct Engine {
     extensions_dir: Option<PathBuf>,
+    startup_extensions: Vec<String>,
+    extension_controller: Option<String>,
     logger: Logger,
     tick_hz: f64,
     window: Option<(String, u32, u32)>,
@@ -72,6 +73,8 @@ impl Engine {
     pub fn new() -> Self {
         Self {
             extensions_dir: None,
+            startup_extensions: Vec::new(),
+            extension_controller: None,
             logger: Logger::default(),
             tick_hz: DEFAULT_TICK_HZ,
             window: None,
@@ -90,6 +93,21 @@ impl Engine {
     /// extensions load.
     pub fn extensions_dir(mut self, path: impl Into<PathBuf>) -> Self {
         self.extensions_dir = Some(path.into());
+        self
+    }
+
+    /// Restricts initial activation to the named catalog entries.
+    ///
+    /// With no names configured, every discovered extension loads as before.
+    pub fn startup_extension(mut self, name: impl Into<String>) -> Self {
+        self.startup_extensions.push(name.into());
+        self
+    }
+
+    /// Authorizes one host-stamped extension sender to issue runtime
+    /// load/unload/reload commands. Unset means runtime control is disabled.
+    pub fn extension_controller(mut self, name: impl Into<String>) -> Self {
+        self.extension_controller = Some(name.into());
         self
     }
 
@@ -280,13 +298,13 @@ impl Engine {
         .map_err(wasmtime::Error::msg)?;
 
         let mut tracked = Vec::new();
-        let mut loaded_names = std::collections::HashSet::new();
+        let mut catalog = std::collections::HashMap::new();
 
         if let Some(dir) = &self.extensions_dir {
             let dir = resolve_relative_to_exe(dir.clone());
             for path in find_wasm_files(&dir) {
                 let name = derive_extension_name(&path);
-                if !is_first_occurrence(&mut loaded_names, &name) {
+                if catalog.contains_key(&name) {
                     self.logger.error(
                         "engine",
                         &format!(
@@ -294,6 +312,12 @@ impl Engine {
                             path.display()
                         ),
                     );
+                    continue;
+                }
+                catalog.insert(name.clone(), path.clone());
+                if !self.startup_extensions.is_empty()
+                    && !self.startup_extensions.contains(&name)
+                {
                     continue;
                 }
                 match attach_extension(
@@ -335,12 +359,33 @@ impl Engine {
             }
         }
 
+        let commands = Arc::new(Mutex::new(Vec::new()));
+        let command_sink = commands.clone();
+        let controller = self.extension_controller.clone();
+        let control = bus.register("extension-manager", move |envelope: &bus::Envelope| {
+            if controller.as_deref() != Some(envelope.sender.as_str()) {
+                return;
+            }
+            if let Ok(Some(command)) = bones_messages::extension_control::Command::decode(
+                &envelope.topic,
+                &envelope.payload,
+            ) {
+                command_sink
+                    .lock()
+                    .unwrap()
+                    .push(crate::supervisor::OwnedCommand::from(command));
+            }
+        });
+        control.subscribe("core/extensions/*");
+
         let supervisor = Supervisor::new(
             wasm_engine,
             bus.clone(),
             registry,
             self.logger.clone(),
             tracked,
+            catalog,
+            commands,
             exit_requested.clone(),
             display_info,
         );

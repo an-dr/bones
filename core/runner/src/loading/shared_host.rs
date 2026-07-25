@@ -27,4 +27,8 @@ impl SharedHost {
     pub(crate) fn is_faulted(&self) -> bool {
         self.0.lock().unwrap().is_faulted()
     }
+
+    pub(crate) fn shutdown(&self) -> wasmtime::Result<()> {
+        self.0.lock().unwrap().shutdown()
+    }
 }

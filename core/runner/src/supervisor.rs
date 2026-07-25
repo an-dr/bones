@@ -3,9 +3,12 @@
 //! rest of the engine.
 
 mod tracked_extension;
+mod owned_command;
 
+use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use bus::{Bus, Registry};
@@ -17,6 +20,7 @@ use wasm_extensions::lifecycle::Event;
 use crate::loading::{attach_extension, read_file_mtime, ENGINE_SENDER};
 
 pub(crate) use tracked_extension::TrackedExtension;
+pub(crate) use owned_command::OwnedCommand;
 
 /// How often the mtime half of `check` actually stats tracked files. The
 /// fault half (an atomic load) stays every-call; at 60Hz with `check`
@@ -38,6 +42,8 @@ pub struct Supervisor {
     pub registry: Registry,
     logger: Logger,
     tracked: Vec<TrackedExtension>,
+    catalog: HashMap<String, PathBuf>,
+    commands: Arc<Mutex<Vec<OwnedCommand>>>,
     last_mtime_sweep: Option<Instant>,
     exit_requested: Arc<AtomicBool>,
     display_info: DisplayInfo,
@@ -50,6 +56,8 @@ impl Supervisor {
         registry: Registry,
         logger: Logger,
         tracked: Vec<TrackedExtension>,
+        catalog: HashMap<String, PathBuf>,
+        commands: Arc<Mutex<Vec<OwnedCommand>>>,
         exit_requested: Arc<AtomicBool>,
         display_info: DisplayInfo,
     ) -> Self {
@@ -59,6 +67,8 @@ impl Supervisor {
             registry,
             logger,
             tracked,
+            catalog,
+            commands,
             last_mtime_sweep: None,
             exit_requested,
             display_info,
@@ -71,6 +81,19 @@ impl Supervisor {
     /// logged and the *old* instance (or nothing, if just quarantined)
     /// keeps running.
     pub fn check(&mut self) {
+        let commands = std::mem::take(&mut *self.commands.lock().unwrap());
+        for command in commands {
+            match command {
+                OwnedCommand::Load(name) => self.load(&name, Event::Loaded),
+                OwnedCommand::Unload(name) => self.unload(&name, true),
+                OwnedCommand::Reload(name) => {
+                    lifecycle::publish(&self.bus, ENGINE_SENDER, &name, Event::Reloading);
+                    self.unload(&name, false);
+                    self.load(&name, Event::Reloaded);
+                }
+            }
+        }
+
         for extension in self.tracked.iter_mut() {
             if extension.quarantined || !extension.shared.is_faulted() {
                 continue;
@@ -140,6 +163,80 @@ impl Supervisor {
                     );
                 }
             }
+        }
+    }
+
+    fn load(&mut self, name: &str, success_event: Event) {
+        if self
+            .tracked
+            .iter()
+            .any(|extension| extension.name == name && !extension.quarantined)
+        {
+            lifecycle::publish(&self.bus, ENGINE_SENDER, name, success_event);
+            return;
+        }
+        let Some(path) = self.catalog.get(name).cloned() else {
+            self.logger
+                .error("engine", &format!("extension '{name}' is not in the catalog"));
+            lifecycle::publish(&self.bus, ENGINE_SENDER, name, Event::Faulted);
+            return;
+        };
+        match attach_extension(
+            &self.wasm_engine,
+            &self.bus,
+            &self.registry,
+            &self.logger,
+            &path,
+            name,
+            &self.exit_requested,
+            &self.display_info,
+        ) {
+            Ok((endpoint, shared, topics)) => {
+                self.tracked.retain(|extension| extension.name != name);
+                self.tracked.push(TrackedExtension {
+                    name: name.to_string(),
+                    path: path.clone(),
+                    mtime: read_file_mtime(&path),
+                    endpoint,
+                    shared,
+                    quarantined: false,
+                });
+                self.logger.info(
+                    "engine",
+                    &format!("loaded '{name}' from {} (subscribed: {topics:?})", path.display()),
+                );
+                lifecycle::publish(&self.bus, ENGINE_SENDER, name, success_event);
+            }
+            Err(err) => {
+                self.logger
+                    .error("engine", &format!("failed to load {}: {err}", path.display()));
+                lifecycle::publish(&self.bus, ENGINE_SENDER, name, Event::Faulted);
+            }
+        }
+    }
+
+    fn unload(&mut self, name: &str, publish_stopped: bool) {
+        let Some(index) = self
+            .tracked
+            .iter()
+            .position(|extension| extension.name == name)
+        else {
+            if publish_stopped {
+                lifecycle::publish(&self.bus, ENGINE_SENDER, name, Event::Stopped);
+            }
+            return;
+        };
+        let extension = self.tracked.remove(index);
+        if !extension.quarantined {
+            if let Err(err) = extension.shared.shutdown() {
+                self.logger
+                    .error("engine", &format!("shutdown of '{name}' failed: {err}"));
+            }
+            self.bus.unregister(&extension.endpoint);
+            self.registry.remove(name);
+        }
+        if publish_stopped {
+            lifecycle::publish(&self.bus, ENGINE_SENDER, name, Event::Stopped);
         }
     }
 }

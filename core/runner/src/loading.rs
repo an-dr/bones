@@ -63,17 +63,20 @@ pub(crate) fn read_file_mtime(path: &Path) -> SystemTime {
         .unwrap_or(SystemTime::UNIX_EPOCH)
 }
 
-/// `.wasm` files directly inside `dir`, sorted for deterministic load order.
+/// `.wasm` files beneath `dir`, sorted for deterministic load order.
 /// A missing directory is "no extensions," not an error.
 pub(crate) fn find_wasm_files(dir: &Path) -> Vec<PathBuf> {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return Vec::new();
     };
-    let mut files: Vec<PathBuf> = entries
-        .filter_map(|entry| entry.ok())
-        .map(|entry| entry.path())
-        .filter(|path| path.extension().is_some_and(|ext| ext == "wasm"))
-        .collect();
+    let mut files = Vec::new();
+    for path in entries.filter_map(|entry| entry.ok()).map(|entry| entry.path()) {
+        if path.is_dir() {
+            files.extend(find_wasm_files(&path));
+        } else if path.extension().is_some_and(|ext| ext == "wasm") {
+            files.push(path);
+        }
+    }
     files.sort();
     files
 }
@@ -82,17 +85,6 @@ pub(crate) fn derive_extension_name(path: &Path) -> String {
     path.file_stem()
         .map(|stem| stem.to_string_lossy().into_owned())
         .unwrap_or_else(|| path.to_string_lossy().into_owned())
-}
-
-/// True the first time `name` is seen (and records it); false on a repeat.
-/// A single real directory listing can never actually repeat a stem, but a
-/// future multi-directory `extensions_dir` could — this is what makes
-/// extensions.md's "the host rejects duplicates at load" claim true.
-pub(crate) fn is_first_occurrence(
-    seen: &mut std::collections::HashSet<String>,
-    name: &str,
-) -> bool {
-    seen.insert(name.to_string())
 }
 
 #[cfg(test)]

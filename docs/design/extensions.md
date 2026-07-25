@@ -53,6 +53,20 @@ stateDiagram-v2
 Every transition is published on `core/lifecycle`, so tooling and other
 extensions can observe loads, faults, and reloads.
 
+## Runtime activation
+
+`extensions_dir` is scanned recursively into a catalog. Directory names
+organize distributions but extension identity remains the globally unique file
+stem. Embedders either retain load-all startup behavior or provide a startup
+allow-list; other catalog entries remain uninstantiated.
+
+The embedder may authorize one host-stamped extension sender as the runtime
+controller. Its typed `core/extensions/load`, `unload`, or `reload` commands
+are applied after bus dispatch; commands from every other sender are ignored.
+Results appear on `core/lifecycle`. Unload calls `shutdown`, preserves messages
+the hook published for later dispatch, then releases the bus endpoint,
+direct-send registration, and component instance.
+
 ## Faults and quarantine
 
 Per ADR-007: exceeding the per-call time budget, exhausting queue/publish

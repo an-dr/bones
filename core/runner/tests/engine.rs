@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use bones_messages::lifecycle::{Event, LifecycleEvent};
+use bones_messages::extension_control::{Load, Unload};
 use bones_messages::{DecodeMessage, EncodeMessage, Message};
 use bus::{Envelope, Handler, Module, ModuleContext};
 use logging::{Logger, RecordingSink};
@@ -83,6 +84,65 @@ fn build_discovers_loads_and_registers_a_real_extension() {
         records.iter().any(|(_, _, msg)| msg.contains("tick")),
         "expected the extension's tick log line, got {records:?}"
     );
+}
+
+#[test]
+fn startup_allow_list_and_runtime_commands_control_activation() {
+    let dir = std::env::temp_dir().join("bones-runtime-extension-manager");
+    std::fs::create_dir_all(dir.join("core")).unwrap();
+    std::fs::create_dir_all(dir.join("levels")).unwrap();
+    std::fs::copy(format!("{HELLO_DIR}/hello.wasm"), dir.join("core/menu.wasm")).unwrap();
+    std::fs::copy(
+        format!("{HELLO_DIR}/hello.wasm"),
+        dir.join("levels/later.wasm"),
+    )
+    .unwrap();
+
+    let BuiltEngine {
+        runner,
+        mut supervisor,
+        ..
+    } = Engine::new()
+        .extensions_dir(&dir)
+        .startup_extension("menu")
+        .extension_controller("menu")
+        .build()
+        .unwrap();
+    assert!(supervisor.registry.call("test", "menu", &[]).is_ok());
+    assert!(supervisor.registry.call("test", "later", &[]).is_err());
+
+    runner.bus().publish(Envelope {
+        topic: Load::TOPIC.to_string(),
+        sender: "rogue".to_string(),
+        correlation: None,
+        payload: Load { extension: "later" }.encode(),
+    });
+    runner.step(1.0 / 60.0);
+    supervisor.check();
+    assert!(supervisor.registry.call("test", "later", &[]).is_err());
+
+    runner.bus().publish(Envelope {
+        topic: Load::TOPIC.to_string(),
+        sender: "menu".to_string(),
+        correlation: None,
+        payload: Load { extension: "later" }.encode(),
+    });
+    runner.step(1.0 / 60.0);
+    supervisor.check();
+    assert!(supervisor.registry.call("test", "later", &[]).is_ok());
+
+    runner.bus().publish(Envelope {
+        topic: Unload::TOPIC.to_string(),
+        sender: "menu".to_string(),
+        correlation: None,
+        payload: Unload { extension: "later" }.encode(),
+    });
+    runner.step(1.0 / 60.0);
+    supervisor.check();
+    assert!(supervisor.registry.call("test", "later", &[]).is_err());
+
+    drop(supervisor);
+    std::fs::remove_dir_all(dir).ok();
 }
 
 #[test]
