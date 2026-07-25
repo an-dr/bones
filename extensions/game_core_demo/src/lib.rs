@@ -833,10 +833,9 @@ fn draw_menu(
         resolution_options,
     );
     let panel_y = layout.panel.y;
-    DrawCommand::rectangle(layout.panel, true, PANEL_BG_COLOR, MENU_LAYER)
-        .publish_with(|topic, payload| publish(topic, payload));
+    DrawCommand::rectangle(layout.panel, true, PANEL_BG_COLOR, MENU_LAYER).publish_with(publish);
     DrawCommand::rectangle(layout.panel, false, PANEL_BORDER_COLOR, MENU_LAYER)
-        .publish_with(|topic, payload| publish(topic, payload));
+        .publish_with(publish);
 
     let title = match menu {
         MenuState::Main => "Paused (Esc to resume)",
@@ -903,8 +902,7 @@ fn draw_menu(
     }
 
     for button in layout.buttons {
-        DrawCommand::rectangle(button.bounds, true, BUTTON_COLOR, MENU_LAYER)
-            .publish_with(|topic, payload| publish(topic, payload));
+        DrawCommand::rectangle(button.bounds, true, BUTTON_COLOR, MENU_LAYER).publish_with(publish);
         // Rough centering assuming ~8px average glyph width at size 16 —
         // good enough for this demo's short labels, not measured text.
         let text_x =
@@ -918,7 +916,7 @@ fn draw_menu(
             BUTTON_TEXT_COLOR,
             MENU_LAYER,
         )
-        .publish_with(|topic, payload| publish(topic, payload));
+        .publish_with(publish);
     }
 }
 

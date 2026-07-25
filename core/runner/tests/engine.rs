@@ -6,8 +6,8 @@
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
+use bones_messages::extension_control::{Load, Reload, Unload};
 use bones_messages::lifecycle::{Event, LifecycleEvent};
-use bones_messages::extension_control::{Load, Unload};
 use bones_messages::{DecodeMessage, EncodeMessage, Message};
 use bus::{Envelope, Handler, Module, ModuleContext};
 use logging::{Logger, RecordingSink};
@@ -91,13 +91,18 @@ fn startup_allow_list_and_runtime_commands_control_activation() {
     let dir = std::env::temp_dir().join("bones-runtime-extension-manager");
     std::fs::create_dir_all(dir.join("core")).unwrap();
     std::fs::create_dir_all(dir.join("levels")).unwrap();
-    std::fs::copy(format!("{HELLO_DIR}/hello.wasm"), dir.join("core/menu.wasm")).unwrap();
+    std::fs::copy(
+        format!("{HELLO_DIR}/hello.wasm"),
+        dir.join("core/menu.wasm"),
+    )
+    .unwrap();
     std::fs::copy(
         format!("{HELLO_DIR}/hello.wasm"),
         dir.join("levels/later.wasm"),
     )
     .unwrap();
 
+    let sink = RecordingSink::new();
     let BuiltEngine {
         runner,
         mut supervisor,
@@ -106,6 +111,7 @@ fn startup_allow_list_and_runtime_commands_control_activation() {
         .extensions_dir(&dir)
         .startup_extension("menu")
         .extension_controller("menu")
+        .logger(Logger::new(Arc::new(sink.clone())))
         .build()
         .unwrap();
     assert!(supervisor.registry.call("test", "menu", &[]).is_ok());
@@ -120,6 +126,21 @@ fn startup_allow_list_and_runtime_commands_control_activation() {
     runner.step(1.0 / 60.0);
     supervisor.check();
     assert!(supervisor.registry.call("test", "later", &[]).is_err());
+    assert!(sink.records().iter().any(|(_, _, message)| {
+        message.contains("rejected runtime extension command from 'rogue'")
+    }));
+
+    runner.bus().publish(Envelope {
+        topic: Load::TOPIC.to_string(),
+        sender: "menu".to_string(),
+        correlation: None,
+        payload: vec![0xff],
+    });
+    runner.step(1.0 / 60.0);
+    supervisor.check();
+    assert!(sink.records().iter().any(|(_, _, message)| {
+        message.contains("could not decode extension command from 'menu'")
+    }));
 
     runner.bus().publish(Envelope {
         topic: Load::TOPIC.to_string(),
@@ -130,6 +151,23 @@ fn startup_allow_list_and_runtime_commands_control_activation() {
     runner.step(1.0 / 60.0);
     supervisor.check();
     assert!(supervisor.registry.call("test", "later", &[]).is_ok());
+
+    std::fs::write(dir.join("levels/later.wasm"), b"not a component").unwrap();
+    runner.bus().publish(Envelope {
+        topic: Reload::TOPIC.to_string(),
+        sender: "menu".to_string(),
+        correlation: None,
+        payload: Reload { extension: "later" }.encode(),
+    });
+    runner.step(1.0 / 60.0);
+    supervisor.check();
+    assert!(
+        supervisor.registry.call("test", "later", &[]).is_ok(),
+        "a failed commanded reload must keep the current instance running"
+    );
+    assert!(sink.records().iter().any(|(_, _, message)| {
+        message.contains("reload of 'later' failed, keeping the running instance")
+    }));
 
     runner.bus().publish(Envelope {
         topic: Unload::TOPIC.to_string(),
@@ -143,6 +181,21 @@ fn startup_allow_list_and_runtime_commands_control_activation() {
 
     drop(supervisor);
     std::fs::remove_dir_all(dir).ok();
+}
+
+#[test]
+fn a_missing_startup_extension_is_logged() {
+    let sink = RecordingSink::new();
+    let _engine = Engine::new()
+        .extensions_dir(HELLO_DIR)
+        .startup_extension("typo")
+        .logger(Logger::new(Arc::new(sink.clone())))
+        .build()
+        .unwrap();
+
+    assert!(sink.records().iter().any(|(_, _, message)| {
+        message.contains("startup extension 'typo' is not in the catalog")
+    }));
 }
 
 #[test]

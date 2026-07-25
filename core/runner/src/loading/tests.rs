@@ -46,6 +46,23 @@ fn find_wasm_files_recurses_into_group_directories() {
     assert!(files.iter().any(|path| path.ends_with("level_one.wasm")));
 }
 
+#[cfg(unix)]
+#[test]
+fn find_wasm_files_does_not_follow_directory_symlinks() {
+    use std::os::unix::fs::symlink;
+
+    let root = std::env::temp_dir().join("bones-symlink-extension-catalog");
+    std::fs::create_dir_all(root.join("nested")).unwrap();
+    std::fs::write(root.join("nested/level.wasm"), []).unwrap();
+    symlink(&root, root.join("nested/cycle")).unwrap();
+
+    let files = find_wasm_files(&root);
+
+    std::fs::remove_dir_all(root).ok();
+    assert_eq!(files.len(), 1);
+    assert!(files[0].ends_with("level.wasm"));
+}
+
 #[test]
 fn derive_extension_name_is_the_file_stem() {
     assert_eq!(derive_extension_name(Path::new("/a/b/hello.wasm")), "hello");

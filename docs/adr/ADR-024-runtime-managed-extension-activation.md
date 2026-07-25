@@ -16,8 +16,9 @@ The extension host separates recursive discovery from activation:
 - An embedder chooses a startup allow-list. Other catalog entries remain
   discovered but uninstantiated.
 - Typed runtime commands load, unload, or reload a catalog entry by name.
-  Commands complete asynchronously and every outcome is published through the
-  lifecycle event stream.
+  Commands complete asynchronously and every state change is published through
+  the lifecycle event stream. Rejected, malformed, or transactionally failed
+  requests are logged because they do not change lifecycle state.
 - Loading instantiates the component, runs `init`, then registers it as
   running. Unloading calls a new `shutdown` export before releasing its bus
   endpoint, direct-send registration, and instance.

@@ -2,8 +2,8 @@
 //! (design/extensions.md's Reloading state) and reacts, independent of the
 //! rest of the engine.
 
-mod tracked_extension;
 mod owned_command;
+mod tracked_extension;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -19,8 +19,8 @@ use wasm_extensions::lifecycle::Event;
 
 use crate::loading::{attach_extension, read_file_mtime, ENGINE_SENDER};
 
-pub(crate) use tracked_extension::TrackedExtension;
 pub(crate) use owned_command::OwnedCommand;
+pub(crate) use tracked_extension::TrackedExtension;
 
 /// How often the mtime half of `check` actually stats tracked files. The
 /// fault half (an atomic load) stays every-call; at 60Hz with `check`
@@ -50,6 +50,7 @@ pub struct Supervisor {
 }
 
 impl Supervisor {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         wasm_engine: wasmtime::Engine,
         bus: Bus,
@@ -86,11 +87,7 @@ impl Supervisor {
             match command {
                 OwnedCommand::Load(name) => self.load(&name, Event::Loaded),
                 OwnedCommand::Unload(name) => self.unload(&name, true),
-                OwnedCommand::Reload(name) => {
-                    lifecycle::publish(&self.bus, ENGINE_SENDER, &name, Event::Reloading);
-                    self.unload(&name, false);
-                    self.load(&name, Event::Reloaded);
-                }
+                OwnedCommand::Reload(name) => self.reload(&name),
             }
         }
 
@@ -166,6 +163,10 @@ impl Supervisor {
         }
     }
 
+    /// Activates a catalog entry.
+    ///
+    /// Idempotent: an already-running extension succeeds without replacing
+    /// its instance.
     fn load(&mut self, name: &str, success_event: Event) {
         if self
             .tracked
@@ -176,8 +177,10 @@ impl Supervisor {
             return;
         }
         let Some(path) = self.catalog.get(name).cloned() else {
-            self.logger
-                .error("engine", &format!("extension '{name}' is not in the catalog"));
+            self.logger.error(
+                "engine",
+                &format!("extension '{name}' is not in the catalog"),
+            );
             lifecycle::publish(&self.bus, ENGINE_SENDER, name, Event::Faulted);
             return;
         };
@@ -203,18 +206,91 @@ impl Supervisor {
                 });
                 self.logger.info(
                     "engine",
-                    &format!("loaded '{name}' from {} (subscribed: {topics:?})", path.display()),
+                    &format!(
+                        "loaded '{name}' from {} (subscribed: {topics:?})",
+                        path.display()
+                    ),
                 );
                 lifecycle::publish(&self.bus, ENGINE_SENDER, name, success_event);
             }
             Err(err) => {
-                self.logger
-                    .error("engine", &format!("failed to load {}: {err}", path.display()));
+                self.logger.error(
+                    "engine",
+                    &format!("failed to load {}: {err}", path.display()),
+                );
                 lifecycle::publish(&self.bus, ENGINE_SENDER, name, Event::Faulted);
             }
         }
     }
 
+    /// Replaces a running extension transactionally.
+    ///
+    /// The replacement attaches before the old endpoint is shut down. A
+    /// missing or invalid replacement is logged and leaves the current
+    /// instance registered and running.
+    fn reload(&mut self, name: &str) {
+        lifecycle::publish(&self.bus, ENGINE_SENDER, name, Event::Reloading);
+
+        let Some(path) = self.catalog.get(name).cloned() else {
+            self.logger.error(
+                "engine",
+                &format!("reload of '{name}' failed: extension is not in the catalog"),
+            );
+            return;
+        };
+        let Some(index) = self
+            .tracked
+            .iter()
+            .position(|extension| extension.name == name && !extension.quarantined)
+        else {
+            self.load(name, Event::Reloaded);
+            return;
+        };
+
+        match attach_extension(
+            &self.wasm_engine,
+            &self.bus,
+            &self.registry,
+            &self.logger,
+            &path,
+            name,
+            &self.exit_requested,
+            &self.display_info,
+        ) {
+            Ok((endpoint, shared, topics)) => {
+                let extension = &mut self.tracked[index];
+                if let Err(err) = extension.shared.shutdown() {
+                    self.logger
+                        .error("engine", &format!("shutdown of '{name}' failed: {err}"));
+                }
+                self.bus.unregister(&extension.endpoint);
+                extension.path = path.clone();
+                extension.mtime = read_file_mtime(&path);
+                extension.endpoint = endpoint;
+                extension.shared = shared;
+                extension.quarantined = false;
+                self.logger.info(
+                    "engine",
+                    &format!(
+                        "reloaded '{name}' from {} (subscribed: {topics:?})",
+                        path.display()
+                    ),
+                );
+                lifecycle::publish(&self.bus, ENGINE_SENDER, name, Event::Reloaded);
+            }
+            Err(err) => {
+                self.logger.error(
+                    "engine",
+                    &format!("reload of '{name}' failed, keeping the running instance: {err}"),
+                );
+            }
+        }
+    }
+
+    /// Deactivates an extension.
+    ///
+    /// Idempotent: an absent extension succeeds and, when requested,
+    /// publishes `Stopped`.
     fn unload(&mut self, name: &str, publish_stopped: bool) {
         let Some(index) = self
             .tracked

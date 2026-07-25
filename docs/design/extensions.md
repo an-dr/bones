@@ -46,6 +46,7 @@ stateDiagram-v2
     Running --> Reloading: file changed / reload request
     Faulted --> Reloading: explicit reload (user or host policy)
     Reloading --> Running: new instance init() ok
+    Reloading --> Running: replacement init() error; old instance retained
     Reloading --> Faulted: new instance init() error
     Running --> Stopped: shutdown()
     Stopped --> [*]
@@ -63,10 +64,12 @@ allow-list; other catalog entries remain uninstantiated.
 
 The embedder may authorize one host-stamped extension sender as the runtime
 controller. Its typed `core/extensions/load`, `unload`, or `reload` commands
-are applied after bus dispatch; commands from every other sender are ignored.
-Results appear on `core/lifecycle`. Unload calls `shutdown`, preserves messages
-the hook published for later dispatch, then releases the bus endpoint,
-direct-send registration, and component instance.
+are applied after bus dispatch; commands from every other sender are rejected
+and logged. State changes appear on `core/lifecycle`. A reload attaches its
+replacement before shutting down the current instance; a failed replacement is
+logged and leaves the current instance running. Unload calls `shutdown`,
+preserves messages the hook published for later dispatch, then releases the bus
+endpoint, direct-send registration, and component instance.
 
 ## Faults and quarantine
 

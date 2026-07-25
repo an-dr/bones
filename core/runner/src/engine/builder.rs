@@ -315,9 +315,7 @@ impl Engine {
                     continue;
                 }
                 catalog.insert(name.clone(), path.clone());
-                if !self.startup_extensions.is_empty()
-                    && !self.startup_extensions.contains(&name)
-                {
+                if !self.startup_extensions.is_empty() && !self.startup_extensions.contains(&name) {
                     continue;
                 }
                 match attach_extension(
@@ -358,22 +356,52 @@ impl Engine {
                 }
             }
         }
+        for name in &self.startup_extensions {
+            if !catalog.contains_key(name) {
+                self.logger.error(
+                    "engine",
+                    &format!("startup extension '{name}' is not in the catalog"),
+                );
+            }
+        }
 
         let commands = Arc::new(Mutex::new(Vec::new()));
         let command_sink = commands.clone();
         let controller = self.extension_controller.clone();
+        let control_logger = self.logger.clone();
         let control = bus.register("extension-manager", move |envelope: &bus::Envelope| {
             if controller.as_deref() != Some(envelope.sender.as_str()) {
+                control_logger.error(
+                    "engine",
+                    &format!(
+                        "rejected runtime extension command from '{}' on '{}'",
+                        envelope.sender, envelope.topic
+                    ),
+                );
                 return;
             }
-            if let Ok(Some(command)) = bones_messages::extension_control::Command::decode(
+            match bones_messages::extension_control::Command::decode(
                 &envelope.topic,
                 &envelope.payload,
             ) {
-                command_sink
+                Ok(Some(command)) => command_sink
                     .lock()
                     .unwrap()
-                    .push(crate::supervisor::OwnedCommand::from(command));
+                    .push(crate::supervisor::OwnedCommand::from(command)),
+                Ok(None) => control_logger.warn(
+                    "engine",
+                    &format!(
+                        "ignored unknown extension command topic '{}'",
+                        envelope.topic
+                    ),
+                ),
+                Err(err) => control_logger.warn(
+                    "engine",
+                    &format!(
+                        "could not decode extension command from '{}' on '{}': {err}",
+                        envelope.sender, envelope.topic
+                    ),
+                ),
             }
         });
         control.subscribe("core/extensions/*");

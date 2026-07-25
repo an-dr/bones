@@ -64,14 +64,23 @@ pub(crate) fn read_file_mtime(path: &Path) -> SystemTime {
 }
 
 /// `.wasm` files beneath `dir`, sorted for deterministic load order.
-/// A missing directory is "no extensions," not an error.
+///
+/// - A missing directory is "no extensions," not an error.
+/// - Symbolic links are skipped, so a linked directory cycle cannot recurse.
 pub(crate) fn find_wasm_files(dir: &Path) -> Vec<PathBuf> {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return Vec::new();
     };
     let mut files = Vec::new();
-    for path in entries.filter_map(|entry| entry.ok()).map(|entry| entry.path()) {
-        if path.is_dir() {
+    for entry in entries.filter_map(|entry| entry.ok()) {
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
+        if file_type.is_symlink() {
+            continue;
+        }
+        let path = entry.path();
+        if file_type.is_dir() {
             files.extend(find_wasm_files(&path));
         } else if path.extension().is_some_and(|ext| ext == "wasm") {
             files.push(path);
