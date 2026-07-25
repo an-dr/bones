@@ -19,6 +19,7 @@ use bones_messages::gfx::{DrawRect, DrawText, LoadSprite, SetDisplay};
 use bones_messages::input::{GamepadAxis, KeyDown, KeyUp, MouseDown};
 use bones_messages::renderer::DisplayChanged;
 use bones_messages::{DecodeMessage, EncodeMessage, Message};
+use game_ui::{ButtonLayout, Canvas, DrawCommand, MenuLayout, Rect};
 
 const LEVEL_TMX: &[u8] = include_bytes!("assets/level.tmx");
 const SPRITE_PNG: &[u8] = include_bytes!("assets/robot_william.png");
@@ -610,7 +611,7 @@ const PANEL_X: i32 = (SCREEN_WIDTH - PANEL_W as i32) / 2;
 // toggle and zoom presets, and the resolution dropdown collapsed to its one
 // toggle button - the common case. Expanding the dropdown adds one row per
 // option on top of this, so the panel grows (and re-centers) only then;
-// `panel_geometry` is the one place both `draw_menu` and `menu_buttons`
+// `panel_geometry` is the one place both `draw_menu` and `menu_layout`
 // compute this from, so they can never drift apart.
 const PANEL_H_COLLAPSED: u32 = 480;
 
@@ -620,7 +621,7 @@ const PANEL_H_COLLAPSED: u32 = 480;
 /// pushing its bottom edge further down.
 fn panel_geometry(resolution_expanded: bool, num_resolution_options: usize) -> (i32, u32) {
     let extra = if resolution_expanded {
-        // 3 per row (menu_buttons' own grid) - rows, not raw option count.
+        // 3 per row (`menu_layout`'s own grid) - rows, not raw option count.
         let rows = num_resolution_options.div_ceil(3) as u32;
         rows * (BUTTON_H + BUTTON_GAP as u32)
     } else {
@@ -643,46 +644,21 @@ const BUTTON_GAP: i32 = 12;
 // spacing above the next row of buttons.
 const SECTION_GAP: i32 = 46;
 
-/// One clickable rectangle, positioned identically whether it's being
-/// drawn (`draw_menu`) or hit-tested against a click (`on_mouse_down`) —
-/// both read from `menu_buttons`, so the two can never drift apart the
-/// way a hand-duplicated layout could.
-struct ButtonLayout {
-    id: u32,
-    x: i32,
-    y: i32,
-    w: u32,
-    h: u32,
-    // `Cow` rather than `&'static str`: most labels are static, but the
-    // resolution toggle's shows the current selection, computed fresh each
-    // call.
-    label: std::borrow::Cow<'static, str>,
-}
-
-impl ButtonLayout {
-    fn contains(&self, x: f32, y: f32) -> bool {
-        x >= self.x as f32
-            && x < (self.x + self.w as i32) as f32
-            && y >= self.y as f32
-            && y < (self.y + self.h as i32) as f32
-    }
-}
-
 /// Every button `menu` currently shows, top to bottom — empty for
 /// `Closed`. Pure layout math (`fullscreen`/`resolution` only change label
 /// text, not positions; `resolution_expanded` does change what's laid out
 /// below it), no side effects, so both `draw_menu` and `on_mouse_down` can
 /// call it freely every tick/click.
-fn menu_buttons(
+fn menu_layout(
     menu: MenuState,
     fullscreen: bool,
     resolution: (u32, u32),
     resolution_expanded: bool,
     resolution_options: &[(u32, u32)],
-) -> Vec<ButtonLayout> {
+) -> MenuLayout {
     let content_x = PANEL_X + BUTTON_MARGIN;
     let content_w = (PANEL_W as i32 - 2 * BUTTON_MARGIN) as u32;
-    let (panel_y, _) = panel_geometry(resolution_expanded, resolution_options.len());
+    let (panel_y, panel_height) = panel_geometry(resolution_expanded, resolution_options.len());
     let mut buttons = Vec::new();
     match menu {
         MenuState::Closed => {}
@@ -690,19 +666,23 @@ fn menu_buttons(
             let row_y = panel_y + 70;
             buttons.push(ButtonLayout {
                 id: BUTTON_SETTINGS,
-                x: content_x,
-                y: row_y,
-                w: content_w,
-                h: BUTTON_H,
-                label: "Settings".into(),
+                bounds: Rect {
+                    x: content_x,
+                    y: row_y,
+                    width: content_w,
+                    height: BUTTON_H,
+                },
+                label: "Settings".to_owned(),
             });
             buttons.push(ButtonLayout {
                 id: BUTTON_EXIT,
-                x: content_x,
-                y: row_y + BUTTON_H as i32 + BUTTON_GAP,
-                w: content_w,
-                h: BUTTON_H,
-                label: "Exit".into(),
+                bounds: Rect {
+                    x: content_x,
+                    y: row_y + BUTTON_H as i32 + BUTTON_GAP,
+                    width: content_w,
+                    height: BUTTON_H,
+                },
+                label: "Exit".to_owned(),
             });
         }
         MenuState::Settings => {
@@ -711,62 +691,75 @@ fn menu_buttons(
             for (index, &(name, _)) in BIG_BOX_PRESETS.iter().enumerate() {
                 buttons.push(ButtonLayout {
                     id: BUTTON_BIG_BOX_PRESET_BASE + index as u32,
-                    x: content_x + index as i32 * (preset_w as i32 + BUTTON_GAP),
-                    y: big_row_y,
-                    w: preset_w,
-                    h: BUTTON_H,
-                    label: name.into(),
+                    bounds: Rect {
+                        x: content_x + index as i32 * (preset_w as i32 + BUTTON_GAP),
+                        y: big_row_y,
+                        width: preset_w,
+                        height: BUTTON_H,
+                    },
+                    label: name.to_owned(),
                 });
             }
             let small_row_y = big_row_y + BUTTON_H as i32 + SECTION_GAP;
             for (index, &(name, _)) in SMALL_BOX_PRESETS.iter().enumerate() {
                 buttons.push(ButtonLayout {
                     id: BUTTON_SMALL_BOX_PRESET_BASE + index as u32,
-                    x: content_x + index as i32 * (preset_w as i32 + BUTTON_GAP),
-                    y: small_row_y,
-                    w: preset_w,
-                    h: BUTTON_H,
-                    label: name.into(),
+                    bounds: Rect {
+                        x: content_x + index as i32 * (preset_w as i32 + BUTTON_GAP),
+                        y: small_row_y,
+                        width: preset_w,
+                        height: BUTTON_H,
+                    },
+                    label: name.to_owned(),
                 });
             }
             let fullscreen_row_y = small_row_y + BUTTON_H as i32 + SECTION_GAP;
             buttons.push(ButtonLayout {
                 id: BUTTON_FULLSCREEN_TOGGLE,
-                x: content_x,
-                y: fullscreen_row_y,
-                w: content_w,
-                h: BUTTON_H,
+                bounds: Rect {
+                    x: content_x,
+                    y: fullscreen_row_y,
+                    width: content_w,
+                    height: BUTTON_H,
+                },
                 label: if fullscreen {
-                    "Fullscreen: On".into()
+                    "Fullscreen: On".to_owned()
                 } else {
-                    "Fullscreen: Off".into()
+                    "Fullscreen: Off".to_owned()
                 },
             });
             let zoom_row_y = fullscreen_row_y + BUTTON_H as i32 + BUTTON_GAP;
             for (index, &(name, _)) in ZOOM_PRESETS.iter().enumerate() {
                 buttons.push(ButtonLayout {
                     id: BUTTON_ZOOM_PRESET_BASE + index as u32,
-                    x: content_x + index as i32 * (preset_w as i32 + BUTTON_GAP),
-                    y: zoom_row_y,
-                    w: preset_w,
-                    h: BUTTON_H,
-                    label: name.into(),
+                    bounds: Rect {
+                        x: content_x + index as i32 * (preset_w as i32 + BUTTON_GAP),
+                        y: zoom_row_y,
+                        width: preset_w,
+                        height: BUTTON_H,
+                    },
+                    label: name.to_owned(),
                 });
             }
             let resolution_toggle_row_y = zoom_row_y + BUTTON_H as i32 + SECTION_GAP;
             buttons.push(ButtonLayout {
                 id: BUTTON_RESOLUTION_TOGGLE,
-                x: content_x,
-                y: resolution_toggle_row_y,
-                w: content_w,
-                h: BUTTON_H,
+                bounds: Rect {
+                    x: content_x,
+                    y: resolution_toggle_row_y,
+                    width: content_w,
+                    height: BUTTON_H,
+                },
                 label: format!(
                     "Resolution: {}x{} {}",
                     resolution.0,
                     resolution.1,
-                    if resolution_expanded { "\u{25B4}" } else { "\u{25BE}" }
-                )
-                .into(),
+                    if resolution_expanded {
+                        "\u{25B4}"
+                    } else {
+                        "\u{25BE}"
+                    }
+                ),
             });
             let mut after_resolution_y = resolution_toggle_row_y + BUTTON_H as i32 + BUTTON_GAP;
             if resolution_expanded {
@@ -782,11 +775,13 @@ fn menu_buttons(
                     }
                     buttons.push(ButtonLayout {
                         id: BUTTON_RESOLUTION_OPTION_BASE + index as u32,
-                        x: content_x + column as i32 * (preset_w as i32 + BUTTON_GAP),
-                        y: after_resolution_y,
-                        w: preset_w,
-                        h: BUTTON_H,
-                        label: format!("{width}x{height}").into(),
+                        bounds: Rect {
+                            x: content_x + column as i32 * (preset_w as i32 + BUTTON_GAP),
+                            y: after_resolution_y,
+                            width: preset_w,
+                            height: BUTTON_H,
+                        },
+                        label: format!("{width}x{height}"),
                     });
                 }
                 after_resolution_y += BUTTON_H as i32 + BUTTON_GAP;
@@ -794,22 +789,32 @@ fn menu_buttons(
             let back_y = after_resolution_y - BUTTON_GAP + SECTION_GAP;
             buttons.push(ButtonLayout {
                 id: BUTTON_BACK,
-                x: content_x,
-                y: back_y,
-                w: content_w,
-                h: BUTTON_H,
-                label: "Back".into(),
+                bounds: Rect {
+                    x: content_x,
+                    y: back_y,
+                    width: content_w,
+                    height: BUTTON_H,
+                },
+                label: "Back".to_owned(),
             });
         }
     }
-    buttons
+    MenuLayout {
+        panel: Rect {
+            x: PANEL_X,
+            y: panel_y,
+            width: PANEL_W,
+            height: panel_height,
+        },
+        buttons,
+    }
 }
 
 /// Draws the pause menu/settings panel — a no-op while `Closed`. A solid
 /// backdrop panel (not a full-screen dim: this renderer's `DrawRect`
 /// doesn't blend alpha for filled rects yet, so a translucent overlay
 /// would just render opaque) with a title, section labels for `Settings`,
-/// and every button from `menu_buttons`.
+/// and every button from `menu_layout`.
 fn draw_menu(
     menu: MenuState,
     fullscreen: bool,
@@ -820,35 +825,18 @@ fn draw_menu(
     if menu == MenuState::Closed {
         return;
     }
-    let (panel_y, panel_h) = panel_geometry(resolution_expanded, resolution_options.len());
-    publish(
-        DrawRect::TOPIC,
-        &DrawRect {
-            x: PANEL_X,
-            y: panel_y,
-            w: PANEL_W,
-            h: panel_h,
-            filled: true,
-            color: PANEL_BG_COLOR,
-            layer: MENU_LAYER,
-            screen_space: true,
-        }
-        .encode(),
+    let layout = menu_layout(
+        menu,
+        fullscreen,
+        resolution,
+        resolution_expanded,
+        resolution_options,
     );
-    publish(
-        DrawRect::TOPIC,
-        &DrawRect {
-            x: PANEL_X,
-            y: panel_y,
-            w: PANEL_W,
-            h: panel_h,
-            filled: false,
-            color: PANEL_BORDER_COLOR,
-            layer: MENU_LAYER,
-            screen_space: true,
-        }
-        .encode(),
-    );
+    let panel_y = layout.panel.y;
+    DrawCommand::rectangle(layout.panel, true, PANEL_BG_COLOR, MENU_LAYER)
+        .publish_with(|topic, payload| publish(topic, payload));
+    DrawCommand::rectangle(layout.panel, false, PANEL_BORDER_COLOR, MENU_LAYER)
+        .publish_with(|topic, payload| publish(topic, payload));
 
     let title = match menu {
         MenuState::Main => "Paused (Esc to resume)",
@@ -914,44 +902,23 @@ fn draw_menu(
         );
     }
 
-    for button in menu_buttons(
-        menu,
-        fullscreen,
-        resolution,
-        resolution_expanded,
-        resolution_options,
-    ) {
-        publish(
-            DrawRect::TOPIC,
-            &DrawRect {
-                x: button.x,
-                y: button.y,
-                w: button.w,
-                h: button.h,
-                filled: true,
-                color: BUTTON_COLOR,
-                layer: MENU_LAYER,
-                screen_space: true,
-            }
-            .encode(),
-        );
+    for button in layout.buttons {
+        DrawCommand::rectangle(button.bounds, true, BUTTON_COLOR, MENU_LAYER)
+            .publish_with(|topic, payload| publish(topic, payload));
         // Rough centering assuming ~8px average glyph width at size 16 —
         // good enough for this demo's short labels, not measured text.
-        let text_x = button.x + (button.w as i32 - button.label.len() as i32 * 8) / 2;
-        let text_y = button.y + (button.h as i32 - 16) / 2;
-        publish(
-            DrawText::TOPIC,
-            &DrawText {
-                text: &button.label,
-                x: text_x,
-                y: text_y,
-                size: 16,
-                color: BUTTON_TEXT_COLOR,
-                layer: MENU_LAYER,
-                screen_space: true,
-            }
-            .encode(),
-        );
+        let text_x =
+            button.bounds.x + (button.bounds.width as i32 - button.label.len() as i32 * 8) / 2;
+        let text_y = button.bounds.y + (button.bounds.height as i32 - 16) / 2;
+        DrawCommand::text(
+            button.label,
+            text_x,
+            text_y,
+            16,
+            BUTTON_TEXT_COLOR,
+            MENU_LAYER,
+        )
+        .publish_with(|topic, payload| publish(topic, payload));
     }
 }
 
@@ -1007,7 +974,12 @@ fn draw_end_screen(outcome: Outcome, score: u32) {
     );
     match outcome {
         Outcome::GameOver => {
-            draw_centered_text("GAME OVER", SCREEN_HEIGHT / 2 - 30, 48, GAME_OVER_TITLE_COLOR);
+            draw_centered_text(
+                "GAME OVER",
+                SCREEN_HEIGHT / 2 - 30,
+                48,
+                GAME_OVER_TITLE_COLOR,
+            );
             draw_centered_text(
                 "Press Enter to retry",
                 SCREEN_HEIGHT / 2 + 30,
@@ -1029,7 +1001,7 @@ fn draw_end_screen(outcome: Outcome, score: u32) {
     }
 }
 
-/// Left-click hit-testing against whatever `menu_buttons` the current menu
+/// Left-click hit-testing against whatever `menu_layout` the current menu
 /// shows — a no-op while `Closed` (nothing to click) or for any click that
 /// doesn't land inside a button.
 fn on_mouse_down(x: f32, y: f32) {
@@ -1050,27 +1022,26 @@ fn on_mouse_down(x: f32, y: f32) {
     // `input/mouse-down` reports physical window pixels (platform has no
     // concept of the renderer's fixed logical/UI space - see
     // gfx::SetDisplay's own doc comment), but every button position from
-    // `menu_buttons` is in that fixed SCREEN_WIDTH/SCREEN_HEIGHT space, the
+    // `menu_layout` is in that fixed SCREEN_WIDTH/SCREEN_HEIGHT space, the
     // same one screen_space draws stretch to fill. Converting back by
     // `resolution` keeps hit-testing aligned with what's actually drawn -
     // `resolution` is the renderer's own confirmed actual size
     // (renderer/display-changed, see on_message), not a guess, so this
     // stays correct in fullscreen too.
-    let (x, y) = (
-        x * SCREEN_WIDTH as f32 / resolution.0 as f32,
-        y * SCREEN_HEIGHT as f32 / resolution.1 as f32,
-    );
-    for button in menu_buttons(
+    let layout = menu_layout(
         menu,
         fullscreen,
         resolution,
         resolution_expanded,
         &resolution_options,
+    );
+    if let Some((_, id)) = layout.hit_test(
+        Canvas::new(SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32),
+        x,
+        y,
+        resolution,
     ) {
-        if button.contains(x, y) {
-            on_button_clicked(button.id);
-            break;
-        }
+        on_button_clicked(id);
     }
 }
 
