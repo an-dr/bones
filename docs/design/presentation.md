@@ -27,6 +27,9 @@ settings dialog on `ui/*`).
   per-layer.
 - The command vocabulary (clear, sprite, shapes, text, …) is a versioned core
   API; its exact set is an implementation-increment concern.
+- WASM guests may use the optional `game-ui` shared crate for logical-canvas
+  menu layout, selection, hit-testing, and owned `gfx/*` command generation.
+  It is theme-free and adds no native backend or bus protocol (ADR-025).
 
 ## ui — widgets
 

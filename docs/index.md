@@ -74,3 +74,4 @@ Immutable ADRs in [adr/](adr/):
 - [ADR-020](adr/ADR-020-persistence-is-kernel-tier-host-lifecycle-and-persistence-merge-into-wasm-extensions.md) — persistence is kernel-tier; host, lifecycle, and persistence merge into wasm-extensions
 - [ADR-021](adr/ADR-021-physics-backend-abstraction-split-rapier2d-out-of-game-core-add-a-retro-backend.md) — physics backend abstraction: split rapier2d out of game-core, add a retro backend (superseded by ADR-022)
 - [ADR-022](adr/ADR-022-physics-stays-inside-game-core-internal-physics-tiles-graphics-grouping-no-separate-crates.md) — physics stays inside game-core: internal physics/tiles/graphics grouping, no separate crates
+- [ADR-025](adr/ADR-025-game-ui-is-a-theme-free-guest-toolkit.md) — game UI is a theme-free guest toolkit

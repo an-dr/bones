@@ -109,7 +109,8 @@ bones/
 │   └── app/       #  the engine executable (default composition)
 ├── wit/           # contract: the WIT package
 ├── shared/        # crates depended on by both host and WASM guest code
-│   └── bones-messages/ # typed core messages + payload codecs (tick, gfx, ...)
+│   ├── bones-messages/ # typed core messages + payload codecs (tick, gfx, ...)
+│   └── game-ui/   # optional theme-free game menu layout and interaction
 ├── vendor/        # tracked upstream dependencies (submodules)
 │   └── pubsub-bus/   # the bus's underlying pub/sub primitive
 ├── extensions/    # first-party & example extensions, one directory each
