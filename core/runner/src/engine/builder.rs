@@ -9,10 +9,15 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+#[cfg(feature = "presentation")]
 use bones_messages::Message;
-use bus::{BudgetLimits, Module, ModuleContext, Registry, ServiceRegistry};
+#[cfg(feature = "presentation")]
+use bus::ModuleContext;
+use bus::{BudgetLimits, Module, Registry, ServiceRegistry};
 use logging::Logger;
+#[cfg(feature = "presentation")]
 use renderer::Renderer;
+#[cfg(feature = "presentation")]
 use ui::Ui;
 use wasm_extensions::host::DisplayInfo;
 use wasm_extensions::lifecycle;
@@ -28,9 +33,11 @@ use crate::Supervisor;
 
 use super::built_engine::{run_shutdown, BuiltEngine};
 use super::register_module::register_module;
+#[cfg(feature = "presentation")]
 use super::shared::Shared;
 
 const DEFAULT_TICK_HZ: f64 = 60.0;
+#[cfg(feature = "presentation")]
 const GFX_TOPICS: &str = "gfx/*";
 
 /// A relative `extensions_dir`/`saves_dir` resolves against the running
@@ -61,8 +68,11 @@ pub struct Engine {
     extension_controller: Option<String>,
     logger: Logger,
     tick_hz: f64,
+    #[cfg(feature = "presentation")]
     window: Option<(String, u32, u32)>,
+    #[cfg(feature = "presentation")]
     renderer_enabled: bool,
+    #[cfg(feature = "presentation")]
     ui_enabled: bool,
     #[cfg(feature = "web")]
     web_enabled: bool,
@@ -80,8 +90,11 @@ impl Engine {
             extension_controller: None,
             logger: Logger::default(),
             tick_hz: DEFAULT_TICK_HZ,
+            #[cfg(feature = "presentation")]
             window: None,
+            #[cfg(feature = "presentation")]
             renderer_enabled: false,
+            #[cfg(feature = "presentation")]
             ui_enabled: false,
             #[cfg(feature = "web")]
             web_enabled: false,
@@ -132,6 +145,7 @@ impl Engine {
     /// Opens one SDL window (platform/design.md) and feeds its keyboard
     /// events onto `input/*` each frame of `run`'s loop. No window
     /// configured here means no platform at all — a headless engine.
+    #[cfg(feature = "presentation")]
     pub fn window(mut self, title: impl Into<String>, width: u32, height: u32) -> Self {
         self.window = Some((title.into(), width, height));
         self
@@ -141,6 +155,7 @@ impl Engine {
     /// executes `gfx/*` draw commands published by extensions and presents
     /// once per `run` iteration. Requires `.window(...)` — `build`/`run`
     /// error if this is set without one.
+    #[cfg(feature = "presentation")]
     pub fn renderer(mut self) -> Self {
         self.renderer_enabled = true;
         self
@@ -151,6 +166,7 @@ impl Engine {
     /// Requires `.renderer()` too (ui draws through it, direct-wired for
     /// now — see docs/structure.md) — `build`/`run` error if this is set
     /// without one.
+    #[cfg(feature = "presentation")]
     pub fn ui(mut self) -> Self {
         self.ui_enabled = true;
         self
@@ -214,14 +230,18 @@ impl Engine {
     /// publicly (not just used by `run`) for a future driver that wants
     /// the wired-up pieces without `run`'s sleep-loop attached.
     pub fn build(mut self) -> wasmtime::Result<BuiltEngine> {
+        #[cfg(feature = "presentation")]
         let window = self.window.take();
+        #[cfg(feature = "presentation")]
         let renderer_enabled = self.renderer_enabled;
+        #[cfg(feature = "presentation")]
         let ui_enabled = self.ui_enabled;
         let bus = bus::Bus::new();
         let registry = Registry::new();
         let wasm_engine = wasm_extensions::host::new_engine()?;
         let exit_requested = Arc::new(AtomicBool::new(false));
 
+        #[cfg(feature = "presentation")]
         let mut platform = match window {
             Some((title, width, height)) => {
                 Some(platform::Platform::new(&title, width, height).map_err(wasmtime::Error::msg)?)
@@ -231,6 +251,7 @@ impl Engine {
         // Queried once here, independent of the window hand-off below
         // (`Platform` resolves it at construction, not from the live
         // window) - every loaded extension gets the same static snapshot.
+        #[cfg(feature = "presentation")]
         let display_info = match &platform {
             Some(platform) => DisplayInfo {
                 modes: platform.display_modes().to_vec(),
@@ -238,6 +259,8 @@ impl Engine {
             },
             None => DisplayInfo::default(),
         };
+        #[cfg(not(feature = "presentation"))]
+        let display_info = DisplayInfo::default();
 
         // Build-time-only (ADR-017): every module's `init` runs against
         // this. Seeded with `window-surface` unconditionally (not just for
@@ -247,6 +270,7 @@ impl Engine {
         // nothing ends up consuming it, so an unclaimed window stays open
         // instead of closing with the registry it briefly lived in.
         let mut services = ServiceRegistry::new();
+        #[cfg(feature = "presentation")]
         if let Some(platform) = &mut platform {
             platform.provide_window(&mut services);
         }
@@ -277,6 +301,7 @@ impl Engine {
             None
         };
 
+        #[cfg(feature = "presentation")]
         let renderer = if renderer_enabled {
             if platform.is_none() {
                 return Err(wasmtime::Error::msg(".renderer() needs .window(...) too"));
@@ -295,6 +320,7 @@ impl Engine {
             None
         };
 
+        #[cfg(feature = "presentation")]
         let ui = if ui_enabled {
             renderer
                 .as_ref()
@@ -465,14 +491,18 @@ impl Engine {
             self.extension_budget,
         );
 
+        #[cfg(feature = "presentation")]
         if let Some(platform) = &mut platform {
             platform.reclaim_window(&mut services);
         }
 
         Ok(BuiltEngine {
             runner: Runner::new(bus, self.logger),
+            #[cfg(feature = "presentation")]
             platform,
+            #[cfg(feature = "presentation")]
             renderer,
+            #[cfg(feature = "presentation")]
             ui,
             modules,
             supervisor,
@@ -492,8 +522,11 @@ impl Engine {
         let period = Duration::from_secs_f64(1.0 / self.tick_hz);
         let BuiltEngine {
             runner,
+            #[cfg(feature = "presentation")]
             mut platform,
+            #[cfg(feature = "presentation")]
             renderer,
+            #[cfg(feature = "presentation")]
             ui,
             modules,
             mut supervisor,
@@ -503,6 +536,7 @@ impl Engine {
 
         let mut last = std::time::Instant::now() - period;
         let shutdown_sender = loop {
+            #[cfg(feature = "presentation")]
             if let Some(platform) = &mut platform {
                 // ADR-008: offer every raw event to the ui layer first; what
                 // it claims (wants_pointer_input/wants_keyboard_input, as of
@@ -533,6 +567,7 @@ impl Engine {
             // happened synchronously via `Handler::handle` during `step`'s
             // dispatch above, so `render` is a no-op for renderer today —
             // still called for any module that does need it.
+            #[cfg(feature = "presentation")]
             if let Some(renderer) = &renderer {
                 renderer.lock().unwrap().render();
             }
@@ -542,12 +577,14 @@ impl Engine {
 
             // ui draws above every gfx layer (design/presentation.md), so
             // its `update` runs between `render` and `present`.
+            #[cfg(feature = "presentation")]
             if let (Some(ui), Some(renderer)) = (&ui, &renderer) {
                 let mut renderer = renderer.lock().unwrap();
                 let (width, height) = renderer.size();
                 ui.lock().unwrap().update(&mut renderer, width, height);
             }
 
+            #[cfg(feature = "presentation")]
             if let Some(renderer) = &renderer {
                 renderer.lock().unwrap().present();
             }

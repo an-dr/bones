@@ -16,7 +16,7 @@ a fixed **kernel** and optional, consumer-injectable **native modules**
 | wasm-extensions | Everything about a WASM extension's existence over time (ADR-020): loading/dispatch/watchdog (`host`), state-transition events (`lifecycle`), and save/load of its own state (`persistence`, unconditional — see the ADR for why it isn't in the optional module set below) | bus, contract, logging |
 | contract  | The WIT package — the extension-facing API definition             | —                     |
 | platform  | SDL window, tray, input sources, timing, event pump; headless mode | logging                |
-| runner    | Frame-phase loop skeleton, builder API (`.module(...)` injection)  | bus, wasm-extensions, platform, logging |
+| runner    | Frame-phase loop skeleton, builder API (`.module(...)` injection); native presentation is feature-gated | bus, wasm-extensions, logging; optional platform/renderer/ui |
 | logging   | Structured sink and per-extension tagging                           | —                     |
 
 ## Native modules (first-party)
