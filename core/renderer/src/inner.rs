@@ -94,6 +94,9 @@ impl Inner {
                 let (r, g, b, a) = (clear.r, clear.g, clear.b, clear.a);
                 self.clear_color = Some(Color::RGBA(r, g, b, a));
             }
+            Command::ClearDrawBatch(_) => {
+                clear_pending_draws(&mut self.pending_draws, sender);
+            }
             Command::LoadSprite(load) => {
                 let texture = self
                     .texture_creator
@@ -102,10 +105,7 @@ impl Inner {
                 self.textures.insert(load.id, texture);
             }
             Command::DrawSprite(draw) => {
-                self.pending_draws
-                    .entry(sender.to_string())
-                    .or_default()
-                    .push(RetainedDraw::Sprite(draw));
+                push_pending_draw(&mut self.pending_draws, sender, RetainedDraw::Sprite(draw));
             }
             Command::SetCamera(camera) => {
                 self.camera = (camera.x, camera.y, camera.zoom);
@@ -131,34 +131,26 @@ impl Inner {
                 }
             }
             Command::DrawRect(draw) => {
-                self.pending_draws
-                    .entry(sender.to_string())
-                    .or_default()
-                    .push(RetainedDraw::Rect(draw));
+                push_pending_draw(&mut self.pending_draws, sender, RetainedDraw::Rect(draw));
             }
             Command::DrawLine(draw) => {
-                self.pending_draws
-                    .entry(sender.to_string())
-                    .or_default()
-                    .push(RetainedDraw::Line(draw));
+                push_pending_draw(&mut self.pending_draws, sender, RetainedDraw::Line(draw));
             }
             Command::DrawCircle(draw) => {
-                self.pending_draws
-                    .entry(sender.to_string())
-                    .or_default()
-                    .push(RetainedDraw::Circle(draw));
+                push_pending_draw(&mut self.pending_draws, sender, RetainedDraw::Circle(draw));
             }
             Command::DrawTriangle(draw) => {
-                self.pending_draws
-                    .entry(sender.to_string())
-                    .or_default()
-                    .push(RetainedDraw::Triangle(draw));
+                push_pending_draw(
+                    &mut self.pending_draws,
+                    sender,
+                    RetainedDraw::Triangle(draw),
+                );
             }
             Command::DrawText(draw) => {
-                self.pending_draws
-                    .entry(sender.to_string())
-                    .or_default()
-                    .push(RetainedDraw::Text {
+                push_pending_draw(
+                    &mut self.pending_draws,
+                    sender,
+                    RetainedDraw::Text {
                         text: draw.text.to_string(),
                         x: draw.x,
                         y: draw.y,
@@ -167,7 +159,8 @@ impl Inner {
                         layer: draw.layer,
                         screen_space: draw.screen_space,
                         align: draw.align,
-                    });
+                    },
+                );
             }
         }
         Ok(())
@@ -184,12 +177,11 @@ impl Inner {
             self.canvas.set_draw_color(color);
             self.canvas.clear();
         }
-        for (sender, draws) in self.pending_draws.drain() {
-            if !self.retained_draws.contains_key(&sender) {
-                self.sender_order.push(sender.clone());
-            }
-            self.retained_draws.insert(sender, draws);
-        }
+        retain_completed_batches(
+            &mut self.pending_draws,
+            &mut self.retained_draws,
+            &mut self.sender_order,
+        );
 
         let mut ordered: Vec<RetainedDraw> = Vec::new();
         for sender in &self.sender_order {
@@ -482,3 +474,34 @@ impl Inner {
         result
     }
 }
+
+fn push_pending_draw(
+    pending_draws: &mut HashMap<String, Vec<RetainedDraw>>,
+    sender: &str,
+    draw: RetainedDraw,
+) {
+    pending_draws
+        .entry(sender.to_string())
+        .or_default()
+        .push(draw);
+}
+
+fn clear_pending_draws(pending_draws: &mut HashMap<String, Vec<RetainedDraw>>, sender: &str) {
+    pending_draws.insert(sender.to_string(), Vec::new());
+}
+
+fn retain_completed_batches(
+    pending_draws: &mut HashMap<String, Vec<RetainedDraw>>,
+    retained_draws: &mut HashMap<String, Vec<RetainedDraw>>,
+    sender_order: &mut Vec<String>,
+) {
+    for (sender, draws) in pending_draws.drain() {
+        if !retained_draws.contains_key(&sender) {
+            sender_order.push(sender.clone());
+        }
+        retained_draws.insert(sender, draws);
+    }
+}
+
+#[cfg(test)]
+mod tests;

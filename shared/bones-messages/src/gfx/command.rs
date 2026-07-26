@@ -1,8 +1,8 @@
 use crate::{DecodeError, DecodeMessage, Message};
 
 use super::{
-    Clear, DrawCircle, DrawLine, DrawRect, DrawSprite, DrawText, DrawTriangle, LoadSprite,
-    SetCamera, SetDisplay,
+    Clear, ClearDrawBatch, DrawCircle, DrawLine, DrawRect, DrawSprite, DrawText, DrawTriangle,
+    LoadSprite, SetCamera, SetDisplay,
 };
 
 /// Any currently supported `gfx/*` command, decoded by exact topic.
@@ -10,6 +10,7 @@ use super::{
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Command<'a> {
     Clear(Clear),
+    ClearDrawBatch(ClearDrawBatch),
     LoadSprite(LoadSprite<'a>),
     DrawSprite(DrawSprite),
     SetCamera(SetCamera),
@@ -27,6 +28,9 @@ impl<'a> Command<'a> {
     pub fn decode(topic: &str, payload: &'a [u8]) -> Result<Option<Self>, DecodeError> {
         match topic {
             Clear::TOPIC => Clear::decode(payload).map(|value| Some(Self::Clear(value))),
+            ClearDrawBatch::TOPIC => {
+                ClearDrawBatch::decode(payload).map(|value| Some(Self::ClearDrawBatch(value)))
+            }
             LoadSprite::TOPIC => {
                 LoadSprite::decode(payload).map(|value| Some(Self::LoadSprite(value)))
             }

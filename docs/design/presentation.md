@@ -22,6 +22,8 @@ settings dialog on `ui/*`).
   extension's own stream deterministic).
 - A batch fully replaces that extension's previous batch on the same layer —
   retained until replaced, so a paused extension keeps its last frame visible.
+- `gfx/clear-draw-batch` publishes an explicit empty batch for its sender,
+  removing only that sender's retained draws on the next render pass.
 - A single world-to-screen camera transform (position + zoom) applies to
   every draw — one viewport for the whole scene, not per-extension or
   per-layer.

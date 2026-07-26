@@ -19,6 +19,12 @@ fn every_command_round_trips() {
         Ok(Some(Command::Clear(clear)))
     );
 
+    let clear_draw_batch = ClearDrawBatch;
+    assert_eq!(
+        Command::decode(ClearDrawBatch::TOPIC, &clear_draw_batch.encode()),
+        Ok(Some(Command::ClearDrawBatch(clear_draw_batch)))
+    );
+
     let load = LoadSprite {
         id: 7,
         png_bytes: b"not-really-a-png",
@@ -227,5 +233,9 @@ fn fixed_shape_commands_reject_wrong_byte_counts() {
     assert_eq!(
         Command::decode(DrawSprite::TOPIC, &[0; 46]),
         Err(DecodeError::Truncated)
+    );
+    assert_eq!(
+        Command::decode(ClearDrawBatch::TOPIC, &[1]),
+        Err(DecodeError::TrailingBytes)
     );
 }

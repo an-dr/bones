@@ -1,6 +1,7 @@
 //! Typed `gfx/*` draw commands shared by extensions and the renderer.
 
 mod clear;
+mod clear_draw_batch;
 mod command;
 mod draw_circle;
 mod draw_line;
@@ -14,6 +15,7 @@ mod set_display;
 mod text_align;
 
 pub use clear::Clear;
+pub use clear_draw_batch::ClearDrawBatch;
 pub use command::Command;
 pub use draw_circle::DrawCircle;
 pub use draw_line::DrawLine;
