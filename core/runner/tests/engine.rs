@@ -87,6 +87,52 @@ fn build_discovers_loads_and_registers_a_real_extension() {
 }
 
 #[test]
+fn shutdown_all_calls_cleanup_unregisters_and_publishes_stopped() {
+    let sink = RecordingSink::new();
+    let BuiltEngine {
+        runner,
+        mut supervisor,
+        ..
+    } = Engine::new()
+        .extensions_dir(HELLO_DIR)
+        .logger(Logger::new(Arc::new(sink.clone())))
+        .build()
+        .expect("build extensions/hello first: pwsh extensions/hello/build.ps1");
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let captured = events.clone();
+    let endpoint = runner
+        .bus()
+        .register("lifecycle-spy", move |envelope: &Envelope| {
+            captured.lock().unwrap().push(envelope.clone());
+        });
+    endpoint.subscribe(LifecycleEvent::TOPIC);
+    assert!(
+        supervisor.registry.call("test", "hello", &[]).is_ok(),
+        "hello must be running before the shutdown sequence"
+    );
+
+    supervisor.shutdown_all();
+    assert!(
+        supervisor.registry.call("test", "hello", &[]).is_err(),
+        "a stopped extension must no longer accept direct sends"
+    );
+    runner.bus().dispatch();
+
+    assert!(sink
+        .records()
+        .iter()
+        .any(|(_, _, message)| message.contains("shutdown")));
+    let events = events.lock().unwrap();
+    assert!(events.iter().any(|envelope| {
+        LifecycleEvent::decode(&envelope.payload)
+            == Ok(LifecycleEvent {
+                event: Event::Stopped,
+                extension: "hello",
+            })
+    }));
+}
+
+#[test]
 fn startup_allow_list_and_runtime_commands_control_activation() {
     let dir = std::env::temp_dir().join("bones-runtime-extension-manager");
     std::fs::create_dir_all(dir.join("core")).unwrap();

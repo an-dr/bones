@@ -13,6 +13,7 @@ guests in other languages to reproduce without Rust or serde.
 
 - `tick` — `Tick` on `core/tick`.
 - `lifecycle` — `LifecycleEvent` and `Event` on `core/lifecycle`.
+- `window` — `CloseRequested` on `window/close-requested`.
 - `input` — `KeyDown` and `KeyUp` keyboard events.
 - `gfx` — `Clear`, `LoadSprite`, `DrawSprite`, `DrawRect`, `DrawLine`,
   `DrawCircle`, `DrawTriangle`, and `DrawText`, plus the wildcard-friendly

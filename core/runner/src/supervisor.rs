@@ -163,6 +163,22 @@ impl Supervisor {
         }
     }
 
+    /// Stops every running extension through the same orderly lifecycle
+    /// boundary as a runtime unload.
+    ///
+    /// Shutdown-hook publishes stay queued ahead of each `Stopped` event.
+    pub fn shutdown_all(&mut self) {
+        let running: Vec<String> = self
+            .tracked
+            .iter()
+            .filter(|extension| !extension.quarantined)
+            .map(|extension| extension.name.clone())
+            .collect();
+        for name in running {
+            self.unload(&name, true);
+        }
+    }
+
     /// Activates a catalog entry.
     ///
     /// Idempotent: an already-running extension succeeds without replacing
