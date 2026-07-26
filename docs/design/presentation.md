@@ -47,9 +47,13 @@ settings dialog on `ui/*`).
 
 ## web — panels
 
-- Panel lifecycle: an extension requests open (with bundled HTML or a URL),
-  close, or navigate; the core confirms via events. Each panel belongs to
-  exactly one extension and is closed automatically when its owner unloads.
+- Panel lifecycle: an extension directly sends typed open (with inline HTML
+  or a URL), close, or navigate commands to the `web` endpoint; the core
+  confirms via `web/*` events. A missing optional module is therefore an
+  immediate `UnknownEndpoint`, not a silently ignored publish.
+- Each panel belongs to exactly one extension and is closed automatically when
+  its owner unloads. Panel ids are local to that owner. Events include both
+  the host-derived owner and panel id because bus topics are broadcast.
 - Messages between the extension and its page are opaque JSON, bridged
   between the bus and the page's script environment. The page cannot reach the
   bus directly — everything passes through (and is attributable to) the

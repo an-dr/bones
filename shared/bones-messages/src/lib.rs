@@ -13,6 +13,7 @@ pub mod persistence;
 pub mod renderer;
 pub mod tick;
 pub mod ui;
+pub mod web;
 pub mod window;
 
 pub use codec::{DecodeError, Reader, Writer};

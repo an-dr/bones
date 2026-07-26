@@ -9,7 +9,8 @@ end to end, including a direct request to another extension.
 1. Manifest: name `dashboard`, version `0.1.0`. The extension package bundles
    its frontend assets (HTML/JS/CSS).
 2. `init`: subscribe to `web/*` events for its panel and to the app-defined
-   topic `metrics/updated`; request panel open with the bundled page.
+   topic `metrics/updated`; directly send `web::Command::Open` to the `web`
+   endpoint with the bundled page.
 
 ## Steady state
 
@@ -46,6 +47,6 @@ owning extension, which decides what its frontend may see and do
   instead of hanging its page.
 - **Panel ownership:** if the dashboard extension unloads or faults, the core
   closes its panel automatically (presentation.md).
-- **Optional feature:** on an engine built without the web feature, panel-open
-  requests fail with an error reply — the extension can detect this and
+- **Optional feature:** on an engine built without the web feature, the
+  direct open command returns `UnknownEndpoint` — the extension can detect it and
   degrade (e.g. log and exit cleanly).
