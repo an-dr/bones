@@ -558,7 +558,6 @@ fn draw_hud(score: u32, life: u32) {
             color: HUD_BG_COLOR,
             layer: HUD_LAYER,
             screen_space: true,
-            align: TextAlign::Left,
         }
         .encode(),
     );
@@ -573,7 +572,6 @@ fn draw_hud(score: u32, life: u32) {
             color: HUD_BORDER_COLOR,
             layer: HUD_LAYER,
             screen_space: true,
-            align: TextAlign::Left,
         }
         .encode(),
     );
@@ -588,6 +586,7 @@ fn draw_hud(score: u32, life: u32) {
             color: HUD_TEXT_COLOR,
             layer: HUD_LAYER,
             screen_space: true,
+            align: TextAlign::Left,
         }
         .encode(),
     );
@@ -602,6 +601,7 @@ fn draw_hud(score: u32, life: u32) {
             color: HUD_TEXT_COLOR,
             layer: HUD_LAYER,
             screen_space: true,
+            align: TextAlign::Left,
         }
         .encode(),
     );

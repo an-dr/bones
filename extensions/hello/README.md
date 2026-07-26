@@ -24,5 +24,5 @@ silently compiles a native `hello.dll`/`.so` instead, since this crate has no
 other way to know which platform you meant. Always go through the script.
 
 The same script also builds the `bones` engine and assembles a runnable
-`dist/` next to this README — `dist/bones(.exe)` with `dist/extensions/
-hello.wasm` already in place, ready to run directly with no further setup.
+`dist/` next to this README — `dist/bones(.exe)`, `dist/bones.toml`, and
+`dist/extensions/hello.wasm`, ready to run directly with no further setup.

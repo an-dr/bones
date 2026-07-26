@@ -1,17 +1,6 @@
 #!/usr/bin/env pwsh
-# Builds the flooding extension and its healthy peer, then packages a
-# directly runnable demonstration. Run with: pwsh build.ps1
+# Builds the metrics extension and assembles a directly runnable dist package.
 $ErrorActionPreference = "Stop"
-
-rustup target add wasm32-wasip2
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-cargo build --manifest-path "$PSScriptRoot/Cargo.toml" --target wasm32-wasip2 --release
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-cargo build --manifest-path "$PSScriptRoot/../hello/Cargo.toml" --target wasm32-wasip2 --release
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-Write-Host "Built: target/wasm32-wasip2/release/flood_demo.wasm"
 
 function Initialize-NativeBuildEnvironment {
     if ((Get-Command ninja -ErrorAction SilentlyContinue) -and -not $env:CMAKE_GENERATOR) {
@@ -34,7 +23,6 @@ function Initialize-NativeBuildEnvironment {
     }
 
     $arch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64" } else { "x64" }
-    Write-Host "==> No compiler on PATH; loading MSVC ($($vcvarsall.FullName) $arch)..."
     cmd /c "`"$($vcvarsall.FullName)`" $arch >nul 2>&1 && set" | ForEach-Object {
         if ($_ -match '^([^=]+)=(.*)$') {
             Set-Item -Path "env:$($matches[1])" -Value $matches[2]
@@ -42,15 +30,15 @@ function Initialize-NativeBuildEnvironment {
     }
 }
 
+rustup target add wasm32-wasip2
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+cargo build --manifest-path "$PSScriptRoot/Cargo.toml" --target wasm32-wasip2 --release
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
 $repoRoot = (Resolve-Path "$PSScriptRoot/../..").Path
 $exeName = if ($IsWindows) { "bones.exe" } else { "bones" }
-$dist = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "dist"))
-$demoRoot = [IO.Path]::GetFullPath($PSScriptRoot)
-if (-not $dist.StartsWith($demoRoot + [IO.Path]::DirectorySeparatorChar)) {
-    throw "Refusing to replace dist outside the flood_demo directory"
-}
 
-Write-Host "==> Building bones..."
 Push-Location $repoRoot
 try {
     Initialize-NativeBuildEnvironment
@@ -60,14 +48,18 @@ try {
     Pop-Location
 }
 
+$dist = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "dist"))
+$demoRoot = [IO.Path]::GetFullPath($PSScriptRoot)
+if (-not $dist.StartsWith($demoRoot + [IO.Path]::DirectorySeparatorChar)) {
+    throw "Refusing to replace dist outside the metrics directory"
+}
 if (Test-Path -LiteralPath $dist) {
     Remove-Item -LiteralPath $dist -Recurse -Force
 }
 New-Item -ItemType Directory -Path "$dist/extensions" -Force | Out-Null
 Copy-Item "$repoRoot/target/release/$exeName" "$dist/$exeName"
 Copy-Item "$PSScriptRoot/bones.toml" "$dist/bones.toml"
-Copy-Item "$PSScriptRoot/target/wasm32-wasip2/release/flood_demo.wasm" "$dist/extensions/flood_demo.wasm"
-Copy-Item "$PSScriptRoot/../hello/target/wasm32-wasip2/release/hello.wasm" "$dist/extensions/hello.wasm"
+Copy-Item "$PSScriptRoot/target/wasm32-wasip2/release/metrics.wasm" "$dist/extensions/metrics.wasm"
 
 Write-Host ""
-Write-Host "Packaged: $dist/$exeName (flood_demo + healthy hello peer)"
+Write-Host "Packaged: $dist/$exeName (extensions/metrics.wasm and bones.toml alongside it)"

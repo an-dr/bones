@@ -1,0 +1,4 @@
+extensions_dir = "extensions"
+window_title = "Bones game-core demo"
+game_core = true
+audio = true

@@ -7,7 +7,7 @@ $ErrorActionPreference = "Stop"
 rustup target add wasm32-wasip2
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-cargo build --target wasm32-wasip2 --release
+cargo build --manifest-path "$PSScriptRoot/Cargo.toml" --target wasm32-wasip2 --release
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "Built: target/wasm32-wasip2/release/hello.wasm"
@@ -50,9 +50,13 @@ function Initialize-NativeBuildEnvironment {
     }
 }
 
-$repoRoot = Resolve-Path "$PSScriptRoot/../.."
+$repoRoot = (Resolve-Path "$PSScriptRoot/../..").Path
 $exeName = if ($IsWindows) { "bones.exe" } else { "bones" }
-$dist = "$PSScriptRoot/dist"
+$dist = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "dist"))
+$demoRoot = [IO.Path]::GetFullPath($PSScriptRoot)
+if (-not $dist.StartsWith($demoRoot + [IO.Path]::DirectorySeparatorChar)) {
+    throw "Refusing to replace dist outside the hello directory"
+}
 
 Write-Host "==> Building bones..."
 Push-Location $repoRoot
@@ -64,9 +68,12 @@ try {
     Pop-Location
 }
 
-Remove-Item -Recurse -Force $dist -ErrorAction SilentlyContinue
+if (Test-Path -LiteralPath $dist) {
+    Remove-Item -LiteralPath $dist -Recurse -Force
+}
 New-Item -ItemType Directory -Path "$dist/extensions" -Force | Out-Null
 Copy-Item "$repoRoot/target/release/$exeName" "$dist/$exeName"
+Copy-Item "$PSScriptRoot/bones.toml" "$dist/bones.toml"
 Copy-Item "$PSScriptRoot/target/wasm32-wasip2/release/hello.wasm" "$dist/extensions/hello.wasm"
 
 Write-Host ""
