@@ -39,8 +39,26 @@ impl Registry {
             .insert(name.into(), target);
     }
 
+    /// Inserts only when the endpoint name is vacant.
+    pub fn try_insert(&self, name: impl Into<String>, target: Arc<dyn Respond>) -> bool {
+        use std::collections::hash_map::Entry;
+
+        match self.inner.lock().unwrap().targets.entry(name.into()) {
+            Entry::Vacant(entry) => {
+                entry.insert(target);
+                true
+            }
+            Entry::Occupied(_) => false,
+        }
+    }
+
     pub fn remove(&self, name: &str) {
         self.inner.lock().unwrap().targets.remove(name);
+    }
+
+    /// Reports whether a direct-call endpoint is currently registered.
+    pub fn contains(&self, name: &str) -> bool {
+        self.inner.lock().unwrap().targets.contains_key(name)
     }
 
     /// Synchronously calls `to` on behalf of `from`, returning its reply

@@ -29,3 +29,7 @@ pub/sub:
   invokes `to` synchronously and returns its reply. A `to` already in the
   current call chain fails immediately with `SendError::Cycle` rather than
   deadlocking.
+
+`ModuleRegistration` attaches a native `Module` to both message paths at
+runtime and owns its shutdown/unregistration. It supports temporary module
+compositions without rebuilding the engine.

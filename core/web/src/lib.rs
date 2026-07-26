@@ -11,4 +11,8 @@ pub use web::Web;
 #[cfg(feature = "wry-backend")]
 mod wry_backend;
 #[cfg(feature = "wry-backend")]
+mod wry_presentation;
+#[cfg(feature = "wry-backend")]
 pub use wry_backend::WryBackend;
+#[cfg(feature = "wry-backend")]
+pub use wry_presentation::WryPresentation;

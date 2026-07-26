@@ -18,3 +18,8 @@ webviews that track the resizable window's live client area. Pages send opaque
 JSON text to extensions with `window.ipc.postMessage(text)` and receive host
 messages as `bones-message` `CustomEvent`s whose `detail` is the same opaque
 JSON text.
+
+`WryPresentation` is the detachable composition for service embedders. It
+opens its own SDL parent window, attaches the same `web` endpoint to an
+existing bus/registry, and fully unregisters it on close. The engine that owns
+that bus can remain headless and open a new presentation later.

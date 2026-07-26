@@ -754,6 +754,51 @@ fn web_and_renderer_share_a_real_window_and_register_the_web_endpoint() {
     engine.shutdown();
 }
 
+#[cfg(all(feature = "web", target_os = "windows"))]
+#[test]
+fn a_headless_engine_can_repeatedly_attach_and_close_wry_presentation() {
+    use bones_messages::web::{Command, OpenPanel, PanelSource, ENDPOINT};
+    use web::WryPresentation;
+
+    let _guard = sdl_test_lock().lock().unwrap();
+    let mut engine = Engine::new().build().unwrap();
+    assert!(engine.is_headless());
+
+    for cycle in 0..2 {
+        let mut presentation = WryPresentation::open(
+            engine.runner.bus().clone(),
+            engine.supervisor.registry.clone(),
+            Logger::default(),
+            format!("lazy web {cycle}"),
+            160,
+            120,
+        )
+        .unwrap();
+        assert!(presentation.is_open());
+        assert!(engine.supervisor.registry.contains(ENDPOINT));
+
+        let reply = engine.supervisor.registry.call(
+            "dashboard",
+            ENDPOINT,
+            &Command::Open(OpenPanel {
+                panel: "main",
+                source: PanelSource::Html("<!doctype html><title>lazy</title>"),
+            })
+            .encode(),
+        );
+        assert_eq!(reply, Ok(Vec::new()));
+        assert!(!presentation.update());
+        engine.runner.bus().dispatch();
+
+        presentation.close();
+        assert!(!presentation.is_open());
+        assert!(!engine.supervisor.registry.contains(ENDPOINT));
+        assert!(engine.is_headless());
+    }
+
+    engine.shutdown();
+}
+
 #[cfg(feature = "web")]
 #[test]
 fn web_without_a_window_is_a_build_error() {

@@ -79,3 +79,4 @@ Immutable ADRs in [adr/](adr/):
 - [ADR-025](adr/ADR-025-game-ui-is-a-theme-free-guest-toolkit.md) — game UI is a theme-free guest toolkit
 - [ADR-026](adr/ADR-026-game-core-publishes-authoritative-entity-transform-snapshots.md) — game-core publishes authoritative entity transform snapshots
 - [ADR-027](adr/ADR-027-feature-gate-native-presentation.md) — feature-gate the native presentation stack
+- [ADR-028](adr/ADR-028-detachable-native-modules-and-wry-presentation.md) — attach native modules and wry presentation to a live headless engine
