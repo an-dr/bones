@@ -4,6 +4,8 @@ use std::sync::{Arc, Mutex, Weak};
 use crate::adapter::Adapter;
 use crate::{Endpoint, EndpointBudget, Envelope, Handler};
 
+type BudgetRegistrations = Arc<Mutex<Vec<(Weak<Mutex<Adapter>>, EndpointBudget)>>>;
+
 /// Cheap to clone: an extension's `publish` import needs to hold a handle
 /// to the same bus it's registered on. `pubsub_bus::EventBus` is `Clone`
 /// (3.2.0) and already `Arc`-backed internally, so no wrapping `Arc` of
@@ -11,7 +13,7 @@ use crate::{Endpoint, EndpointBudget, Envelope, Handler};
 #[derive(Clone)]
 pub struct Bus {
     inner: pubsub_bus::EventBus<Envelope, ()>,
-    budgets: Arc<Mutex<Vec<(Weak<Mutex<Adapter>>, EndpointBudget)>>>,
+    budgets: BudgetRegistrations,
 }
 
 impl Bus {

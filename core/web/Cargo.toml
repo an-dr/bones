@@ -1,0 +1,9 @@
+[package]
+name = "web"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bones-messages = { path = "../../shared/bones-messages" }
+bus = { path = "../bus" }
+logging = { path = "../logging" }
