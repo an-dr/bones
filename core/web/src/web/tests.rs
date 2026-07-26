@@ -15,6 +15,7 @@ use super::*;
 struct FakeState {
     calls: Arc<Mutex<Vec<String>>>,
     events: Arc<Mutex<Vec<BackendEvent>>>,
+    updates: Arc<Mutex<usize>>,
 }
 
 struct FakeBackend {
@@ -62,6 +63,11 @@ impl Backend for FakeBackend {
         Ok(())
     }
 
+    fn update(&mut self) -> Result<(), String> {
+        *self.state.updates.lock().unwrap() += 1;
+        Ok(())
+    }
+
     fn drain_events(&mut self) -> Vec<BackendEvent> {
         std::mem::take(&mut *self.state.events.lock().unwrap())
     }
@@ -102,6 +108,14 @@ fn module_identity_and_lifecycle_subscription_are_explicit() {
         context.into_subscriptions(),
         vec![LifecycleEvent::TOPIC.to_string()]
     );
+}
+
+#[test]
+fn render_updates_the_native_backend() {
+    let (mut web, state, _, _) = setup();
+    web.render();
+
+    assert_eq!(*state.updates.lock().unwrap(), 1);
 }
 
 #[test]

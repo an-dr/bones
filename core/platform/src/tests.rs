@@ -14,6 +14,16 @@ fn sdl_test_lock() -> &'static Mutex<()> {
 }
 
 #[test]
+fn a_platform_window_is_resizable() {
+    let _guard = sdl_test_lock().lock().unwrap();
+    let mut platform = Platform::new("test", 64, 64).expect("needs a real display");
+    let window = platform.take_window().expect("window should be available");
+
+    assert!(sdl3::video::WindowFlags::from(window.window_flags())
+        .contains(sdl3::video::WindowFlags::RESIZABLE));
+}
+
+#[test]
 fn key_down_becomes_an_input_key_down_envelope() {
     let event = Event::KeyDown {
         timestamp: 0,

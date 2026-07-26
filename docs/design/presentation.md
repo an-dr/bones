@@ -59,7 +59,8 @@ settings dialog on `ui/*`).
   bus directly — everything passes through (and is attributable to) the
   owning extension.
 - Panels are OS webviews composited above the SDL content as native children
-  of the SDL window on supported desktop window systems.
+  of the resizable SDL window on supported desktop window systems. Their
+  bounds track the live client area.
 
 ## Input routing
 

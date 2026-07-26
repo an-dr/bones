@@ -2,9 +2,8 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use bones_messages::web::PanelSource;
-use raw_window_handle::HasWindowHandle;
 use send_wrapper::SendWrapper;
-use wry::dpi::{LogicalPosition, LogicalSize};
+use wry::dpi::{PhysicalPosition, PhysicalSize};
 use wry::{Rect, WebView, WebViewBuilder};
 
 use crate::{Backend, BackendEvent};
@@ -25,31 +24,35 @@ type EventQueue = Arc<Mutex<Vec<BackendEvent>>>;
 /// native thread affinity whenever a view is accessed or dropped.
 pub struct WryBackend {
     parent: SendWrapper<ParentHandle>,
-    bounds: Rect,
+    pixel_size: (u32, u32),
     panels: HashMap<PanelKey, SendWrapper<WebView>>,
     events: EventQueue,
 }
 
 impl WryBackend {
-    /// Captures the SDL window's native handle and initial client size.
-    ///
-    /// The SDL window must outlive this backend. The runner satisfies that
-    /// invariant by shutting modules down before dropping the renderer/window.
+    /// Shares the SDL window and captures its initial client size.
     pub fn new(window: &sdl3::video::Window) -> Result<Self, String> {
-        let raw = window
-            .window_handle()
-            .map_err(|error| format!("reading SDL window handle: {error}"))?
-            .as_raw();
-        let (width, height) = window.size();
         Ok(Self {
-            parent: SendWrapper::new(ParentHandle::new(raw)),
-            bounds: Rect {
-                position: LogicalPosition::new(0, 0).into(),
-                size: LogicalSize::new(width, height).into(),
-            },
+            parent: SendWrapper::new(ParentHandle::new(window)),
+            pixel_size: window.size_in_pixels(),
             panels: HashMap::new(),
             events: Arc::new(Mutex::new(Vec::new())),
         })
+    }
+
+    fn sync_bounds(&mut self) -> Result<(), String> {
+        let pixel_size = self.parent.pixel_size();
+        if pixel_size == self.pixel_size {
+            return Ok(());
+        }
+
+        let bounds = panel_bounds(pixel_size);
+        for ((owner, panel), view) in &mut self.panels {
+            view.set_bounds(bounds)
+                .map_err(|error| format!("resizing panel '{owner}/{panel}': {error}"))?;
+        }
+        self.pixel_size = pixel_size;
+        Ok(())
     }
 
     fn panel_mut(&mut self, owner: &str, panel: &str) -> Result<&mut WebView, String> {
@@ -71,7 +74,7 @@ impl Backend for WryBackend {
         let event_panel = panel.to_string();
         let events = Arc::clone(&self.events);
         let builder = WebViewBuilder::new()
-            .with_bounds(self.bounds)
+            .with_bounds(panel_bounds(self.pixel_size))
             .with_ipc_handler(move |request| {
                 if let Ok(mut events) = events.lock() {
                     events.push(BackendEvent::PageMessage {
@@ -116,10 +119,21 @@ impl Backend for WryBackend {
             .map_err(|error| format!("sending message to panel '{owner}/{panel}': {error}"))
     }
 
+    fn update(&mut self) -> Result<(), String> {
+        self.sync_bounds()
+    }
+
     fn drain_events(&mut self) -> Vec<BackendEvent> {
         self.events
             .lock()
             .map(|mut events| std::mem::take(&mut *events))
             .unwrap_or_default()
+    }
+}
+
+fn panel_bounds((width, height): (u32, u32)) -> Rect {
+    Rect {
+        position: PhysicalPosition::new(0, 0).into(),
+        size: PhysicalSize::new(width, height).into(),
     }
 }

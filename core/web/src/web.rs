@@ -131,6 +131,10 @@ impl Web {
     }
 
     fn drain_backend_events(&mut self) {
+        if let Err(reason) = self.backend.update() {
+            self.logger
+                .error(ENDPOINT, &format!("updating browser backend: {reason}"));
+        }
         for event in self.backend.drain_events() {
             match event {
                 BackendEvent::PageMessage { owner, panel, json } if self.owns(&owner, &panel) => {

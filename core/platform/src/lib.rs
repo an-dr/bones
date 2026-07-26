@@ -46,6 +46,7 @@ impl Platform {
         let window = video
             .window(title, width, height)
             .position_centered()
+            .resizable()
             .build()
             .map_err(|e| e.to_string())?;
         // Started unconditionally, before the window can be handed away via
@@ -61,7 +62,12 @@ impl Platform {
         let mut display_modes: Vec<(u32, u32)> = display
             .as_ref()
             .and_then(|display| display.get_fullscreen_modes().ok())
-            .map(|modes| modes.iter().map(|mode| (mode.w as u32, mode.h as u32)).collect())
+            .map(|modes| {
+                modes
+                    .iter()
+                    .map(|mode| (mode.w as u32, mode.h as u32))
+                    .collect()
+            })
             .unwrap_or_default();
         display_modes.sort_unstable();
         display_modes.dedup();
