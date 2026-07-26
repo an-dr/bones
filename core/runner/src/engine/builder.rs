@@ -64,6 +64,8 @@ pub struct Engine {
     window: Option<(String, u32, u32)>,
     renderer_enabled: bool,
     ui_enabled: bool,
+    #[cfg(feature = "web")]
+    web_enabled: bool,
     modules: Vec<Box<dyn Module>>,
     saves_dir: PathBuf,
     persistence_read_only: bool,
@@ -81,6 +83,8 @@ impl Engine {
             window: None,
             renderer_enabled: false,
             ui_enabled: false,
+            #[cfg(feature = "web")]
+            web_enabled: false,
             modules: Vec::new(),
             saves_dir: PathBuf::from("saves"),
             persistence_read_only: false,
@@ -149,6 +153,14 @@ impl Engine {
     /// without one.
     pub fn ui(mut self) -> Self {
         self.ui_enabled = true;
+        self
+    }
+
+    /// Attaches the optional wry web-panel module (ADR-006). Requires
+    /// `.window(...)`; it may share that parent with `.renderer()`.
+    #[cfg(feature = "web")]
+    pub fn web(mut self) -> Self {
+        self.web_enabled = true;
         self
     }
 
@@ -247,6 +259,24 @@ impl Engine {
             .provide(bus.clone())
             .expect("no other service registers as Bus");
 
+        #[cfg(feature = "web")]
+        let web_module: Option<Box<dyn Module>> = if self.web_enabled {
+            if platform.is_none() {
+                return Err(wasmtime::Error::msg(".web() needs .window(...) too"));
+            }
+            let window = services
+                .get()
+                .ok_or_else(|| wasmtime::Error::msg("web needs the window-surface service"))?;
+            let backend = web::WryBackend::new(window).map_err(wasmtime::Error::msg)?;
+            Some(Box::new(web::Web::new(
+                bus.clone(),
+                self.logger.clone(),
+                backend,
+            )))
+        } else {
+            None
+        };
+
         let renderer = if renderer_enabled {
             if platform.is_none() {
                 return Err(wasmtime::Error::msg(".renderer() needs .window(...) too"));
@@ -287,6 +317,11 @@ impl Engine {
         // `persistence` registered after every extension's `init` had
         // already run and failed its `send` with `SendError::UnknownEndpoint`.
         let mut modules = Vec::new();
+        #[cfg(feature = "web")]
+        if let Some(module) = web_module {
+            register_module(&bus, &registry, &mut services, &mut modules, module)
+                .map_err(wasmtime::Error::msg)?;
+        }
         for module in self.modules.drain(..) {
             register_module(&bus, &registry, &mut services, &mut modules, module)
                 .map_err(wasmtime::Error::msg)?;

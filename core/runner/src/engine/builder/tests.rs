@@ -19,6 +19,13 @@ fn extension_budget_defaults_and_overrides_are_explicit() {
     );
 }
 
+#[cfg(feature = "web")]
+#[test]
+fn web_is_opt_in_when_the_feature_is_available() {
+    assert!(!Engine::new().web_enabled);
+    assert!(Engine::new().web().web_enabled);
+}
+
 #[test]
 fn an_absolute_path_passes_through_resolve_relative_to_exe_unchanged() {
     let absolute = if cfg!(windows) {

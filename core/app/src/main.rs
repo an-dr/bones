@@ -38,6 +38,16 @@ fn run() -> Result<(), String> {
     if config.ui {
         engine = engine.ui();
     }
+    if config.web {
+        #[cfg(feature = "web")]
+        {
+            engine = engine.web();
+        }
+        #[cfg(not(feature = "web"))]
+        {
+            return Err("web = true requires building app with --features web".to_string());
+        }
+    }
     if config.audio {
         engine = engine.module(audio::Audio::new());
     }

@@ -698,6 +698,63 @@ fn a_runaway_extension_is_quarantined_while_the_engine_keeps_running() {
     );
 }
 
+#[cfg(all(feature = "web", target_os = "windows"))]
+#[test]
+fn web_and_renderer_share_a_real_window_and_register_the_web_endpoint() {
+    use bones_messages::web::{Command, OpenPanel, PanelOpened, PanelSource};
+
+    let _guard = sdl_test_lock().lock().unwrap();
+    let mut engine = Engine::new()
+        .window("bones web composition", 160, 120)
+        .renderer()
+        .web()
+        .build()
+        .unwrap();
+    let opened = Arc::new(Mutex::new(Vec::new()));
+    let captured = opened.clone();
+    let endpoint = engine
+        .runner
+        .bus()
+        .register("web-test-spy", move |envelope: &Envelope| {
+            captured.lock().unwrap().push(envelope.clone());
+        });
+    endpoint.subscribe(PanelOpened::TOPIC);
+
+    let reply = engine.supervisor.registry.call(
+        "dashboard",
+        "web",
+        &Command::Open(OpenPanel {
+            panel: "main",
+            source: PanelSource::Html("<!doctype html><title>dashboard</title>"),
+        })
+        .encode(),
+    );
+    engine.runner.bus().dispatch();
+
+    assert_eq!(reply, Ok(Vec::new()));
+    let opened = opened.lock().unwrap();
+    let event = opened
+        .iter()
+        .find(|envelope| envelope.topic == PanelOpened::TOPIC)
+        .map(|envelope| PanelOpened::decode(&envelope.payload).unwrap())
+        .expect("web should publish confirmation after opening the native panel");
+    assert_eq!((event.owner, event.panel), ("dashboard", "main"));
+    drop(opened);
+
+    engine.shutdown();
+}
+
+#[cfg(feature = "web")]
+#[test]
+fn web_without_a_window_is_a_build_error() {
+    let error = match Engine::new().web().build() {
+        Ok(_) => panic!("web must not build without a parent window"),
+        Err(error) => error,
+    };
+
+    assert!(error.to_string().contains(".web() needs .window(...)"));
+}
+
 #[test]
 fn a_flooding_extension_is_faulted_without_starving_its_peer() {
     let dir = std::env::temp_dir().join("bones-engine-test-flood");

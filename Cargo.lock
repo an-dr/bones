@@ -2935,6 +2935,7 @@ dependencies = [
  "ui",
  "wasm-extensions",
  "wasmtime",
+ "web",
 ]
 
 [[package]]

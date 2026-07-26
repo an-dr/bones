@@ -31,6 +31,10 @@ impl<'a> ModuleContext<'a> {
         self.registry.consume()
     }
 
+    pub fn get_service<T: 'static>(&self) -> Option<&T> {
+        self.registry.get()
+    }
+
     /// Drains the topics requested via `subscribe` — the caller applies
     /// them to this module's `Endpoint` once it exists.
     pub fn into_subscriptions(self) -> Vec<String> {

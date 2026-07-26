@@ -15,6 +15,7 @@ pub struct Config {
     pub window_height: u32,
     pub renderer: bool,
     pub ui: bool,
+    pub web: bool,
     pub audio: bool,
     pub game_core: bool,
     pub saves_dir: String,
@@ -32,6 +33,7 @@ impl Default for Config {
             window_height: 600,
             renderer: true,
             ui: true,
+            web: false,
             // Unlike renderer/ui, not every deployment target has a working
             // audio device (headless CI, some containers) — opt-in via
             // bones.toml rather than risking `Engine::build()` failing by
@@ -86,6 +88,7 @@ mod tests {
         assert_eq!((config.window_width, config.window_height), (800, 600));
         assert!(config.renderer);
         assert!(config.ui);
+        assert!(!config.web, "web is an optional cargo feature");
         assert!(
             !config.audio,
             "not every deployment target has a working audio device"
