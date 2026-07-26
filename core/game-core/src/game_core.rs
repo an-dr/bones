@@ -19,7 +19,7 @@ use bus::{Bus, Envelope, Handler, Module, ModuleContext};
 use glam::Vec2;
 
 use crate::camera::Camera;
-use crate::graphics::{SpriteAnimation, SquareColor, Transform};
+use crate::graphics::{SpriteAnimation, SpriteTint, SquareColor, Transform};
 use crate::physics::{
     self, BodyHandle, Collider, ColliderHandle, PhysicsBackend, PhysicsWorldKind, Rapier2dBackend,
     RetroBackend, Shape, WorldBody,
@@ -181,6 +181,7 @@ impl GameCore {
                 entity_id,
                 presentation,
             } => self.set_sprite(entity_id, presentation),
+            EntityOp::SetSpriteTint { entity_id, tint } => self.set_sprite_tint(entity_id, tint),
             EntityOp::SetCameraSmoothing { responsiveness } => {
                 self.camera.set_responsiveness(responsiveness)
             }
@@ -206,6 +207,16 @@ impl GameCore {
         }
     }
 
+    /// A no-op if `entity_id` names no entity, or one with no sprite.
+    fn set_sprite_tint(&mut self, entity_id: u32, tint: (u8, u8, u8, u8)) {
+        let Some(&entity) = self.entities.get(&entity_id) else {
+            return;
+        };
+        if let Ok(mut sprite_tint) = self.world.get::<&mut SpriteTint>(entity) {
+            sprite_tint.0 = tint;
+        }
+    }
+
     fn set_sprite(
         &mut self,
         entity_id: u32,
@@ -221,6 +232,7 @@ impl GameCore {
         }
         if self.world.insert_one(entity, animation).is_ok() {
             let _ = self.world.remove_one::<SquareColor>(entity);
+            let _ = self.world.insert_one(entity, SpriteTint::default());
         }
     }
 
@@ -258,6 +270,7 @@ impl GameCore {
         match animation {
             Some(animation) => {
                 builder.add(animation);
+                builder.add(SpriteTint::default());
             }
             None => {
                 builder.add(SquareColor(square_color));
@@ -675,8 +688,10 @@ impl GameCore {
                 tint: (255, 255, 255, 255),
             });
         }
-        for (_, (transform, animation)) in
-            self.world.query::<(&Transform, &SpriteAnimation)>().iter()
+        for (_, (transform, animation, tint)) in self
+            .world
+            .query::<(&Transform, &SpriteAnimation, &SpriteTint)>()
+            .iter()
         {
             // `Transform` is the entity's center (matching rapier2d's own
             // convention); `DrawSprite::dst_x`/`dst_y` is a top-left corner
@@ -697,7 +712,7 @@ impl GameCore {
                 angle: 0.0,
                 flip_h: animation.flip_h,
                 flip_v: animation.flip_v,
-                tint: (255, 255, 255, 255),
+                tint: tint.0,
             });
         }
         for (_, (transform, color, collider)) in self

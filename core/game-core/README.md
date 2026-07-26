@@ -103,6 +103,9 @@ case.
     looping or one-shot playback, and opt-in animation while stopped. An
     unknown `entity_id` is a no-op; applying it to a colored square replaces
     that square visual without replacing the entity.
+  - `SetSpriteTint` — applies RGBA color modulation to a sprite without
+    replacing its animation or simulation state. White is the default;
+    unknown entities and plain colored squares are no-ops.
   - `SetCameraFollow` — follows one entity at a caller-supplied logical
     viewport and zoom, clamped to the loaded tilemap's pixel bounds. Without
     a loaded tilemap the follow is centered but unclamped.

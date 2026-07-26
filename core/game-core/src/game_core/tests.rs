@@ -310,14 +310,15 @@ fn spawn_with_a_sprite_adds_a_transform_and_animation() {
     game_core.handle(&entity_op_envelope(spawn_at(3.0, 4.0)));
 
     assert_eq!(game_core.world.len(), 1);
-    let (_, (transform, animation)) = game_core
+    let (_, (transform, animation, tint)) = game_core
         .world
-        .query_mut::<(&Transform, &SpriteAnimation)>()
+        .query_mut::<(&Transform, &SpriteAnimation, &SpriteTint)>()
         .into_iter()
         .next()
         .expect("the spawned entity should carry both components");
     assert_eq!(*transform, Transform { x: 3.0, y: 4.0 });
     assert_eq!(animation.sprite_id, 1);
+    assert_eq!(*tint, SpriteTint::default());
 }
 
 #[test]
@@ -723,6 +724,28 @@ fn tick_publishes_a_clear_a_camera_and_one_draw_sprite_per_sprite_entity() {
     // Spawned at (3, 4); the sprite fixture is 16x16, so its top-left
     // corner (Transform is the entity's center) is offset by half that.
     assert_eq!((sprites[0].dst_x, sprites[0].dst_y), (-5, -4));
+}
+
+#[test]
+fn set_sprite_tint_changes_only_the_published_sprite_modulation() {
+    let (mut game_core, bus, spy) = ready_game_core();
+    game_core.handle(&entity_op_envelope(spawn_at(3.0, 4.0)));
+    game_core.handle(&entity_op_envelope(EntityOp::SetSpriteTint {
+        entity_id: 0,
+        tint: (255, 48, 58, 255),
+    }));
+
+    game_core.handle(&envelope(Tick::TOPIC, Tick { dt: 0.0 }.encode()));
+    bus.dispatch();
+
+    let published = spy.0.lock().unwrap();
+    let draw = published
+        .iter()
+        .rfind(|event| event.topic == gfx::DrawSprite::TOPIC)
+        .map(|event| gfx::DrawSprite::decode(&event.payload).unwrap())
+        .unwrap();
+    assert_eq!(draw.tint, (255, 48, 58, 255));
+    assert_eq!((draw.dst_x, draw.dst_y), (-5, -4));
 }
 
 #[test]

@@ -163,6 +163,12 @@ pub enum EntityOp {
         entity_id: u32,
         presentation: SpritePresentation,
     },
+    /// Sets RGBA modulation on an existing sprite entity without replacing its
+    /// animation or simulation state. A no-op for unknown or square entities.
+    SetSpriteTint {
+        entity_id: u32,
+        tint: (u8, u8, u8, u8),
+    },
     /// Sets camera-follow responsiveness in inverse seconds. `0.0` keeps the
     /// established immediate-follow behavior; positive values ease toward the
     /// target on each tick before applying the level-edge clamp.
@@ -183,6 +189,7 @@ const TAG_SET_CAMERA_FOLLOW: u8 = 6;
 const TAG_SET_SPRITE: u8 = 7;
 const TAG_SET_CAMERA_SMOOTHING: u8 = 8;
 const TAG_RESET: u8 = 9;
+const TAG_SET_SPRITE_TINT: u8 = 10;
 
 impl EntityOp {
     pub(super) fn encode_into(&self, writer: Writer) -> Writer {
@@ -285,6 +292,16 @@ impl EntityOp {
                 writer.u8(TAG_SET_CAMERA_SMOOTHING).f32(*responsiveness)
             }
             EntityOp::Reset => writer.u8(TAG_RESET),
+            EntityOp::SetSpriteTint { entity_id, tint } => {
+                let (r, g, b, a) = *tint;
+                writer
+                    .u8(TAG_SET_SPRITE_TINT)
+                    .u32(*entity_id)
+                    .u8(r)
+                    .u8(g)
+                    .u8(b)
+                    .u8(a)
+            }
         }
     }
 
@@ -398,6 +415,16 @@ impl EntityOp {
                 responsiveness: reader.read_f32()?,
             }),
             TAG_RESET => Ok(EntityOp::Reset),
+            TAG_SET_SPRITE_TINT => {
+                let entity_id = reader.read_u32()?;
+                let tint = (
+                    reader.read_u8()?,
+                    reader.read_u8()?,
+                    reader.read_u8()?,
+                    reader.read_u8()?,
+                );
+                Ok(EntityOp::SetSpriteTint { entity_id, tint })
+            }
             _ => Err(DecodeError::InvalidTag {
                 message: "game-core entity op",
                 tag,

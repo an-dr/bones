@@ -179,6 +179,19 @@ fn set_color_round_trips() {
 }
 
 #[test]
+fn set_sprite_tint_round_trips() {
+    let op = EntityOp::SetSpriteTint {
+        entity_id: 4,
+        tint: (255, 48, 58, 192),
+    };
+    let message = EntityOpMessage(op);
+    assert_eq!(
+        EntityOpMessage::decode(&message.encode()),
+        Ok(EntityOpMessage(op))
+    );
+}
+
+#[test]
 fn set_debug_hitboxes_enabled_round_trips() {
     let op = EntityOp::SetDebugHitboxes { enabled: true };
     let message = EntityOpMessage(op);
