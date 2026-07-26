@@ -10,7 +10,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
-use bus::{Bus, Endpoint, Registry};
+use bus::{BudgetLimits, Bus, Endpoint, EndpointBudget, Registry};
 use logging::Logger;
 use wasm_extensions::host::{DisplayInfo, Host};
 
@@ -34,7 +34,9 @@ pub(crate) fn attach_extension(
     name: &str,
     exit_requested: &Arc<AtomicBool>,
     display_info: &DisplayInfo,
-) -> wasmtime::Result<(Endpoint, SharedHost, Vec<String>)> {
+    budget_limits: BudgetLimits,
+) -> wasmtime::Result<(Endpoint, SharedHost, EndpointBudget, Vec<String>)> {
+    let budget = EndpointBudget::new(budget_limits);
     let mut extension = Host::load(
         wasm_engine,
         &path.to_string_lossy(),
@@ -44,17 +46,18 @@ pub(crate) fn attach_extension(
         logger.clone(),
         exit_requested.clone(),
         display_info.clone(),
+        budget.clone(),
     )?;
     let topics = extension.requested_topics();
     let shared = SharedHost(Arc::new(Mutex::new(extension)));
 
-    let ep = bus.register(name.to_string(), shared.clone());
+    let ep = bus.register_with_budget(name.to_string(), shared.clone(), budget.clone());
     for topic in &topics {
         ep.subscribe(topic);
     }
     registry.insert(name.to_string(), Arc::new(shared.clone()));
 
-    Ok((ep, shared, topics))
+    Ok((ep, shared, budget, topics))
 }
 
 pub(crate) fn read_file_mtime(path: &Path) -> SystemTime {

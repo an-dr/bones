@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use bones_messages::Message;
-use bus::{Module, ModuleContext, Registry, ServiceRegistry};
+use bus::{BudgetLimits, Module, ModuleContext, Registry, ServiceRegistry};
 use logging::Logger;
 use renderer::Renderer;
 use ui::Ui;
@@ -67,6 +67,7 @@ pub struct Engine {
     modules: Vec<Box<dyn Module>>,
     saves_dir: PathBuf,
     persistence_read_only: bool,
+    extension_budget: BudgetLimits,
 }
 
 impl Engine {
@@ -83,6 +84,7 @@ impl Engine {
             modules: Vec::new(),
             saves_dir: PathBuf::from("saves"),
             persistence_read_only: false,
+            extension_budget: BudgetLimits::default(),
         }
     }
 
@@ -184,6 +186,12 @@ impl Engine {
     /// wouldn't save anything.
     pub fn read_only_persistence(mut self) -> Self {
         self.persistence_read_only = true;
+        self
+    }
+
+    /// Sets the per-frame allowances shared by every WASM extension.
+    pub fn extension_budget(mut self, limits: BudgetLimits) -> Self {
+        self.extension_budget = limits;
         self
     }
 
@@ -328,8 +336,9 @@ impl Engine {
                     &name,
                     &exit_requested,
                     &display_info,
+                    self.extension_budget,
                 ) {
-                    Ok((ep, shared, topics)) => {
+                    Ok((ep, shared, budget, topics)) => {
                         self.logger.info(
                             "engine",
                             &format!(
@@ -344,6 +353,7 @@ impl Engine {
                             path,
                             endpoint: ep,
                             shared,
+                            budget,
                             quarantined: false,
                         });
                     }
@@ -417,6 +427,7 @@ impl Engine {
             commands,
             exit_requested.clone(),
             display_info,
+            self.extension_budget,
         );
 
         if let Some(platform) = &mut platform {

@@ -693,6 +693,82 @@ fn a_runaway_extension_is_quarantined_while_the_engine_keeps_running() {
     );
 }
 
+#[test]
+fn exceeding_the_publish_allowance_quarantines_with_drop_counters() {
+    let sink = RecordingSink::new();
+    let BuiltEngine {
+        runner,
+        mut supervisor,
+        ..
+    } = Engine::new()
+        .extensions_dir(HELLO_DIR)
+        .extension_budget(bus::BudgetLimits {
+            max_inbound: 4,
+            max_publishes: 0,
+        })
+        .logger(Logger::new(Arc::new(sink.clone())))
+        .build()
+        .unwrap();
+
+    runner.bus().publish(Envelope {
+        topic: bones_messages::window::CloseRequested::TOPIC.to_string(),
+        sender: "test".to_string(),
+        correlation: None,
+        payload: Vec::new(),
+    });
+    runner.bus().dispatch();
+    supervisor.check();
+
+    assert_eq!(
+        supervisor.registry.call("test", "hello", &[]),
+        Err(bus::SendError::UnknownEndpoint)
+    );
+    assert!(sink.records().iter().any(|(_, _, message)| {
+        message.contains("'hello' faulted")
+            && message.contains("inbound=0")
+            && message.contains("publishes=1")
+    }));
+}
+
+#[test]
+fn exceeding_the_inbound_allowance_quarantines_with_drop_counters() {
+    let sink = RecordingSink::new();
+    let BuiltEngine {
+        runner,
+        mut supervisor,
+        ..
+    } = Engine::new()
+        .extensions_dir(HELLO_DIR)
+        .extension_budget(bus::BudgetLimits {
+            max_inbound: 1,
+            max_publishes: 4,
+        })
+        .logger(Logger::new(Arc::new(sink.clone())))
+        .build()
+        .unwrap();
+    for _ in 0..2 {
+        runner.bus().publish(Envelope {
+            topic: bones_messages::window::CloseRequested::TOPIC.to_string(),
+            sender: "test".to_string(),
+            correlation: None,
+            payload: Vec::new(),
+        });
+    }
+
+    runner.bus().dispatch();
+    supervisor.check();
+
+    assert_eq!(
+        supervisor.registry.call("test", "hello", &[]),
+        Err(bus::SendError::UnknownEndpoint)
+    );
+    assert!(sink.records().iter().any(|(_, _, message)| {
+        message.contains("'hello' faulted")
+            && message.contains("inbound=1")
+            && message.contains("publishes=0")
+    }));
+}
+
 /// Records every `Module`/`Handler` call it receives — proves `.module()`
 /// runs the same init-then-subscribe-then-hook sequence a real module
 /// (`renderer`) goes through, without needing SDL or a wasm fixture.

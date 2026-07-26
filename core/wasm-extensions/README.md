@@ -6,7 +6,8 @@ opposed to what it can currently *do* (that's `renderer`/`ui`/`audio`):
 - **`host`** — loads a WASM component against the `bones:core` contract
   (`wit/core.wit`) and calls its exports. Registers as an ordinary bus
   `Handler`; on the bus, the host is indistinguishable from any other
-  endpoint. Also wires in `wasmtime-wasi` with a deny-by-default `WasiCtx`.
+  endpoint. Also wires in `wasmtime-wasi` with a deny-by-default `WasiCtx`
+  and enforces per-extension inbound and publish allowances.
 - **`lifecycle`** — the topic every extension state transition (Loaded,
   Faulted, Reloading, Reloaded, Stopped) is published on, so tooling and
   other extensions can observe loads, faults, and reloads.
@@ -18,3 +19,7 @@ opposed to what it can currently *do* (that's `renderer`/`ui`/`audio`):
   instead.
 
 See each submodule's doc comment for its own contract.
+
+Time, inbound, and publish budget violations all follow the same supervisor
+quarantine path. The engine log includes cumulative inbound and publish drop
+counters for a message-budget fault.

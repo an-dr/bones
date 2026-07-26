@@ -11,7 +11,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use bus::{Bus, Registry};
+use bus::{BudgetLimits, Bus, Registry};
 use logging::Logger;
 use wasm_extensions::host::DisplayInfo;
 use wasm_extensions::lifecycle;
@@ -47,6 +47,7 @@ pub struct Supervisor {
     last_mtime_sweep: Option<Instant>,
     exit_requested: Arc<AtomicBool>,
     display_info: DisplayInfo,
+    budget_limits: BudgetLimits,
 }
 
 impl Supervisor {
@@ -61,6 +62,7 @@ impl Supervisor {
         commands: Arc<Mutex<Vec<OwnedCommand>>>,
         exit_requested: Arc<AtomicBool>,
         display_info: DisplayInfo,
+        budget_limits: BudgetLimits,
     ) -> Self {
         Self {
             wasm_engine,
@@ -73,6 +75,7 @@ impl Supervisor {
             last_mtime_sweep: None,
             exit_requested,
             display_info,
+            budget_limits,
         }
     }
 
@@ -92,9 +95,12 @@ impl Supervisor {
         }
 
         for extension in self.tracked.iter_mut() {
-            if extension.quarantined || !extension.shared.is_faulted() {
+            if extension.quarantined
+                || (!extension.shared.is_faulted() && !extension.budget.has_exceeded())
+            {
                 continue;
             }
+            let drops = extension.budget.get_drop_counters();
             self.bus.unregister(&extension.endpoint);
             // Also drop the Registry entry -- otherwise a direct `send`
             // still resolves to this faulted Host, whose `respond` returns
@@ -105,7 +111,10 @@ impl Supervisor {
             extension.quarantined = true;
             self.logger.error(
                 "engine",
-                &format!("'{}' faulted and was quarantined", extension.name),
+                &format!(
+                    "'{}' faulted and was quarantined (dropped inbound={}, publishes={})",
+                    extension.name, drops.inbound, drops.publishes
+                ),
             );
             lifecycle::publish(&self.bus, ENGINE_SENDER, &extension.name, Event::Faulted);
         }
@@ -135,13 +144,15 @@ impl Supervisor {
                 &extension.name,
                 &self.exit_requested,
                 &self.display_info,
+                self.budget_limits,
             ) {
-                Ok((ep, shared, topics)) => {
+                Ok((ep, shared, budget, topics)) => {
                     if !extension.quarantined {
                         self.bus.unregister(&extension.endpoint);
                     }
                     extension.endpoint = ep;
                     extension.shared = shared;
+                    extension.budget = budget;
                     extension.mtime = mtime;
                     extension.quarantined = false;
                     self.logger.info(
@@ -209,8 +220,9 @@ impl Supervisor {
             name,
             &self.exit_requested,
             &self.display_info,
+            self.budget_limits,
         ) {
-            Ok((endpoint, shared, topics)) => {
+            Ok((endpoint, shared, budget, topics)) => {
                 self.tracked.retain(|extension| extension.name != name);
                 self.tracked.push(TrackedExtension {
                     name: name.to_string(),
@@ -218,6 +230,7 @@ impl Supervisor {
                     mtime: read_file_mtime(&path),
                     endpoint,
                     shared,
+                    budget,
                     quarantined: false,
                 });
                 self.logger.info(
@@ -272,8 +285,9 @@ impl Supervisor {
             name,
             &self.exit_requested,
             &self.display_info,
+            self.budget_limits,
         ) {
-            Ok((endpoint, shared, topics)) => {
+            Ok((endpoint, shared, budget, topics)) => {
                 let extension = &mut self.tracked[index];
                 if let Err(err) = extension.shared.shutdown() {
                     self.logger
@@ -284,6 +298,7 @@ impl Supervisor {
                 extension.mtime = read_file_mtime(&path);
                 extension.endpoint = endpoint;
                 extension.shared = shared;
+                extension.budget = budget;
                 extension.quarantined = false;
                 self.logger.info(
                     "engine",

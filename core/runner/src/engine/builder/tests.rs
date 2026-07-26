@@ -7,6 +7,19 @@ fn tick_hz_defaults_to_60_and_is_overridable() {
 }
 
 #[test]
+fn extension_budget_defaults_and_overrides_are_explicit() {
+    assert_eq!(Engine::new().extension_budget, BudgetLimits::default());
+    let limits = BudgetLimits {
+        max_inbound: 2,
+        max_publishes: 3,
+    };
+    assert_eq!(
+        Engine::new().extension_budget(limits).extension_budget,
+        limits
+    );
+}
+
+#[test]
 fn an_absolute_path_passes_through_resolve_relative_to_exe_unchanged() {
     let absolute = if cfg!(windows) {
         PathBuf::from(r"C:\somewhere\saves")
