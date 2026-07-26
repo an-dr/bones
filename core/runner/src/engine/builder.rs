@@ -26,7 +26,7 @@ use crate::supervisor::TrackedExtension;
 use crate::Runner;
 use crate::Supervisor;
 
-use super::built_engine::BuiltEngine;
+use super::built_engine::{run_shutdown, BuiltEngine};
 use super::register_module::register_module;
 use super::shared::Shared;
 
@@ -431,6 +431,7 @@ impl Engine {
             modules,
             supervisor,
             exit_requested,
+            shutdown_started: false,
         })
     }
 
@@ -451,10 +452,11 @@ impl Engine {
             modules,
             mut supervisor,
             exit_requested,
+            shutdown_started: _,
         } = self.build()?;
 
         let mut last = std::time::Instant::now() - period;
-        loop {
+        let shutdown_sender = loop {
             if let Some(platform) = &mut platform {
                 // ADR-008: offer every raw event to the ui layer first; what
                 // it claims (wants_pointer_input/wants_keyboard_input, as of
@@ -464,20 +466,12 @@ impl Engine {
                 platform.poll_events_with(runner.bus(), "platform", |event| {
                     ui_guard.as_mut().is_some_and(|ui| ui.feed_event(event))
                 });
-                // Minimal shutdown slice: exit cleanly on a window close
-                // request. TODO: no close-request-as-event or shutdown()
-                // call to extensions yet (design/platform.md's full
-                // sequence) — a future roadmap rung.
                 if platform.quit_requested() {
-                    break;
+                    break "platform";
                 }
             }
-            // Same minimal-shutdown-slice stance as quit_requested() above,
-            // just extension-triggered instead of OS-triggered: an
-            // extension's own `request-exit` host-api call, not the full
-            // shutdown sequence.
             if exit_requested.load(Ordering::Relaxed) {
-                break;
+                break ENGINE_SENDER;
             }
 
             supervisor.check();
@@ -519,8 +513,9 @@ impl Engine {
             if elapsed < period {
                 std::thread::sleep(period - elapsed);
             }
-        }
+        };
 
+        run_shutdown(&runner, &mut supervisor, &modules, shutdown_sender);
         Ok(())
     }
 }

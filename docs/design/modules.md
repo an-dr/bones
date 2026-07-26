@@ -51,8 +51,8 @@ subscription, the same as any extension.
   Default: no reply. `persistence` is the first module to use this (an
   extension's own `init` loading its prior save synchronously); most
   modules have nothing to answer.
-- `shutdown()` — declared, not yet called by `Engine::run` (the full
-  shutdown sequence is a separate roadmap rung, design/platform.md).
+- `shutdown()` — called once after extensions stop during orderly application
+  shutdown.
 
 ## Frame phases
 

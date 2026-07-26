@@ -133,6 +133,64 @@ fn shutdown_all_calls_cleanup_unregisters_and_publishes_stopped() {
 }
 
 #[test]
+fn orderly_shutdown_dispatches_close_cleanup_and_stopped_in_order() {
+    let module = RecordingModule::default();
+    let mut engine = Engine::new()
+        .extensions_dir(HELLO_DIR)
+        .module(module.clone())
+        .build()
+        .expect("build extensions/hello first: pwsh extensions/hello/build.ps1");
+    let observed = Arc::new(Mutex::new(Vec::new()));
+    let captured = observed.clone();
+    let endpoint = engine
+        .runner
+        .bus()
+        .register("shutdown-spy", move |envelope: &Envelope| {
+            captured
+                .lock()
+                .unwrap()
+                .push((envelope.topic.clone(), envelope.payload.clone()));
+        });
+    endpoint.subscribe("window/*");
+    endpoint.subscribe("hello/cleanup");
+    endpoint.subscribe(LifecycleEvent::TOPIC);
+
+    engine.shutdown();
+    engine.shutdown();
+
+    let observed = observed.lock().unwrap();
+    let close = observed
+        .iter()
+        .position(|(topic, _)| topic == bones_messages::window::CloseRequested::TOPIC)
+        .unwrap();
+    let cleanup = observed
+        .iter()
+        .position(|(topic, _)| topic == "hello/cleanup")
+        .unwrap();
+    let stopped = observed
+        .iter()
+        .position(|(topic, payload)| {
+            topic == LifecycleEvent::TOPIC
+                && LifecycleEvent::decode(payload)
+                    == Ok(LifecycleEvent {
+                        event: Event::Stopped,
+                        extension: "hello",
+                    })
+        })
+        .unwrap();
+    assert!(close < cleanup && cleanup < stopped);
+    assert_eq!(
+        module
+            .calls()
+            .iter()
+            .filter(|call| call.as_str() == "shutdown")
+            .count(),
+        1,
+        "the complete sequence is idempotent"
+    );
+}
+
+#[test]
 fn startup_allow_list_and_runtime_commands_control_activation() {
     let dir = std::env::temp_dir().join("bones-runtime-extension-manager");
     std::fs::create_dir_all(dir.join("core")).unwrap();
@@ -673,6 +731,10 @@ impl Module for RecordingModule {
 
     fn present(&mut self) {
         self.0.lock().unwrap().push("present".to_string());
+    }
+
+    fn shutdown(&mut self) {
+        self.0.lock().unwrap().push("shutdown".to_string());
     }
 
     fn respond(&mut self, sender: &str, payload: &[u8]) -> Option<Vec<u8>> {

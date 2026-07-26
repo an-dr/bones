@@ -3,7 +3,8 @@
 Reference WASM extension exercising the full contract (`wit/core.wit`):
 subscribes to `core/tick` in `init`, logs on every `init`, `on-tick`, and
 `on-message`, and publishes a `hello/received` envelope for every message
-it gets.
+it gets. It also subscribes to the application close request and publishes
+`hello/cleanup` from `shutdown`, making orderly cleanup visible in the demo.
 
 ## Build
 

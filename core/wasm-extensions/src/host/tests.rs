@@ -139,7 +139,13 @@ fn shutdown_calls_the_guest_cleanup_hook() {
 #[test]
 fn requested_topics_reflects_what_init_subscribed_to() {
     let mut host = load_hello(Bus::new(), Logger::default());
-    assert_eq!(host.requested_topics(), vec![Tick::TOPIC.to_string()]);
+    assert_eq!(
+        host.requested_topics(),
+        vec![
+            Tick::TOPIC.to_string(),
+            bones_messages::window::CloseRequested::TOPIC.to_string(),
+        ]
+    );
     assert!(host.requested_topics().is_empty(), "must drain, not repeat");
 }
 

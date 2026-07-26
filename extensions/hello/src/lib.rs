@@ -4,16 +4,20 @@ wit_bindgen::generate!({
 });
 
 use bones::core::host_api::{log, publish, subscribe, Level};
+use bones_messages::window::CloseRequested;
+use bones_messages::Message;
 
 struct Component;
 
 impl Guest for Component {
     fn shutdown() {
+        publish("hello/cleanup", b"complete");
         log(Level::Info, "shutdown");
     }
 
     fn init() {
         subscribe("core/tick");
+        subscribe(CloseRequested::TOPIC);
         log(Level::Info, "init");
     }
 
