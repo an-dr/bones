@@ -57,6 +57,16 @@ const PERSISTENCE_DEMO_DIR: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../extensions/persistence_demo/target/wasm32-wasip2/release"
 );
+#[cfg(all(feature = "web", target_os = "windows"))]
+const DASHBOARD_WASM: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../extensions/dashboard/target/wasm32-wasip2/release/dashboard.wasm"
+);
+#[cfg(all(feature = "web", target_os = "windows"))]
+const METRICS_WASM: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../extensions/metrics/target/wasm32-wasip2/release/metrics.wasm"
+);
 
 #[test]
 fn build_discovers_loads_and_registers_a_real_extension() {
@@ -753,6 +763,75 @@ fn web_without_a_window_is_a_build_error() {
     };
 
     assert!(error.to_string().contains(".web() needs .window(...)"));
+}
+
+#[cfg(all(feature = "web", target_os = "windows"))]
+#[test]
+fn dashboard_and_metrics_exchange_push_pull_and_page_ipc() {
+    let _guard = sdl_test_lock().lock().unwrap();
+    let dir = std::env::temp_dir().join("bones-dashboard-integration");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::copy(DASHBOARD_WASM, dir.join("dashboard.wasm"))
+        .expect("build extensions/dashboard for wasm32-wasip2 first");
+    std::fs::copy(METRICS_WASM, dir.join("metrics.wasm"))
+        .expect("build extensions/metrics for wasm32-wasip2 first");
+
+    let sink = RecordingSink::new();
+    let mut engine = Engine::new()
+        .extensions_dir(&dir)
+        .logger(Logger::new(Arc::new(sink.clone())))
+        .window("bones dashboard integration", 800, 600)
+        .web()
+        .build()
+        .unwrap();
+
+    for _ in 0..120 {
+        engine
+            .platform
+            .as_mut()
+            .unwrap()
+            .poll_events(engine.runner.bus(), "platform");
+        engine.runner.step(0.1);
+        engine.supervisor.check();
+        for module in &engine.modules {
+            module.lock().unwrap().render();
+        }
+        let records = sink.records();
+        let acknowledged_update = records
+            .iter()
+            .any(|(_, _, message)| message.contains("page acknowledged update"));
+        let acknowledged_history = records
+            .iter()
+            .any(|(_, _, message)| message.contains("page acknowledged history"));
+        if acknowledged_update && acknowledged_history {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+
+    let records = sink.records();
+    assert!(
+        records
+            .iter()
+            .any(|(_, _, message)| message.contains("page acknowledged update")),
+        "dashboard page never acknowledged a pushed metrics update: {records:?}"
+    );
+    assert!(
+        records
+            .iter()
+            .any(|(_, _, message)| message.contains("history requested by dashboard")),
+        "dashboard never made its direct pull request: {records:?}"
+    );
+    assert!(
+        records
+            .iter()
+            .any(|(_, _, message)| message.contains("page acknowledged history")),
+        "dashboard page never acknowledged the pulled history: {records:?}"
+    );
+
+    engine.shutdown();
+    drop(engine);
+    std::fs::remove_dir_all(&dir).ok();
 }
 
 #[test]

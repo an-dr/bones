@@ -1,0 +1,14 @@
+[workspace]
+
+[package]
+name = "dashboard"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+bones-messages = { path = "../../shared/bones-messages" }
+serde_json = "1.0"
+wit-bindgen = "0.59.0"
