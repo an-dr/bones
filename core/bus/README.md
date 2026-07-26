@@ -11,6 +11,12 @@ topics with exact and prefix-wildcard subscriptions, built on `pubsub-bus`.
 Publish only enqueues; delivery happens on `dispatch()`, deferred so a
 handler can safely publish in response to what it just received (ADR-015).
 
+`EndpointBudget` supplies ADR-007's per-frame inbound and publish allowances
+for untrusted endpoints. A bounded adapter drops matching deliveries over its
+allowance; the extension host applies the same object before guest publishes.
+`begin_frame` resets allowances while cumulative `DropCounters` and the
+violation flag remain observable.
+
 ## Direct send (ADR-010)
 
 `Registry` addresses endpoints by name, separately from `Bus`'s by-topic

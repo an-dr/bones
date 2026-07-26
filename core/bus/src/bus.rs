@@ -2,7 +2,7 @@ use pubsub_bus::Subscriber;
 use std::sync::{Arc, Mutex};
 
 use crate::adapter::Adapter;
-use crate::{Endpoint, Envelope, Handler};
+use crate::{Endpoint, EndpointBudget, Envelope, Handler};
 
 /// Cheap to clone: an extension's `publish` import needs to hold a handle
 /// to the same bus it's registered on. `pubsub_bus::EventBus` is `Clone`
@@ -21,10 +21,30 @@ impl Bus {
     }
 
     pub fn register(&self, name: impl Into<String>, handler: impl Handler + 'static) -> Endpoint {
+        self.register_adapter(name, handler, None)
+    }
+
+    /// Registers an endpoint whose matching deliveries consume `budget`.
+    pub fn register_with_budget(
+        &self,
+        name: impl Into<String>,
+        handler: impl Handler + 'static,
+        budget: EndpointBudget,
+    ) -> Endpoint {
+        self.register_adapter(name, handler, Some(budget))
+    }
+
+    fn register_adapter(
+        &self,
+        name: impl Into<String>,
+        handler: impl Handler + 'static,
+        budget: Option<EndpointBudget>,
+    ) -> Endpoint {
         let name = name.into();
         let adapter = Arc::new(Mutex::new(Adapter {
             patterns: Vec::new(),
             handler: Box::new(handler),
+            budget,
         }));
         self.inner.add_subscriber_shared(adapter.clone());
         Endpoint { name, adapter }
