@@ -1,5 +1,5 @@
 use pubsub_bus::Subscriber;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 
 use crate::adapter::Adapter;
 use crate::{Endpoint, EndpointBudget, Envelope, Handler};
@@ -11,12 +11,14 @@ use crate::{Endpoint, EndpointBudget, Envelope, Handler};
 #[derive(Clone)]
 pub struct Bus {
     inner: pubsub_bus::EventBus<Envelope, ()>,
+    budgets: Arc<Mutex<Vec<(Weak<Mutex<Adapter>>, EndpointBudget)>>>,
 }
 
 impl Bus {
     pub fn new() -> Self {
         Self {
             inner: pubsub_bus::EventBus::new(),
+            budgets: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -46,6 +48,12 @@ impl Bus {
             handler: Box::new(handler),
             budget,
         }));
+        if let Some(budget) = adapter.lock().unwrap().budget.clone() {
+            self.budgets
+                .lock()
+                .unwrap()
+                .push((Arc::downgrade(&adapter), budget));
+        }
         self.inner.add_subscriber_shared(adapter.clone());
         Endpoint { name, adapter }
     }
@@ -68,6 +76,17 @@ impl Bus {
     /// Delivers everything enqueued since the last call, in order (ADR-009).
     pub fn dispatch(&self) {
         self.inner.dispatch();
+    }
+
+    /// Restores every currently registered endpoint's per-frame allowances.
+    pub fn begin_frame(&self) {
+        self.budgets.lock().unwrap().retain(|(adapter, budget)| {
+            if adapter.upgrade().is_none() {
+                return false;
+            }
+            budget.begin_frame();
+            true
+        });
     }
 }
 

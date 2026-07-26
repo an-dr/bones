@@ -81,7 +81,8 @@ per-frame queries *possible*; this pattern is why they should stay rare.
   topics (ADR-009).
 - **Delivery:** at-most-once; drops happen only toward non-Running extensions
   (ADR-009).
-- **Flow control:** the time budget (ADR-007) is enforced today — a handler
-  call that overruns it faults the extension. TODO: the queue budget
-  (bounded inbound queue, per-frame publish allowance, drop counters) isn't
-  implemented yet; see roadmap.md.
+- **Flow control:** every extension has per-frame inbound and publish
+  allowances in addition to the per-call time budget (ADR-007). Matching
+  deliveries and guest publishes over those limits are dropped and counted;
+  any violation faults and quarantines the extension while peers continue.
+  Allowances reset at the runner frame boundary; counters remain cumulative.

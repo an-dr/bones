@@ -9,8 +9,7 @@ design.
 and egui ui modules, audio, the game-core module (ECS, collision, tilemap
 loading, sprite-animation timing), hot reload, and custom native-module
 injection (`.module(...)`, see `embedding-demo/`) all work today. The web
-presentation module and extension queue budgets remain — see
-[docs/roadmap.md](docs/roadmap.md).
+presentation module remains — see [docs/roadmap.md](docs/roadmap.md).
 
 Use cases:
 

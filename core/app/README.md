@@ -33,7 +33,13 @@ window_title = "bones"
 window_width = 800
 window_height = 600
 renderer = true
+extension_max_inbound = 1024
+extension_max_publishes = 1024
 ```
+
+The two extension limits are per frame and apply independently to every WASM
+component. Exceeding either allowance drops and counts the excess work, then
+quarantines only that component.
 
 For a self-contained build (binary + every extension in one directory), run
 `pwsh dist.ps1` from the repo root — assembles `dist/bones(.exe)` and

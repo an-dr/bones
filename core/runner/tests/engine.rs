@@ -42,6 +42,11 @@ const RUNAWAY_DEMO_DIR: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../extensions/runaway_demo/target/wasm32-wasip2/release"
 );
+// Built by extensions/flood_demo/build.ps1 (see its README).
+const FLOOD_DEMO_DIR: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../extensions/flood_demo/target/wasm32-wasip2/release"
+);
 // Built by extensions/audio_demo/build.ps1 (see its README).
 const AUDIO_DEMO_DIR: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -691,6 +696,64 @@ fn a_runaway_extension_is_quarantined_while_the_engine_keeps_running() {
         events.contains(&(Event::Faulted, "runaway_demo".to_string())),
         "expected a Faulted lifecycle event, got {events:?}"
     );
+}
+
+#[test]
+fn a_flooding_extension_is_faulted_without_starving_its_peer() {
+    let dir = std::env::temp_dir().join("bones-engine-test-flood");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::copy(format!("{HELLO_DIR}/hello.wasm"), dir.join("hello.wasm"))
+        .expect("build extensions/hello first: pwsh extensions/hello/build.ps1");
+    std::fs::copy(
+        format!("{FLOOD_DEMO_DIR}/flood_demo.wasm"),
+        dir.join("flood_demo.wasm"),
+    )
+    .expect("build extensions/flood_demo first: pwsh extensions/flood_demo/build.ps1");
+
+    let sink = RecordingSink::new();
+    let BuiltEngine {
+        runner,
+        mut supervisor,
+        ..
+    } = Engine::new()
+        .extensions_dir(&dir)
+        .extension_budget(bus::BudgetLimits {
+            max_inbound: 8,
+            max_publishes: 8,
+        })
+        .logger(Logger::new(Arc::new(sink.clone())))
+        .build()
+        .unwrap();
+
+    runner.step(1.0 / 60.0);
+    supervisor.check();
+    runner.step(1.0 / 60.0);
+    supervisor.check();
+
+    std::fs::remove_dir_all(&dir).ok();
+
+    assert_eq!(
+        supervisor.registry.call("test", "flood_demo", &[]),
+        Err(bus::SendError::UnknownEndpoint)
+    );
+    assert!(
+        supervisor.registry.call("test", "hello", &[]).is_ok(),
+        "the healthy peer must remain reachable"
+    );
+    let records = sink.records();
+    let hello_ticks = records
+        .iter()
+        .filter(|(_, category, message)| category == "hello" && message.contains("tick"))
+        .count();
+    assert_eq!(
+        hello_ticks, 2,
+        "the healthy peer must receive both frames, got {records:?}"
+    );
+    assert!(records.iter().any(|(_, _, message)| {
+        message.contains("'flood_demo' faulted")
+            && message.contains("inbound=0")
+            && message.contains("publishes=56")
+    }));
 }
 
 #[test]

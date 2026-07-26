@@ -13,8 +13,7 @@ registry are all done.
 
 | # | Increment | Demo that proves it |
 | - | --------- | ------------------- |
-| 1 | ADR-007's queue budget: bounded inbound queue, per-frame publish allowance, drop counters (only the time budget is enforced today) | A flooding extension is faulted instead of starving its peers |
-| 2 | web module (wry) + `web/*` vocabulary | The "dashboard" example ([examples/web-app.md](examples/web-app.md)) runs |
+| 1 | web module (wry) + `web/*` vocabulary | The "dashboard" example ([examples/web-app.md](examples/web-app.md)) runs |
 
 Guardrails while climbing:
 

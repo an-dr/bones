@@ -19,6 +19,8 @@ pub struct Config {
     pub game_core: bool,
     pub saves_dir: String,
     pub persistence_read_only: bool,
+    pub extension_max_inbound: u32,
+    pub extension_max_publishes: u32,
 }
 
 impl Default for Config {
@@ -50,6 +52,8 @@ impl Default for Config {
             // off (extensions can save).
             saves_dir: "saves".to_string(),
             persistence_read_only: false,
+            extension_max_inbound: 1_024,
+            extension_max_publishes: 1_024,
         }
     }
 }
@@ -91,6 +95,10 @@ mod tests {
         assert!(
             !config.persistence_read_only,
             "extensions can save by default"
+        );
+        assert_eq!(
+            (config.extension_max_inbound, config.extension_max_publishes),
+            (1_024, 1_024)
         );
     }
 

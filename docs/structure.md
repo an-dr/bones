@@ -15,12 +15,12 @@ Responsibilities in *italics* are not yet built — see
 
 | Component | Responsibility                                                     | Depends on             |
 | --------- | ------------------------------------------------------------------ | ---------------------- |
-| bus       | Topics, direct request/reply, delivery semantics, the `Module` contract and typed service registry (ADR-017); *queue budgets* | logging |
+| bus       | Topics, direct request/reply, delivery semantics, the `Module` contract and typed service registry (ADR-017), queue budgets and drop counters | logging |
 | wasm-extensions | Everything about a WASM extension's existence over time (ADR-020): loading/dispatch/watchdog (`host`), state-transition events (`lifecycle`), and save/load of its own state (`persistence`, unconditional — see the ADR for why it isn't in the optional module set below) | bus, contract, logging |
 | contract  | The WIT package — the extension-facing API definition             | —                     |
 | platform  | SDL window, tray, input sources, timing, event pump; headless mode | logging                |
 | runner    | Frame-phase loop skeleton, builder API (`.module(...)` injection)  | bus, wasm-extensions, platform, logging |
-| logging   | Structured sink, per-extension tagging; *drop counters*            | —                     |
+| logging   | Structured sink and per-extension tagging                           | —                     |
 
 ## Native modules (first-party)
 

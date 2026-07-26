@@ -28,9 +28,11 @@ impl Runner {
         &self.bus
     }
 
-    /// One frame: publish `core/tick` with the given (caller-supplied,
-    /// virtual) dt, then dispatch everything queued.
+    /// One frame: restore extension message allowances, publish `core/tick`
+    /// with the given (caller-supplied, virtual) dt, then dispatch everything
+    /// queued.
     pub fn step(&self, dt: f32) {
+        self.begin_frame();
         self.logger.debug("runner", &format!("tick dt={dt}"));
         let tick = Tick { dt };
         self.bus.publish(Envelope {
@@ -40,6 +42,12 @@ impl Runner {
             payload: tick.encode(),
         });
         self.bus.dispatch();
+    }
+
+    /// Starts a frame without publishing a tick, for nonstandard drivers
+    /// and the orderly shutdown phase.
+    pub fn begin_frame(&self) {
+        self.bus.begin_frame();
     }
 
     pub fn run_for(&self, ticks: u32, dt: f32) {

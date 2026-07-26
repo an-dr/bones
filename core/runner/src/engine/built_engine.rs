@@ -50,6 +50,7 @@ pub(super) fn run_shutdown(
     modules: &[Arc<Mutex<Box<dyn Module>>>],
     sender: &str,
 ) {
+    runner.begin_frame();
     runner.bus().publish(Envelope {
         topic: CloseRequested::TOPIC.to_string(),
         sender: sender.to_string(),

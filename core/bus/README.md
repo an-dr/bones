@@ -14,8 +14,9 @@ handler can safely publish in response to what it just received (ADR-015).
 `EndpointBudget` supplies ADR-007's per-frame inbound and publish allowances
 for untrusted endpoints. A bounded adapter drops matching deliveries over its
 allowance; the extension host applies the same object before guest publishes.
-`begin_frame` resets allowances while cumulative `DropCounters` and the
-violation flag remain observable.
+`Bus::begin_frame` resets every registered allowance while cumulative
+`DropCounters` and the violation flag remain observable; `Runner::step` calls
+it at the authoritative frame boundary.
 
 ## Direct send (ADR-010)
 
