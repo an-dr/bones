@@ -64,6 +64,7 @@ fn exe_dir() -> Option<PathBuf> {
 
 pub struct Engine {
     extensions_dir: Option<PathBuf>,
+    catalog_extensions: Vec<(String, PathBuf)>,
     startup_extensions: Vec<String>,
     extension_controller: Option<String>,
     logger: Logger,
@@ -86,6 +87,7 @@ impl Engine {
     pub fn new() -> Self {
         Self {
             extensions_dir: None,
+            catalog_extensions: Vec::new(),
             startup_extensions: Vec::new(),
             extension_controller: None,
             logger: Logger::default(),
@@ -112,6 +114,15 @@ impl Engine {
     /// extensions load.
     pub fn extensions_dir(mut self, path: impl Into<PathBuf>) -> Self {
         self.extensions_dir = Some(path.into());
+        self
+    }
+
+    /// Adds one explicitly named component to the extension catalog.
+    ///
+    /// This complements directory discovery for embedders whose validated
+    /// extension catalog spans multiple roots.
+    pub fn catalog_extension(mut self, name: impl Into<String>, path: impl Into<PathBuf>) -> Self {
+        self.catalog_extensions.push((name.into(), path.into()));
         self
     }
 
@@ -369,62 +380,70 @@ impl Engine {
 
         let mut tracked = Vec::new();
         let mut catalog = std::collections::HashMap::new();
+        let mut catalog_entries = Vec::new();
 
         if let Some(dir) = &self.extensions_dir {
             let dir = resolve_relative_to_exe(dir.clone());
             for path in find_wasm_files(&dir) {
-                let name = derive_extension_name(&path);
-                if catalog.contains_key(&name) {
-                    self.logger.error(
+                catalog_entries.push((derive_extension_name(&path), path));
+            }
+        }
+        catalog_entries.extend(
+            self.catalog_extensions
+                .drain(..)
+                .map(|(name, path)| (name, resolve_relative_to_exe(path))),
+        );
+        for (name, path) in catalog_entries {
+            if catalog.contains_key(&name) {
+                self.logger.error(
+                    "engine",
+                    &format!(
+                        "skipping {}: an extension named '{name}' is already cataloged",
+                        path.display()
+                    ),
+                );
+                continue;
+            }
+            catalog.insert(name.clone(), path.clone());
+            if !self.startup_extensions.is_empty() && !self.startup_extensions.contains(&name) {
+                continue;
+            }
+            match attach_extension(
+                &wasm_engine,
+                &bus,
+                &registry,
+                &self.logger,
+                &path,
+                &name,
+                &exit_requested,
+                &display_info,
+                self.extension_budget,
+            ) {
+                Ok((ep, shared, budget, topics)) => {
+                    self.logger.info(
                         "engine",
                         &format!(
-                            "skipping {}: an extension named '{name}' is already loaded",
+                            "loaded '{name}' from {} (subscribed: {topics:?})",
                             path.display()
                         ),
                     );
-                    continue;
+                    lifecycle::publish(&bus, ENGINE_SENDER, &name, Event::Loaded);
+                    tracked.push(TrackedExtension {
+                        name,
+                        mtime: read_file_mtime(&path),
+                        path,
+                        endpoint: ep,
+                        shared,
+                        budget,
+                        quarantined: false,
+                    });
                 }
-                catalog.insert(name.clone(), path.clone());
-                if !self.startup_extensions.is_empty() && !self.startup_extensions.contains(&name) {
-                    continue;
-                }
-                match attach_extension(
-                    &wasm_engine,
-                    &bus,
-                    &registry,
-                    &self.logger,
-                    &path,
-                    &name,
-                    &exit_requested,
-                    &display_info,
-                    self.extension_budget,
-                ) {
-                    Ok((ep, shared, budget, topics)) => {
-                        self.logger.info(
-                            "engine",
-                            &format!(
-                                "loaded '{name}' from {} (subscribed: {topics:?})",
-                                path.display()
-                            ),
-                        );
-                        lifecycle::publish(&bus, ENGINE_SENDER, &name, Event::Loaded);
-                        tracked.push(TrackedExtension {
-                            name,
-                            mtime: read_file_mtime(&path),
-                            path,
-                            endpoint: ep,
-                            shared,
-                            budget,
-                            quarantined: false,
-                        });
-                    }
-                    Err(err) => {
-                        self.logger.error(
-                            "engine",
-                            &format!("failed to load {}: {err}", path.display()),
-                        );
-                        lifecycle::publish(&bus, ENGINE_SENDER, &name, Event::Faulted);
-                    }
+                Err(err) => {
+                    self.logger.error(
+                        "engine",
+                        &format!("failed to load {}: {err}", path.display()),
+                    );
+                    lifecycle::publish(&bus, ENGINE_SENDER, &name, Event::Faulted);
                 }
             }
         }

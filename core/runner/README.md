@@ -9,6 +9,8 @@ The frame-phase loop and the public builder API (design/modules.md).
 - `Engine` — the builder: `Engine::new().extensions_dir(path).run()`
   discovers `.wasm` files, loads each via `host`, and runs them over real
   wall-clock timing (default 60Hz, override with `.tick_hz(hz)`).
+  `.catalog_extension(name, path)` adds a validated component explicitly when
+  an embedder's catalog spans multiple directories.
   `.window(title, w, h)` opens an SDL window; `.renderer()` attaches a
   renderer to it; `.extension_budget(limits)` configures message flow
   control. `run` is a thin wrapper around `Runner::step`, not a second

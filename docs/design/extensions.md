@@ -59,8 +59,10 @@ extensions can observe loads, faults, and reloads.
 
 `extensions_dir` is scanned recursively into a catalog. Directory names
 organize distributions but extension identity remains the globally unique file
-stem. Embedders either retain load-all startup behavior or provide a startup
-allow-list; other catalog entries remain uninstantiated.
+stem. An embedder with an already validated, multi-root catalog may add
+explicit `(name, path)` entries instead of copying components beneath one
+directory. Embedders either retain load-all startup behavior or provide a
+startup allow-list; other catalog entries remain uninstantiated.
 
 The embedder may authorize one host-stamped extension sender as the runtime
 controller. Its typed `core/extensions/load`, `unload`, or `reload` commands
