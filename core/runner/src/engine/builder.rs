@@ -251,6 +251,7 @@ impl Engine {
             }
             let ep = bus.register("renderer", Shared(shared.clone()));
             ep.subscribe(GFX_TOPICS);
+            ep.subscribe(bones_messages::lifecycle::LifecycleEvent::TOPIC);
             Some(shared)
         } else {
             None

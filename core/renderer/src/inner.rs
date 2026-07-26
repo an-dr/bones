@@ -83,6 +83,10 @@ impl Inner {
         }
     }
 
+    pub(crate) fn logical_size(&self) -> (u32, u32) {
+        self.reference_size
+    }
+
     /// Handles one decoded `gfx/*` command from `sender`. Cache-populating
     /// commands (`Clear`, `LoadSprite`) apply immediately since they're
     /// idempotent state, not a per-frame draw; `DrawSprite` only

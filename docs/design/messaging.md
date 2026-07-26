@@ -26,6 +26,7 @@ the core never inspects them.
 | `tray/*`       | core → ext      | Tray icon events: click, menu selection        |
 | `core/tick`    | core → ext      | Frame tick with delta time (subscription = opt-in to a frame loop) |
 | `core/lifecycle` | core → ext    | Extension state changes: loaded, faulted, reloaded |
+| `renderer/*`   | core → ext    | Physical display changes and the fixed logical canvas |
 | `gfx/*`        | ext → core      | Draw commands for the renderer                 |
 | `ui/*`         | both             | Widget specs in, interaction events out        |
 | `web/*`        | both             | Panel lifecycle in, JSON frontend messages both ways |

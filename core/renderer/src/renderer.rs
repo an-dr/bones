@@ -1,7 +1,8 @@
 use ab_glyph::FontRef;
 use bones_messages::gfx::Command;
-use bones_messages::renderer::DisplayChanged;
-use bones_messages::{EncodeMessage, Message};
+use bones_messages::lifecycle::{Event, LifecycleEvent};
+use bones_messages::renderer::{DisplayChanged, LogicalCanvas};
+use bones_messages::{DecodeMessage, EncodeMessage, Message};
 use bus::{Bus, Envelope, Handler, Module, ModuleContext};
 use logging::Logger;
 use sdl3::video::Window;
@@ -56,6 +57,16 @@ impl Renderer {
 
     pub fn present(&mut self) {
         self.0.inner_mut().canvas.present();
+    }
+
+    fn publish_logical_canvas(&mut self) {
+        let (width, height) = self.0.inner_mut().logical_size();
+        self.0.bus.publish(Envelope {
+            topic: LogicalCanvas::TOPIC.to_string(),
+            sender: "renderer".to_string(),
+            correlation: None,
+            payload: LogicalCanvas { width, height }.encode(),
+        });
     }
 
     /// Current window size in pixels, for callers (the ui module) that need
@@ -118,9 +129,23 @@ impl Renderer {
 
 impl Handler for Renderer {
     fn handle(&mut self, envelope: &Envelope) {
-        // Only ever reached for gfx/* (the subscription), so an unmatched
-        // topic here is always a caller mistake (e.g. a typo'd command
-        // name) worth surfacing rather than silently dropping.
+        if envelope.topic == LifecycleEvent::TOPIC {
+            if envelope.sender != "engine" {
+                return;
+            }
+            match LifecycleEvent::decode(&envelope.payload) {
+                Ok(event) if announces_logical_canvas(event.event) => {
+                    self.publish_logical_canvas();
+                }
+                Ok(_) => {}
+                Err(err) => self.0.logger.error(
+                    "renderer",
+                    &format!("{} from 'engine': {err}", envelope.topic),
+                ),
+            }
+            return;
+        }
+
         let result = match Command::decode(&envelope.topic, &envelope.payload) {
             Ok(Some(command)) => {
                 // The requested size/fullscreen isn't necessarily what the
@@ -160,6 +185,13 @@ impl Handler for Renderer {
         }
     }
 }
+
+fn announces_logical_canvas(event: Event) -> bool {
+    matches!(event, Event::Loaded | Event::Reloaded)
+}
+
+#[cfg(test)]
+mod tests;
 
 impl Module for Renderer {
     fn name(&self) -> &str {
