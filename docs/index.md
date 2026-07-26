@@ -33,7 +33,7 @@ side effect of applying them.
 - [architecture.md](architecture.md) — engine design overview: core components, messaging, extension model, diagrams.
 - [structure.md](structure.md) — static structure: components, dependency rules, source layout.
 - [code-style.md](code-style.md) — file-layout conventions for Rust source: one-type-per-file, the submodule/tests.rs pattern, README expectations.
-- [roadmap.md](roadmap.md) — remaining implementation increments with demo milestones.
+- [roadmap.md](roadmap.md) — the implementation backlog; currently empty.
 
 ## Detailed design
 

@@ -58,8 +58,8 @@ settings dialog on `ui/*`).
   between the bus and the page's script environment. The page cannot reach the
   bus directly — everything passes through (and is attributable to) the
   owning extension.
-- Panels are OS webviews composited above the SDL content — child views where
-  the platform supports it, separate top-level windows as fallback (ADR-006).
+- Panels are OS webviews composited above the SDL content as native children
+  of the SDL window on supported desktop window systems.
 
 ## Input routing
 
