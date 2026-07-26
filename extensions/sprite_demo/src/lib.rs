@@ -4,7 +4,9 @@ wit_bindgen::generate!({
 });
 
 use bones::core::host_api::{log, publish, subscribe, Level};
-use bones_messages::gfx::{Clear, DrawCircle, DrawRect, DrawSprite, DrawText, LoadSprite, SetCamera};
+use bones_messages::gfx::{
+    Clear, DrawCircle, DrawRect, DrawSprite, DrawText, LoadSprite, SetCamera, TextAlign,
+};
 use bones_messages::{EncodeMessage, Message};
 
 const SPRITE_PNG: &[u8] = include_bytes!("assets/robot_william.png");
@@ -125,6 +127,7 @@ impl Guest for Component {
             color: (255, 255, 255, 255),
             layer: 3,
             screen_space: false,
+            align: TextAlign::Left,
         };
         publish(DrawText::TOPIC, &nameplate.encode());
     }

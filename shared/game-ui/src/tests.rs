@@ -1,4 +1,4 @@
-use bones_messages::gfx::{DrawRect, DrawText};
+use bones_messages::gfx::{DrawRect, DrawText, TextAlign};
 use bones_messages::{DecodeMessage, Message};
 
 use super::*;
@@ -83,6 +83,15 @@ fn draw_commands_publish_screen_space_gfx_messages() {
             9,
         ),
         DrawCommand::text("Hello", 5, 6, 16, (5, 6, 7, 8), 10),
+        DrawCommand::text_aligned(
+            "Centered",
+            400,
+            20,
+            24,
+            (9, 10, 11, 12),
+            11,
+            TextAlign::Center,
+        ),
     ];
     let mut messages = Vec::new();
     for command in commands {
@@ -90,6 +99,9 @@ fn draw_commands_publish_screen_space_gfx_messages() {
     }
     assert!(DrawRect::decode(&messages[0].1)
         .is_ok_and(|message| messages[0].0 == DrawRect::TOPIC && message.screen_space));
-    assert!(DrawText::decode(&messages[1].1)
-        .is_ok_and(|message| messages[1].0 == DrawText::TOPIC && message.screen_space));
+    assert!(DrawText::decode(&messages[1].1).is_ok_and(|message| {
+        messages[1].0 == DrawText::TOPIC && message.screen_space && message.align == TextAlign::Left
+    }));
+    assert!(DrawText::decode(&messages[2].1)
+        .is_ok_and(|message| message.x == 400 && message.align == TextAlign::Center));
 }

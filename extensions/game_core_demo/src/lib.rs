@@ -15,7 +15,7 @@ use bones_messages::game_core::{
     BodyKind, Collision, EntityOp, EntityOpMessage, LoadTilemap, PhysicsWorlds, Shape, Sprite,
     TilesetImage,
 };
-use bones_messages::gfx::{DrawRect, DrawText, LoadSprite, SetDisplay};
+use bones_messages::gfx::{DrawRect, DrawText, LoadSprite, SetDisplay, TextAlign};
 use bones_messages::input::{GamepadAxis, KeyDown, KeyUp, MouseDown};
 use bones_messages::renderer::DisplayChanged;
 use bones_messages::{DecodeMessage, EncodeMessage, Message};
@@ -558,6 +558,7 @@ fn draw_hud(score: u32, life: u32) {
             color: HUD_BG_COLOR,
             layer: HUD_LAYER,
             screen_space: true,
+            align: TextAlign::Left,
         }
         .encode(),
     );
@@ -572,6 +573,7 @@ fn draw_hud(score: u32, life: u32) {
             color: HUD_BORDER_COLOR,
             layer: HUD_LAYER,
             screen_space: true,
+            align: TextAlign::Left,
         }
         .encode(),
     );
@@ -852,6 +854,7 @@ fn draw_menu(
             color: PANEL_TITLE_COLOR,
             layer: MENU_LAYER,
             screen_space: true,
+            align: TextAlign::Left,
         }
         .encode(),
     );
@@ -867,6 +870,7 @@ fn draw_menu(
                 color: SECTION_LABEL_COLOR,
                 layer: MENU_LAYER,
                 screen_space: true,
+                align: TextAlign::Left,
             }
             .encode(),
         );
@@ -882,6 +886,7 @@ fn draw_menu(
                 color: SECTION_LABEL_COLOR,
                 layer: MENU_LAYER,
                 screen_space: true,
+                align: TextAlign::Left,
             }
             .encode(),
         );
@@ -896,6 +901,7 @@ fn draw_menu(
                 color: SECTION_LABEL_COLOR,
                 layer: MENU_LAYER,
                 screen_space: true,
+                align: TextAlign::Left,
             }
             .encode(),
         );
@@ -945,6 +951,7 @@ fn draw_centered_text(text: &str, y: i32, size: u16, color: (u8, u8, u8, u8)) {
             color,
             layer: END_LAYER,
             screen_space: true,
+            align: TextAlign::Left,
         }
         .encode(),
     );

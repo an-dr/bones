@@ -1,4 +1,4 @@
-use bones_messages::gfx::{DrawRect, DrawText};
+use bones_messages::gfx::{DrawRect, DrawText, TextAlign};
 use bones_messages::{EncodeMessage, Message};
 
 use crate::Rect;
@@ -19,6 +19,7 @@ pub enum DrawCommand {
         size: u16,
         color: (u8, u8, u8, u8),
         layer: u8,
+        align: TextAlign,
     },
 }
 
@@ -29,6 +30,26 @@ impl DrawCommand {
             filled,
             color,
             layer,
+        }
+    }
+
+    pub fn text_aligned(
+        text: impl Into<String>,
+        x: i32,
+        y: i32,
+        size: u16,
+        color: (u8, u8, u8, u8),
+        layer: u8,
+        align: TextAlign,
+    ) -> Self {
+        Self::Text {
+            text: text.into(),
+            x,
+            y,
+            size,
+            color,
+            layer,
+            align,
         }
     }
 
@@ -47,6 +68,7 @@ impl DrawCommand {
             size,
             color,
             layer,
+            align: TextAlign::Left,
         }
     }
 
@@ -77,6 +99,7 @@ impl DrawCommand {
                 size,
                 color,
                 layer,
+                align,
             } => {
                 let message = DrawText {
                     text,
@@ -86,6 +109,7 @@ impl DrawCommand {
                     color: *color,
                     layer: *layer,
                     screen_space: true,
+                    align: *align,
                 };
                 publish(DrawText::TOPIC, &message.encode());
             }

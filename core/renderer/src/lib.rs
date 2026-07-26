@@ -8,6 +8,7 @@ mod circle_geometry;
 mod inner;
 mod renderer;
 mod retained_draw;
+mod text_alignment;
 mod text_rasterizer;
 mod ui_mesh;
 

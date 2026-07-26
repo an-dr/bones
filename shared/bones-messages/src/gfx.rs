@@ -11,6 +11,7 @@ mod draw_triangle;
 mod load_sprite;
 mod set_camera;
 mod set_display;
+mod text_align;
 
 pub use clear::Clear;
 pub use command::Command;
@@ -23,6 +24,7 @@ pub use draw_triangle::DrawTriangle;
 pub use load_sprite::LoadSprite;
 pub use set_camera::SetCamera;
 pub use set_display::SetDisplay;
+pub use text_align::TextAlign;
 
 #[cfg(test)]
 mod tests;

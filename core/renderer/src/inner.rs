@@ -10,6 +10,7 @@ use sdl3::video::{Window, WindowContext};
 
 use crate::circle_geometry::{circle_fill_lines, circle_outline_points};
 use crate::retained_draw::RetainedDraw;
+use crate::text_alignment::aligned_text_x;
 use crate::text_rasterizer::rasterize_text;
 use crate::ui_mesh::UiMesh;
 
@@ -165,6 +166,7 @@ impl Inner {
                         color: draw.color,
                         layer: draw.layer,
                         screen_space: draw.screen_space,
+                        align: draw.align,
                     });
             }
         }
@@ -344,10 +346,14 @@ impl Inner {
                             .map_err(|e| e.to_string())?;
                     } else {
                         self.canvas.set_draw_color(Color::RGBA(r, g, b, a));
-                        for [start, end] in
-                            [[points[0], points[1]], [points[1], points[2]], [points[2], points[0]]]
-                        {
-                            self.canvas.draw_line(start, end).map_err(|e| e.to_string())?;
+                        for [start, end] in [
+                            [points[0], points[1]],
+                            [points[1], points[2]],
+                            [points[2], points[0]],
+                        ] {
+                            self.canvas
+                                .draw_line(start, end)
+                                .map_err(|e| e.to_string())?;
                         }
                     }
                 }
@@ -358,6 +364,7 @@ impl Inner {
                     size,
                     color,
                     screen_space,
+                    align,
                     ..
                 } => {
                     if text.is_empty() {
@@ -374,7 +381,7 @@ impl Inner {
                         .update(None, &rgba, width as usize * 4)
                         .map_err(|e| e.to_string())?;
 
-                    let (screen_x, screen_y, scale_x, scale_y) = if *screen_space {
+                    let (anchor_x, screen_y, scale_x, scale_y) = if *screen_space {
                         (
                             (*x as f32 * ui_scale_x).round() as i32,
                             (*y as f32 * ui_scale_y).round() as i32,
@@ -387,6 +394,7 @@ impl Inner {
                     };
                     let screen_w = (width as f32 * scale_x).round().max(0.0) as u32;
                     let screen_h = (height as f32 * scale_y).round().max(0.0) as u32;
+                    let screen_x = aligned_text_x(anchor_x, screen_w, *align);
                     self.canvas
                         .copy(
                             &texture,

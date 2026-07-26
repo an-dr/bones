@@ -1,3 +1,4 @@
+use super::TextAlign;
 use crate::{DecodeError, DecodeMessage, EncodeMessage, Message, Reader, Writer};
 
 /// Draws a line of text with a font-rendered glyph size in points.
@@ -5,7 +6,7 @@ use crate::{DecodeError, DecodeMessage, EncodeMessage, Message, Reader, Writer};
 pub struct DrawText<'a> {
     /// The text to draw. No wrapping — one line.
     pub text: &'a str,
-    /// Baseline-independent top-left x coordinate.
+    /// Baseline-independent horizontal anchor, interpreted by `align`.
     pub x: i32,
     /// Baseline-independent top-left y coordinate.
     pub y: i32,
@@ -19,6 +20,8 @@ pub struct DrawText<'a> {
     /// see `DrawRect::screen_space`. `false` is every caller's behavior
     /// from before this field existed.
     pub screen_space: bool,
+    /// Horizontal placement relative to `x`.
+    pub align: TextAlign,
 }
 
 impl Message for DrawText<'_> {
@@ -39,6 +42,7 @@ impl EncodeMessage for DrawText<'_> {
             .u8(a)
             .u8(self.layer)
             .u8(self.screen_space as u8)
+            .u8(self.align.encode())
             .finish()
     }
 }
@@ -46,21 +50,32 @@ impl EncodeMessage for DrawText<'_> {
 impl<'a> DecodeMessage<'a> for DrawText<'a> {
     fn decode(payload: &'a [u8]) -> Result<Self, DecodeError> {
         let mut reader = Reader::new(payload);
-        let message = Self {
-            text: reader.read_str()?,
-            x: reader.read_i32()?,
-            y: reader.read_i32()?,
-            size: reader.read_u16()?,
-            color: (
-                reader.read_u8()?,
-                reader.read_u8()?,
-                reader.read_u8()?,
-                reader.read_u8()?,
-            ),
-            layer: reader.read_u8()?,
-            screen_space: reader.read_u8()? != 0,
+        let text = reader.read_str()?;
+        let x = reader.read_i32()?;
+        let y = reader.read_i32()?;
+        let size = reader.read_u16()?;
+        let color = (
+            reader.read_u8()?,
+            reader.read_u8()?,
+            reader.read_u8()?,
+            reader.read_u8()?,
+        );
+        let layer = reader.read_u8()?;
+        let screen_space = reader.read_u8()? != 0;
+        let align = match reader.read_rest() {
+            [] => TextAlign::Left,
+            [value] => TextAlign::decode(*value)?,
+            _ => return Err(DecodeError::TrailingBytes),
         };
-        reader.finish()?;
-        Ok(message)
+        Ok(Self {
+            text,
+            x,
+            y,
+            size,
+            color,
+            layer,
+            screen_space,
+            align,
+        })
     }
 }

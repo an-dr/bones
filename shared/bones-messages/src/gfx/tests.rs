@@ -1,5 +1,5 @@
 use super::*;
-use crate::{DecodeError, EncodeMessage, Message};
+use crate::{DecodeError, DecodeMessage, EncodeMessage, Message};
 
 #[test]
 fn non_gfx_topics_are_ignored() {
@@ -119,6 +119,7 @@ fn every_command_round_trips() {
         color: (255, 255, 255, 255),
         layer: 9,
         screen_space: false,
+        align: TextAlign::Center,
     };
     assert_eq!(
         Command::decode(DrawText::TOPIC, &text.encode()),
@@ -167,10 +168,53 @@ fn screen_space_draws_round_trip() {
         color: (255, 255, 255, 255),
         layer: 9,
         screen_space: true,
+        align: TextAlign::Right,
     };
     assert_eq!(
         Command::decode(DrawText::TOPIC, &text.encode()),
         Ok(Some(Command::DrawText(text)))
+    );
+}
+
+#[test]
+fn draw_text_without_an_alignment_byte_defaults_to_left() {
+    let text = DrawText {
+        text: "legacy",
+        x: 10,
+        y: 20,
+        size: 16,
+        color: (255, 255, 255, 255),
+        layer: 1,
+        screen_space: true,
+        align: TextAlign::Center,
+    };
+    let mut legacy_payload = text.encode();
+    legacy_payload.pop();
+
+    assert!(DrawText::decode(&legacy_payload).is_ok_and(|decoded| decoded.align == TextAlign::Left));
+}
+
+#[test]
+fn draw_text_rejects_an_unknown_alignment() {
+    let text = DrawText {
+        text: "invalid",
+        x: 10,
+        y: 20,
+        size: 16,
+        color: (255, 255, 255, 255),
+        layer: 1,
+        screen_space: true,
+        align: TextAlign::Left,
+    };
+    let mut payload = text.encode();
+    *payload.last_mut().expect("alignment byte") = 3;
+
+    assert_eq!(
+        DrawText::decode(&payload),
+        Err(DecodeError::InvalidTag {
+            message: "text alignment",
+            tag: 3,
+        })
     );
 }
 

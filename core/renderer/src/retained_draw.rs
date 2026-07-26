@@ -1,4 +1,4 @@
-use bones_messages::gfx::{DrawCircle, DrawLine, DrawRect, DrawSprite, DrawTriangle};
+use bones_messages::gfx::{DrawCircle, DrawLine, DrawRect, DrawSprite, DrawTriangle, TextAlign};
 
 /// A `gfx/*` draw command that goes through the retained-batch/layer
 /// pipeline (as opposed to `Clear`/`LoadSprite`/`SetCamera`, which apply
@@ -20,6 +20,7 @@ pub(crate) enum RetainedDraw {
         color: (u8, u8, u8, u8),
         layer: u8,
         screen_space: bool,
+        align: TextAlign,
     },
 }
 
