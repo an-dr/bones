@@ -1,0 +1,5 @@
+extensions_dir = "extensions"
+renderer = false
+ui = false
+extension_max_inbound = 8
+extension_max_publishes = 8

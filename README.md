@@ -5,11 +5,10 @@ message bus — with all product behavior implemented as WASM extensions in
 any language. See [docs/architecture.md](docs/architecture.md) for the full
 design.
 
-**Status:** kernel (bus, extension host, platform, logging), the renderer
-and egui ui modules, audio, the game-core module (ECS, collision, tilemap
-loading, sprite-animation timing), hot reload, and custom native-module
-injection (`.module(...)`, see `embedding-demo/`) all work today. The web
-presentation module is next — see [docs/roadmap.md](docs/roadmap.md).
+**Status:** the kernel, renderer, egui UI, audio, game-core, optional wry web
+panels, hot reload, orderly shutdown, extension flow-control budgets, and
+custom native-module injection (`.module(...)`, see `embedding-demo/`) all
+work today.
 
 Use cases:
 
@@ -33,6 +32,15 @@ cargo run -p app
 
 Drop a built `.wasm` extension into `extensions/` next to wherever you run
 it (see `extensions/hello/README.md` to build the reference extension).
+
+For the complete web-panel example:
+
+```sh
+pwsh extensions/dashboard/build.ps1
+```
+
+Run `extensions/dashboard/dist/bones(.exe)` to see two WASM components
+exchange pushed metrics and direct history requests through an embedded page.
 
 ## Documentation
 

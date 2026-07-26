@@ -33,7 +33,18 @@ window_title = "bones"
 window_width = 800
 window_height = 600
 renderer = true
+web = false
+extension_max_inbound = 1024
+extension_max_publishes = 1024
 ```
+
+Web panels require both the cargo feature and configuration switch:
+`cargo run -p app --features web` with `web = true`. Ordinary builds keep the
+wry/WebView2/WKWebView/WebKitGTK dependency out entirely.
+
+The two extension limits are per frame and apply independently to every WASM
+component. Exceeding either allowance drops and counts the excess work, then
+quarantines only that component.
 
 For a self-contained build (binary + every extension in one directory), run
 `pwsh dist.ps1` from the repo root — assembles `dist/bones(.exe)` and

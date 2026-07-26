@@ -17,5 +17,5 @@ Requires PowerShell 7+ (`pwsh`). Output:
 `target/wasm32-wasip2/release/persistence_demo.wasm`.
 
 The same script also builds the `bones` engine and assembles a runnable
-`dist/` next to this README — `dist/bones(.exe)` with `dist/extensions/
-persistence_demo.wasm` already in place, ready to run directly.
+`dist/` next to this README — `dist/bones(.exe)`, `dist/bones.toml`, and
+`dist/extensions/persistence_demo.wasm`, ready to run directly.

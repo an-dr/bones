@@ -1,0 +1,7 @@
+extensions_dir = "extensions"
+window_title = "Bones extension telemetry"
+window_width = 960
+window_height = 640
+renderer = false
+ui = false
+web = true

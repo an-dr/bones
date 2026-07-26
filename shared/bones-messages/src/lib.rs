@@ -4,6 +4,7 @@
 
 pub mod audio;
 pub mod codec;
+pub mod extension_control;
 pub mod game_core;
 pub mod gfx;
 pub mod input;
@@ -12,6 +13,8 @@ pub mod persistence;
 pub mod renderer;
 pub mod tick;
 pub mod ui;
+pub mod web;
+pub mod window;
 
 pub use codec::{DecodeError, Reader, Writer};
 

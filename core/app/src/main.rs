@@ -22,6 +22,10 @@ fn run() -> Result<(), String> {
 
     let mut engine = runner::Engine::new()
         .extensions_dir(paths::config_relative(&config.extensions_dir))
+        .extension_budget(bus::BudgetLimits {
+            max_inbound: config.extension_max_inbound,
+            max_publishes: config.extension_max_publishes,
+        })
         .window(
             config.window_title,
             config.window_width,
@@ -33,6 +37,16 @@ fn run() -> Result<(), String> {
     }
     if config.ui {
         engine = engine.ui();
+    }
+    if config.web {
+        #[cfg(feature = "web")]
+        {
+            engine = engine.web();
+        }
+        #[cfg(not(feature = "web"))]
+        {
+            return Err("web = true requires building app with --features web".to_string());
+        }
     }
     if config.audio {
         engine = engine.module(audio::Audio::new());

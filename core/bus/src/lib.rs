@@ -1,4 +1,5 @@
 mod adapter;
+mod budget;
 mod bus;
 mod endpoint;
 mod envelope;
@@ -8,6 +9,7 @@ mod registry;
 mod respond;
 mod send_error;
 
+pub use budget::{BudgetLimits, DropCounters, EndpointBudget};
 pub use bus::Bus;
 pub use endpoint::Endpoint;
 pub use envelope::Envelope;

@@ -24,9 +24,7 @@ pub trait Module: Handler {
     /// `present` phase: flip buffers / finalize the frame.
     fn present(&mut self) {}
 
-    /// TODO: not called by `Engine::run` yet — the full shutdown sequence
-    /// (WIT `shutdown` export, close-request event, design/platform.md) is
-    /// a separate roadmap rung.
+    /// Called once after extensions stop during orderly application shutdown.
     fn shutdown(&mut self) {}
 
     /// Answers a direct `send` (ADR-010) addressed to this module by name.

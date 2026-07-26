@@ -44,9 +44,6 @@ every Running extension under the usual time budget, then tears down the
 platform. A stuck `shutdown()` is abandoned like any budget violation; the
 engine always exits.
 
-This full sequence — the close-request event, `shutdown()` on every
-extension — is not built yet. What exists today is narrower: an extension
-can call the `request-exit` host-api function to ask the engine to close;
-the run loop breaks on the next iteration, the same as an OS window-close
-request, with no event published and no `shutdown()` call to any
-extension. A clean one-way request, not this section's full sequence.
+The same sequence handles an OS close and an extension's one-way
+`request-exit` host-api call. Cleanup publications and `Stopped` events are
+dispatched before native modules shut down and the platform is torn down.

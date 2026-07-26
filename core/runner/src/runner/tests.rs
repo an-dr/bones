@@ -36,11 +36,16 @@ fn step_delivers_tick_to_a_subscribed_endpoint() {
 fn run_for_delivers_ticks_in_order() {
     let bus = Bus::new();
     let ticks = Arc::new(Mutex::new(Vec::new()));
-    let ep = bus.register(
+    let budget = bus::EndpointBudget::new(bus::BudgetLimits {
+        max_inbound: 1,
+        max_publishes: 0,
+    });
+    let ep = bus.register_with_budget(
         "level",
         CountingEndpoint {
             ticks: ticks.clone(),
         },
+        budget.clone(),
     );
     ep.subscribe(Tick::TOPIC);
 
@@ -48,6 +53,7 @@ fn run_for_delivers_ticks_in_order() {
     runner.run_for(3, 0.016);
 
     assert_eq!(*ticks.lock().unwrap(), vec![0.016, 0.016, 0.016]);
+    assert_eq!(budget.get_drop_counters().inbound, 0);
 }
 
 #[test]

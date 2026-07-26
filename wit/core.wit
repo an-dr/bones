@@ -22,9 +22,7 @@ interface host-api {
     subscribe: func(topic: string);
     publish: func(topic: string, payload: list<u8>);
     send: func(endpoint: string, payload: list<u8>) -> result<list<u8>, send-error>;
-    // A clean, one-way request to close the running app — not the full
-    // shutdown sequence (design/platform.md: no shutdown() call back to
-    // extensions, no close-request event other extensions can react to).
+    // A clean, one-way request to begin orderly application shutdown.
     // The host obeys after this call returns; there is no confirmation.
     request-exit: func();
     // Every fullscreen-capable resolution the window's own display reports
@@ -44,6 +42,8 @@ world extension {
     import host-api;
 
     export init: func();
+    // Called once before a running extension is unloaded.
+    export shutdown: func();
     export on-tick: func(dt: f32);
     // Topic is empty for a direct send (ADR-010) - it has no topic, only a
     // sender and payload. The returned payload is the reply; only read for

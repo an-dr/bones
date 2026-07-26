@@ -15,10 +15,13 @@ pub struct Config {
     pub window_height: u32,
     pub renderer: bool,
     pub ui: bool,
+    pub web: bool,
     pub audio: bool,
     pub game_core: bool,
     pub saves_dir: String,
     pub persistence_read_only: bool,
+    pub extension_max_inbound: u32,
+    pub extension_max_publishes: u32,
 }
 
 impl Default for Config {
@@ -30,6 +33,7 @@ impl Default for Config {
             window_height: 600,
             renderer: true,
             ui: true,
+            web: false,
             // Unlike renderer/ui, not every deployment target has a working
             // audio device (headless CI, some containers) — opt-in via
             // bones.toml rather than risking `Engine::build()` failing by
@@ -50,6 +54,8 @@ impl Default for Config {
             // off (extensions can save).
             saves_dir: "saves".to_string(),
             persistence_read_only: false,
+            extension_max_inbound: 1_024,
+            extension_max_publishes: 1_024,
         }
     }
 }
@@ -82,6 +88,7 @@ mod tests {
         assert_eq!((config.window_width, config.window_height), (800, 600));
         assert!(config.renderer);
         assert!(config.ui);
+        assert!(!config.web, "web is an optional cargo feature");
         assert!(
             !config.audio,
             "not every deployment target has a working audio device"
@@ -91,6 +98,10 @@ mod tests {
         assert!(
             !config.persistence_read_only,
             "extensions can save by default"
+        );
+        assert_eq!(
+            (config.extension_max_inbound, config.extension_max_publishes),
+            (1_024, 1_024)
         );
     }
 

@@ -11,8 +11,8 @@ per engine instance; the host rejects a duplicate at load.
 
 The contract, at concept level:
 
-- **Extension exports:** `init()`, `on-message(msg)`, `on-tick(dt)`.
-  TODO: no `shutdown()` export yet — see roadmap.md.
+- **Extension exports:** `init()`, `shutdown()`, `on-message(msg)`,
+  `on-tick(dt)`.
 - **Host imports:** `subscribe(topic)`, `publish(topic, payload)`,
   `send(endpoint, payload) → reply`, `log(level, text)`.
 
@@ -25,6 +25,7 @@ Extensions never own a thread or loop. The host calls their exports:
 
 - `on-message` for every delivered bus message and direct request.
 - `on-tick(dt)` each frame — only for extensions subscribed to `core/tick`.
+- `shutdown()` once before an orderly runtime unload or reload.
 - Handler calls for one extension never overlap: `on-message` and `on-tick`
   are serialized per extension, so extension authors need no internal locking.
 
@@ -45,6 +46,7 @@ stateDiagram-v2
     Running --> Reloading: file changed / reload request
     Faulted --> Reloading: explicit reload (user or host policy)
     Reloading --> Running: new instance init() ok
+    Reloading --> Running: replacement init() error; old instance retained
     Reloading --> Faulted: new instance init() error
     Running --> Stopped: shutdown()
     Stopped --> [*]
@@ -52,6 +54,22 @@ stateDiagram-v2
 
 Every transition is published on `core/lifecycle`, so tooling and other
 extensions can observe loads, faults, and reloads.
+
+## Runtime activation
+
+`extensions_dir` is scanned recursively into a catalog. Directory names
+organize distributions but extension identity remains the globally unique file
+stem. Embedders either retain load-all startup behavior or provide a startup
+allow-list; other catalog entries remain uninstantiated.
+
+The embedder may authorize one host-stamped extension sender as the runtime
+controller. Its typed `core/extensions/load`, `unload`, or `reload` commands
+are applied after bus dispatch; commands from every other sender are rejected
+and logged. State changes appear on `core/lifecycle`. A reload attaches its
+replacement before shutting down the current instance; a failed replacement is
+logged and leaves the current instance running. Unload calls `shutdown`,
+preserves messages the hook published for later dispatch, then releases the bus
+endpoint, direct-send registration, and component instance.
 
 ## Faults and quarantine
 
@@ -62,8 +80,9 @@ an automatic retry loop.
 
 ## Hot reload
 
-Reload = drop the old instance, instantiate the new binary, run `init`,
-re-register subscriptions. Two consequences extension authors must know:
+Reload = call `shutdown`, drop the old instance, instantiate the new binary,
+run `init`, and re-register subscriptions. Two consequences extension authors
+must know:
 
 - **In-memory state does not survive reload.** Persistence is the extension's
   own concern (e.g. writing state out on `shutdown` or on demand). A state

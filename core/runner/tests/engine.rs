@@ -6,6 +6,7 @@
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
+use bones_messages::extension_control::{Load, Reload, Unload};
 use bones_messages::lifecycle::{Event, LifecycleEvent};
 use bones_messages::{DecodeMessage, EncodeMessage, Message};
 use bus::{Envelope, Handler, Module, ModuleContext};
@@ -41,6 +42,11 @@ const RUNAWAY_DEMO_DIR: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../extensions/runaway_demo/target/wasm32-wasip2/release"
 );
+// Built by extensions/flood_demo/build.ps1 (see its README).
+const FLOOD_DEMO_DIR: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../extensions/flood_demo/target/wasm32-wasip2/release"
+);
 // Built by extensions/audio_demo/build.ps1 (see its README).
 const AUDIO_DEMO_DIR: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -50,6 +56,16 @@ const AUDIO_DEMO_DIR: &str = concat!(
 const PERSISTENCE_DEMO_DIR: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../extensions/persistence_demo/target/wasm32-wasip2/release"
+);
+#[cfg(all(feature = "web", target_os = "windows"))]
+const DASHBOARD_WASM: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../extensions/dashboard/target/wasm32-wasip2/release/dashboard.wasm"
+);
+#[cfg(all(feature = "web", target_os = "windows"))]
+const METRICS_WASM: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../extensions/metrics/target/wasm32-wasip2/release/metrics.wasm"
 );
 
 #[test]
@@ -83,6 +99,222 @@ fn build_discovers_loads_and_registers_a_real_extension() {
         records.iter().any(|(_, _, msg)| msg.contains("tick")),
         "expected the extension's tick log line, got {records:?}"
     );
+}
+
+#[test]
+fn shutdown_all_calls_cleanup_unregisters_and_publishes_stopped() {
+    let sink = RecordingSink::new();
+    let BuiltEngine {
+        runner,
+        mut supervisor,
+        ..
+    } = Engine::new()
+        .extensions_dir(HELLO_DIR)
+        .logger(Logger::new(Arc::new(sink.clone())))
+        .build()
+        .expect("build extensions/hello first: pwsh extensions/hello/build.ps1");
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let captured = events.clone();
+    let endpoint = runner
+        .bus()
+        .register("lifecycle-spy", move |envelope: &Envelope| {
+            captured.lock().unwrap().push(envelope.clone());
+        });
+    endpoint.subscribe(LifecycleEvent::TOPIC);
+    assert!(
+        supervisor.registry.call("test", "hello", &[]).is_ok(),
+        "hello must be running before the shutdown sequence"
+    );
+
+    supervisor.shutdown_all();
+    assert!(
+        supervisor.registry.call("test", "hello", &[]).is_err(),
+        "a stopped extension must no longer accept direct sends"
+    );
+    runner.bus().dispatch();
+
+    assert!(sink
+        .records()
+        .iter()
+        .any(|(_, _, message)| message.contains("shutdown")));
+    let events = events.lock().unwrap();
+    assert!(events.iter().any(|envelope| {
+        LifecycleEvent::decode(&envelope.payload)
+            == Ok(LifecycleEvent {
+                event: Event::Stopped,
+                extension: "hello",
+            })
+    }));
+}
+
+#[test]
+fn orderly_shutdown_dispatches_close_cleanup_and_stopped_in_order() {
+    let module = RecordingModule::default();
+    let mut engine = Engine::new()
+        .extensions_dir(HELLO_DIR)
+        .module(module.clone())
+        .build()
+        .expect("build extensions/hello first: pwsh extensions/hello/build.ps1");
+    let observed = Arc::new(Mutex::new(Vec::new()));
+    let captured = observed.clone();
+    let endpoint = engine
+        .runner
+        .bus()
+        .register("shutdown-spy", move |envelope: &Envelope| {
+            captured
+                .lock()
+                .unwrap()
+                .push((envelope.topic.clone(), envelope.payload.clone()));
+        });
+    endpoint.subscribe("window/*");
+    endpoint.subscribe("hello/cleanup");
+    endpoint.subscribe(LifecycleEvent::TOPIC);
+
+    engine.shutdown();
+    engine.shutdown();
+
+    let observed = observed.lock().unwrap();
+    let close = observed
+        .iter()
+        .position(|(topic, _)| topic == bones_messages::window::CloseRequested::TOPIC)
+        .unwrap();
+    let cleanup = observed
+        .iter()
+        .position(|(topic, _)| topic == "hello/cleanup")
+        .unwrap();
+    let stopped = observed
+        .iter()
+        .position(|(topic, payload)| {
+            topic == LifecycleEvent::TOPIC
+                && LifecycleEvent::decode(payload)
+                    == Ok(LifecycleEvent {
+                        event: Event::Stopped,
+                        extension: "hello",
+                    })
+        })
+        .unwrap();
+    assert!(close < cleanup && cleanup < stopped);
+    assert_eq!(
+        module
+            .calls()
+            .iter()
+            .filter(|call| call.as_str() == "shutdown")
+            .count(),
+        1,
+        "the complete sequence is idempotent"
+    );
+}
+
+#[test]
+fn startup_allow_list_and_runtime_commands_control_activation() {
+    let dir = std::env::temp_dir().join("bones-runtime-extension-manager");
+    std::fs::create_dir_all(dir.join("core")).unwrap();
+    std::fs::create_dir_all(dir.join("levels")).unwrap();
+    std::fs::copy(
+        format!("{HELLO_DIR}/hello.wasm"),
+        dir.join("core/menu.wasm"),
+    )
+    .unwrap();
+    std::fs::copy(
+        format!("{HELLO_DIR}/hello.wasm"),
+        dir.join("levels/later.wasm"),
+    )
+    .unwrap();
+
+    let sink = RecordingSink::new();
+    let BuiltEngine {
+        runner,
+        mut supervisor,
+        ..
+    } = Engine::new()
+        .extensions_dir(&dir)
+        .startup_extension("menu")
+        .extension_controller("menu")
+        .logger(Logger::new(Arc::new(sink.clone())))
+        .build()
+        .unwrap();
+    assert!(supervisor.registry.call("test", "menu", &[]).is_ok());
+    assert!(supervisor.registry.call("test", "later", &[]).is_err());
+
+    runner.bus().publish(Envelope {
+        topic: Load::TOPIC.to_string(),
+        sender: "rogue".to_string(),
+        correlation: None,
+        payload: Load { extension: "later" }.encode(),
+    });
+    runner.step(1.0 / 60.0);
+    supervisor.check();
+    assert!(supervisor.registry.call("test", "later", &[]).is_err());
+    assert!(sink.records().iter().any(|(_, _, message)| {
+        message.contains("rejected runtime extension command from 'rogue'")
+    }));
+
+    runner.bus().publish(Envelope {
+        topic: Load::TOPIC.to_string(),
+        sender: "menu".to_string(),
+        correlation: None,
+        payload: vec![0xff],
+    });
+    runner.step(1.0 / 60.0);
+    supervisor.check();
+    assert!(sink.records().iter().any(|(_, _, message)| {
+        message.contains("could not decode extension command from 'menu'")
+    }));
+
+    runner.bus().publish(Envelope {
+        topic: Load::TOPIC.to_string(),
+        sender: "menu".to_string(),
+        correlation: None,
+        payload: Load { extension: "later" }.encode(),
+    });
+    runner.step(1.0 / 60.0);
+    supervisor.check();
+    assert!(supervisor.registry.call("test", "later", &[]).is_ok());
+
+    std::fs::write(dir.join("levels/later.wasm"), b"not a component").unwrap();
+    runner.bus().publish(Envelope {
+        topic: Reload::TOPIC.to_string(),
+        sender: "menu".to_string(),
+        correlation: None,
+        payload: Reload { extension: "later" }.encode(),
+    });
+    runner.step(1.0 / 60.0);
+    supervisor.check();
+    assert!(
+        supervisor.registry.call("test", "later", &[]).is_ok(),
+        "a failed commanded reload must keep the current instance running"
+    );
+    assert!(sink.records().iter().any(|(_, _, message)| {
+        message.contains("reload of 'later' failed, keeping the running instance")
+    }));
+
+    runner.bus().publish(Envelope {
+        topic: Unload::TOPIC.to_string(),
+        sender: "menu".to_string(),
+        correlation: None,
+        payload: Unload { extension: "later" }.encode(),
+    });
+    runner.step(1.0 / 60.0);
+    supervisor.check();
+    assert!(supervisor.registry.call("test", "later", &[]).is_err());
+
+    drop(supervisor);
+    std::fs::remove_dir_all(dir).ok();
+}
+
+#[test]
+fn a_missing_startup_extension_is_logged() {
+    let sink = RecordingSink::new();
+    let _engine = Engine::new()
+        .extensions_dir(HELLO_DIR)
+        .startup_extension("typo")
+        .logger(Logger::new(Arc::new(sink.clone())))
+        .build()
+        .unwrap();
+
+    assert!(sink.records().iter().any(|(_, _, message)| {
+        message.contains("startup extension 'typo' is not in the catalog")
+    }));
 }
 
 #[test]
@@ -476,6 +708,266 @@ fn a_runaway_extension_is_quarantined_while_the_engine_keeps_running() {
     );
 }
 
+#[cfg(all(feature = "web", target_os = "windows"))]
+#[test]
+fn web_and_renderer_share_a_real_window_and_register_the_web_endpoint() {
+    use bones_messages::web::{Command, OpenPanel, PanelOpened, PanelSource};
+
+    let _guard = sdl_test_lock().lock().unwrap();
+    let mut engine = Engine::new()
+        .window("bones web composition", 160, 120)
+        .renderer()
+        .web()
+        .build()
+        .unwrap();
+    let opened = Arc::new(Mutex::new(Vec::new()));
+    let captured = opened.clone();
+    let endpoint = engine
+        .runner
+        .bus()
+        .register("web-test-spy", move |envelope: &Envelope| {
+            captured.lock().unwrap().push(envelope.clone());
+        });
+    endpoint.subscribe(PanelOpened::TOPIC);
+
+    let reply = engine.supervisor.registry.call(
+        "dashboard",
+        "web",
+        &Command::Open(OpenPanel {
+            panel: "main",
+            source: PanelSource::Html("<!doctype html><title>dashboard</title>"),
+        })
+        .encode(),
+    );
+    engine.runner.bus().dispatch();
+
+    assert_eq!(reply, Ok(Vec::new()));
+    let opened = opened.lock().unwrap();
+    let event = opened
+        .iter()
+        .find(|envelope| envelope.topic == PanelOpened::TOPIC)
+        .map(|envelope| PanelOpened::decode(&envelope.payload).unwrap())
+        .expect("web should publish confirmation after opening the native panel");
+    assert_eq!((event.owner, event.panel), ("dashboard", "main"));
+    drop(opened);
+
+    engine.shutdown();
+}
+
+#[cfg(feature = "web")]
+#[test]
+fn web_without_a_window_is_a_build_error() {
+    let error = match Engine::new().web().build() {
+        Ok(_) => panic!("web must not build without a parent window"),
+        Err(error) => error,
+    };
+
+    assert!(error.to_string().contains(".web() needs .window(...)"));
+}
+
+#[cfg(all(feature = "web", target_os = "windows"))]
+#[test]
+fn dashboard_and_metrics_exchange_push_pull_and_page_ipc() {
+    let _guard = sdl_test_lock().lock().unwrap();
+    let dir = std::env::temp_dir().join("bones-dashboard-integration");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::copy(DASHBOARD_WASM, dir.join("dashboard.wasm"))
+        .expect("build extensions/dashboard for wasm32-wasip2 first");
+    std::fs::copy(METRICS_WASM, dir.join("metrics.wasm"))
+        .expect("build extensions/metrics for wasm32-wasip2 first");
+
+    let sink = RecordingSink::new();
+    let mut engine = Engine::new()
+        .extensions_dir(&dir)
+        .logger(Logger::new(Arc::new(sink.clone())))
+        .window("bones dashboard integration", 800, 600)
+        .web()
+        .build()
+        .unwrap();
+
+    for _ in 0..120 {
+        engine
+            .platform
+            .as_mut()
+            .unwrap()
+            .poll_events(engine.runner.bus(), "platform");
+        engine.runner.step(0.1);
+        engine.supervisor.check();
+        for module in &engine.modules {
+            module.lock().unwrap().render();
+        }
+        let records = sink.records();
+        let acknowledged_update = records
+            .iter()
+            .any(|(_, _, message)| message.contains("page acknowledged update"));
+        let acknowledged_history = records
+            .iter()
+            .any(|(_, _, message)| message.contains("page acknowledged history"));
+        if acknowledged_update && acknowledged_history {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+
+    let records = sink.records();
+    assert!(
+        records
+            .iter()
+            .any(|(_, _, message)| message.contains("page acknowledged update")),
+        "dashboard page never acknowledged a pushed metrics update: {records:?}"
+    );
+    assert!(
+        records
+            .iter()
+            .any(|(_, _, message)| message.contains("history requested by dashboard")),
+        "dashboard never made its direct pull request: {records:?}"
+    );
+    assert!(
+        records
+            .iter()
+            .any(|(_, _, message)| message.contains("page acknowledged history")),
+        "dashboard page never acknowledged the pulled history: {records:?}"
+    );
+
+    engine.shutdown();
+    drop(engine);
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn a_flooding_extension_is_faulted_without_starving_its_peer() {
+    let dir = std::env::temp_dir().join("bones-engine-test-flood");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::copy(format!("{HELLO_DIR}/hello.wasm"), dir.join("hello.wasm"))
+        .expect("build extensions/hello first: pwsh extensions/hello/build.ps1");
+    std::fs::copy(
+        format!("{FLOOD_DEMO_DIR}/flood_demo.wasm"),
+        dir.join("flood_demo.wasm"),
+    )
+    .expect("build extensions/flood_demo first: pwsh extensions/flood_demo/build.ps1");
+
+    let sink = RecordingSink::new();
+    let BuiltEngine {
+        runner,
+        mut supervisor,
+        ..
+    } = Engine::new()
+        .extensions_dir(&dir)
+        .extension_budget(bus::BudgetLimits {
+            max_inbound: 8,
+            max_publishes: 8,
+        })
+        .logger(Logger::new(Arc::new(sink.clone())))
+        .build()
+        .unwrap();
+
+    runner.step(1.0 / 60.0);
+    supervisor.check();
+    runner.step(1.0 / 60.0);
+    supervisor.check();
+
+    std::fs::remove_dir_all(&dir).ok();
+
+    assert_eq!(
+        supervisor.registry.call("test", "flood_demo", &[]),
+        Err(bus::SendError::UnknownEndpoint)
+    );
+    assert!(
+        supervisor.registry.call("test", "hello", &[]).is_ok(),
+        "the healthy peer must remain reachable"
+    );
+    let records = sink.records();
+    let hello_ticks = records
+        .iter()
+        .filter(|(_, category, message)| category == "hello" && message.contains("tick"))
+        .count();
+    assert_eq!(
+        hello_ticks, 2,
+        "the healthy peer must receive both frames, got {records:?}"
+    );
+    assert!(records.iter().any(|(_, _, message)| {
+        message.contains("'flood_demo' faulted")
+            && message.contains("inbound=0")
+            && message.contains("publishes=56")
+    }));
+}
+
+#[test]
+fn exceeding_the_publish_allowance_quarantines_with_drop_counters() {
+    let sink = RecordingSink::new();
+    let BuiltEngine {
+        runner,
+        mut supervisor,
+        ..
+    } = Engine::new()
+        .extensions_dir(HELLO_DIR)
+        .extension_budget(bus::BudgetLimits {
+            max_inbound: 4,
+            max_publishes: 0,
+        })
+        .logger(Logger::new(Arc::new(sink.clone())))
+        .build()
+        .unwrap();
+
+    runner.bus().publish(Envelope {
+        topic: bones_messages::window::CloseRequested::TOPIC.to_string(),
+        sender: "test".to_string(),
+        correlation: None,
+        payload: Vec::new(),
+    });
+    runner.bus().dispatch();
+    supervisor.check();
+
+    assert_eq!(
+        supervisor.registry.call("test", "hello", &[]),
+        Err(bus::SendError::UnknownEndpoint)
+    );
+    assert!(sink.records().iter().any(|(_, _, message)| {
+        message.contains("'hello' faulted")
+            && message.contains("inbound=0")
+            && message.contains("publishes=1")
+    }));
+}
+
+#[test]
+fn exceeding_the_inbound_allowance_quarantines_with_drop_counters() {
+    let sink = RecordingSink::new();
+    let BuiltEngine {
+        runner,
+        mut supervisor,
+        ..
+    } = Engine::new()
+        .extensions_dir(HELLO_DIR)
+        .extension_budget(bus::BudgetLimits {
+            max_inbound: 1,
+            max_publishes: 4,
+        })
+        .logger(Logger::new(Arc::new(sink.clone())))
+        .build()
+        .unwrap();
+    for _ in 0..2 {
+        runner.bus().publish(Envelope {
+            topic: bones_messages::window::CloseRequested::TOPIC.to_string(),
+            sender: "test".to_string(),
+            correlation: None,
+            payload: Vec::new(),
+        });
+    }
+
+    runner.bus().dispatch();
+    supervisor.check();
+
+    assert_eq!(
+        supervisor.registry.call("test", "hello", &[]),
+        Err(bus::SendError::UnknownEndpoint)
+    );
+    assert!(sink.records().iter().any(|(_, _, message)| {
+        message.contains("'hello' faulted")
+            && message.contains("inbound=1")
+            && message.contains("publishes=0")
+    }));
+}
+
 /// Records every `Module`/`Handler` call it receives — proves `.module()`
 /// runs the same init-then-subscribe-then-hook sequence a real module
 /// (`renderer`) goes through, without needing SDL or a wasm fixture.
@@ -514,6 +1006,10 @@ impl Module for RecordingModule {
 
     fn present(&mut self) {
         self.0.lock().unwrap().push("present".to_string());
+    }
+
+    fn shutdown(&mut self) {
+        self.0.lock().unwrap().push("shutdown".to_string());
     }
 
     fn respond(&mut self, sender: &str, payload: &[u8]) -> Option<Vec<u8>> {

@@ -1,7 +1,8 @@
-//! `renderer/display-changed` (messaging.md): the renderer's own outbound
-//! notification, distinct from `gfx/*` (which flows the other way —
-//! extension to renderer) — the wire format both the renderer and any
-//! extension that wants to react agree on.
+//! Renderer-owned outbound notifications, distinct from `gfx/*` commands.
+
+mod logical_canvas;
+
+pub use logical_canvas::LogicalCanvas;
 
 use crate::{DecodeError, DecodeMessage, EncodeMessage, Message, Reader, Writer};
 

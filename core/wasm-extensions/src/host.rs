@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use bones_messages::tick::Tick;
 use bones_messages::{DecodeMessage, Message};
-use bus::{Bus, Envelope, Handler, Registry};
+use bus::{Bus, EndpointBudget, Envelope, Handler, Registry};
 use contract::bones::core::host_api::{DisplayMode, Host as HostApiImports, Level, SendError};
 use contract::Extension;
 use logging::Logger;
@@ -92,6 +92,7 @@ struct State {
     wasi: wasmtime_wasi::WasiCtx,
     table: wasmtime_wasi::ResourceTable,
     requested_topics: Vec<String>,
+    budget: EndpointBudget,
     /// Shared with whoever runs the engine's own loop (`runner::Engine::run`)
     /// — set here, read there. Not `Host`'s to act on: closing the app is
     /// the run loop's job, this only signals the request.
@@ -115,6 +116,9 @@ impl HostApiImports for State {
     }
 
     fn publish(&mut self, topic: String, payload: Vec<u8>) {
+        if !self.budget.accept_publish() {
+            return;
+        }
         self.bus.publish(Envelope {
             topic,
             sender: self.name.clone(),
@@ -184,7 +188,7 @@ impl Host {
     /// `bus` is what `publish` reaches, `registry` is what `send` reaches,
     /// `exit_requested` is what `request-exit` sets (the caller's own clone
     /// is how it later reads that request), `display_info` backs the two
-    /// display-mode query imports.
+    /// display-mode query imports, and `budget` rejects guest publish floods.
     #[allow(clippy::too_many_arguments)]
     pub fn load(
         engine: &Engine,
@@ -195,6 +199,7 @@ impl Host {
         logger: Logger,
         exit_requested: Arc<AtomicBool>,
         display_info: DisplayInfo,
+        budget: EndpointBudget,
     ) -> wasmtime::Result<Self> {
         let component = Component::from_file(engine, wasm_path)?;
         let mut linker = Linker::new(engine);
@@ -211,6 +216,7 @@ impl Host {
                 wasi: wasmtime_wasi::WasiCtxBuilder::new().build(),
                 table: wasmtime_wasi::ResourceTable::new(),
                 requested_topics: Vec::new(),
+                budget,
                 exit_requested,
                 display_info,
             },
@@ -235,6 +241,31 @@ impl Host {
     /// after `load`, by whoever registers this `Host` on the bus.
     pub fn requested_topics(&mut self) -> Vec<String> {
         std::mem::take(&mut self.store.get_mut().unwrap().data_mut().requested_topics)
+    }
+
+    /// Calls the extension's final cleanup hook under the normal call budget.
+    ///
+    /// A trap faults the instance but does not decide whether its owner may
+    /// still release registrations and drop it.
+    pub fn shutdown(&mut self) -> wasmtime::Result<()> {
+        if self.is_faulted() {
+            return Err(wasmtime::Error::msg(
+                "cannot call shutdown on a faulted extension",
+            ));
+        }
+        let store = self.store.get_mut().unwrap();
+        store.set_epoch_deadline(CALL_TIMEOUT_TICKS);
+        match self.bindings.call_shutdown(&mut *store) {
+            Ok(()) => Ok(()),
+            Err(err) => {
+                store
+                    .data()
+                    .logger
+                    .error("host", &format!("shutdown trapped: {err}"));
+                self.faulted.store(true, Ordering::Relaxed);
+                Err(err)
+            }
+        }
     }
 
     /// Whether a call has ever trapped or exceeded its time budget

@@ -4,7 +4,9 @@ wit_bindgen::generate!({
 });
 
 use bones::core::host_api::{log, publish, subscribe, Level};
-use bones_messages::gfx::{Clear, DrawCircle, DrawRect, DrawSprite, DrawText, LoadSprite, SetCamera};
+use bones_messages::gfx::{
+    Clear, DrawCircle, DrawRect, DrawSprite, DrawText, LoadSprite, SetCamera, TextAlign,
+};
 use bones_messages::{EncodeMessage, Message};
 
 const SPRITE_PNG: &[u8] = include_bytes!("assets/robot_william.png");
@@ -17,6 +19,8 @@ const DST_Y: i32 = 268;
 struct Component;
 
 impl Guest for Component {
+    fn shutdown() {}
+
     fn init() {
         subscribe("core/tick");
         let load = LoadSprite {
@@ -123,6 +127,7 @@ impl Guest for Component {
             color: (255, 255, 255, 255),
             layer: 3,
             screen_space: false,
+            align: TextAlign::Left,
         };
         publish(DrawText::TOPIC, &nameplate.encode());
     }

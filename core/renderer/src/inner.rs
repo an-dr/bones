@@ -10,6 +10,7 @@ use sdl3::video::{Window, WindowContext};
 
 use crate::circle_geometry::{circle_fill_lines, circle_outline_points};
 use crate::retained_draw::RetainedDraw;
+use crate::text_alignment::aligned_text_x;
 use crate::text_rasterizer::rasterize_text;
 use crate::ui_mesh::UiMesh;
 
@@ -82,6 +83,10 @@ impl Inner {
         }
     }
 
+    pub(crate) fn logical_size(&self) -> (u32, u32) {
+        self.reference_size
+    }
+
     /// Handles one decoded `gfx/*` command from `sender`. Cache-populating
     /// commands (`Clear`, `LoadSprite`) apply immediately since they're
     /// idempotent state, not a per-frame draw; `DrawSprite` only
@@ -93,6 +98,9 @@ impl Inner {
                 let (r, g, b, a) = (clear.r, clear.g, clear.b, clear.a);
                 self.clear_color = Some(Color::RGBA(r, g, b, a));
             }
+            Command::ClearDrawBatch(_) => {
+                clear_pending_draws(&mut self.pending_draws, sender);
+            }
             Command::LoadSprite(load) => {
                 let texture = self
                     .texture_creator
@@ -101,10 +109,7 @@ impl Inner {
                 self.textures.insert(load.id, texture);
             }
             Command::DrawSprite(draw) => {
-                self.pending_draws
-                    .entry(sender.to_string())
-                    .or_default()
-                    .push(RetainedDraw::Sprite(draw));
+                push_pending_draw(&mut self.pending_draws, sender, RetainedDraw::Sprite(draw));
             }
             Command::SetCamera(camera) => {
                 self.camera = (camera.x, camera.y, camera.zoom);
@@ -130,34 +135,26 @@ impl Inner {
                 }
             }
             Command::DrawRect(draw) => {
-                self.pending_draws
-                    .entry(sender.to_string())
-                    .or_default()
-                    .push(RetainedDraw::Rect(draw));
+                push_pending_draw(&mut self.pending_draws, sender, RetainedDraw::Rect(draw));
             }
             Command::DrawLine(draw) => {
-                self.pending_draws
-                    .entry(sender.to_string())
-                    .or_default()
-                    .push(RetainedDraw::Line(draw));
+                push_pending_draw(&mut self.pending_draws, sender, RetainedDraw::Line(draw));
             }
             Command::DrawCircle(draw) => {
-                self.pending_draws
-                    .entry(sender.to_string())
-                    .or_default()
-                    .push(RetainedDraw::Circle(draw));
+                push_pending_draw(&mut self.pending_draws, sender, RetainedDraw::Circle(draw));
             }
             Command::DrawTriangle(draw) => {
-                self.pending_draws
-                    .entry(sender.to_string())
-                    .or_default()
-                    .push(RetainedDraw::Triangle(draw));
+                push_pending_draw(
+                    &mut self.pending_draws,
+                    sender,
+                    RetainedDraw::Triangle(draw),
+                );
             }
             Command::DrawText(draw) => {
-                self.pending_draws
-                    .entry(sender.to_string())
-                    .or_default()
-                    .push(RetainedDraw::Text {
+                push_pending_draw(
+                    &mut self.pending_draws,
+                    sender,
+                    RetainedDraw::Text {
                         text: draw.text.to_string(),
                         x: draw.x,
                         y: draw.y,
@@ -165,7 +162,9 @@ impl Inner {
                         color: draw.color,
                         layer: draw.layer,
                         screen_space: draw.screen_space,
-                    });
+                        align: draw.align,
+                    },
+                );
             }
         }
         Ok(())
@@ -182,12 +181,11 @@ impl Inner {
             self.canvas.set_draw_color(color);
             self.canvas.clear();
         }
-        for (sender, draws) in self.pending_draws.drain() {
-            if !self.retained_draws.contains_key(&sender) {
-                self.sender_order.push(sender.clone());
-            }
-            self.retained_draws.insert(sender, draws);
-        }
+        retain_completed_batches(
+            &mut self.pending_draws,
+            &mut self.retained_draws,
+            &mut self.sender_order,
+        );
 
         let mut ordered: Vec<RetainedDraw> = Vec::new();
         for sender in &self.sender_order {
@@ -344,10 +342,14 @@ impl Inner {
                             .map_err(|e| e.to_string())?;
                     } else {
                         self.canvas.set_draw_color(Color::RGBA(r, g, b, a));
-                        for [start, end] in
-                            [[points[0], points[1]], [points[1], points[2]], [points[2], points[0]]]
-                        {
-                            self.canvas.draw_line(start, end).map_err(|e| e.to_string())?;
+                        for [start, end] in [
+                            [points[0], points[1]],
+                            [points[1], points[2]],
+                            [points[2], points[0]],
+                        ] {
+                            self.canvas
+                                .draw_line(start, end)
+                                .map_err(|e| e.to_string())?;
                         }
                     }
                 }
@@ -358,6 +360,7 @@ impl Inner {
                     size,
                     color,
                     screen_space,
+                    align,
                     ..
                 } => {
                     if text.is_empty() {
@@ -374,7 +377,7 @@ impl Inner {
                         .update(None, &rgba, width as usize * 4)
                         .map_err(|e| e.to_string())?;
 
-                    let (screen_x, screen_y, scale_x, scale_y) = if *screen_space {
+                    let (anchor_x, screen_y, scale_x, scale_y) = if *screen_space {
                         (
                             (*x as f32 * ui_scale_x).round() as i32,
                             (*y as f32 * ui_scale_y).round() as i32,
@@ -387,6 +390,7 @@ impl Inner {
                     };
                     let screen_w = (width as f32 * scale_x).round().max(0.0) as u32;
                     let screen_h = (height as f32 * scale_y).round().max(0.0) as u32;
+                    let screen_x = aligned_text_x(anchor_x, screen_w, *align);
                     self.canvas
                         .copy(
                             &texture,
@@ -474,3 +478,34 @@ impl Inner {
         result
     }
 }
+
+fn push_pending_draw(
+    pending_draws: &mut HashMap<String, Vec<RetainedDraw>>,
+    sender: &str,
+    draw: RetainedDraw,
+) {
+    pending_draws
+        .entry(sender.to_string())
+        .or_default()
+        .push(draw);
+}
+
+fn clear_pending_draws(pending_draws: &mut HashMap<String, Vec<RetainedDraw>>, sender: &str) {
+    pending_draws.insert(sender.to_string(), Vec::new());
+}
+
+fn retain_completed_batches(
+    pending_draws: &mut HashMap<String, Vec<RetainedDraw>>,
+    retained_draws: &mut HashMap<String, Vec<RetainedDraw>>,
+    sender_order: &mut Vec<String>,
+) {
+    for (sender, draws) in pending_draws.drain() {
+        if !retained_draws.contains_key(&sender) {
+            sender_order.push(sender.clone());
+        }
+        retained_draws.insert(sender, draws);
+    }
+}
+
+#[cfg(test)]
+mod tests;

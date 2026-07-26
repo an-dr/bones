@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use bones_messages::Message;
-use bus::{Module, ModuleContext, Registry, ServiceRegistry};
+use bus::{BudgetLimits, Module, ModuleContext, Registry, ServiceRegistry};
 use logging::Logger;
 use renderer::Renderer;
 use ui::Ui;
@@ -20,14 +20,13 @@ use wasm_extensions::lifecycle::Event;
 use wasm_extensions::persistence::Persistence;
 
 use crate::loading::{
-    attach_extension, derive_extension_name, find_wasm_files, is_first_occurrence, read_file_mtime,
-    ENGINE_SENDER,
+    attach_extension, derive_extension_name, find_wasm_files, read_file_mtime, ENGINE_SENDER,
 };
 use crate::supervisor::TrackedExtension;
 use crate::Runner;
 use crate::Supervisor;
 
-use super::built_engine::BuiltEngine;
+use super::built_engine::{run_shutdown, BuiltEngine};
 use super::register_module::register_module;
 use super::shared::Shared;
 
@@ -58,28 +57,38 @@ fn exe_dir() -> Option<PathBuf> {
 
 pub struct Engine {
     extensions_dir: Option<PathBuf>,
+    startup_extensions: Vec<String>,
+    extension_controller: Option<String>,
     logger: Logger,
     tick_hz: f64,
     window: Option<(String, u32, u32)>,
     renderer_enabled: bool,
     ui_enabled: bool,
+    #[cfg(feature = "web")]
+    web_enabled: bool,
     modules: Vec<Box<dyn Module>>,
     saves_dir: PathBuf,
     persistence_read_only: bool,
+    extension_budget: BudgetLimits,
 }
 
 impl Engine {
     pub fn new() -> Self {
         Self {
             extensions_dir: None,
+            startup_extensions: Vec::new(),
+            extension_controller: None,
             logger: Logger::default(),
             tick_hz: DEFAULT_TICK_HZ,
             window: None,
             renderer_enabled: false,
             ui_enabled: false,
+            #[cfg(feature = "web")]
+            web_enabled: false,
             modules: Vec::new(),
             saves_dir: PathBuf::from("saves"),
             persistence_read_only: false,
+            extension_budget: BudgetLimits::default(),
         }
     }
 
@@ -90,6 +99,21 @@ impl Engine {
     /// extensions load.
     pub fn extensions_dir(mut self, path: impl Into<PathBuf>) -> Self {
         self.extensions_dir = Some(path.into());
+        self
+    }
+
+    /// Restricts initial activation to the named catalog entries.
+    ///
+    /// With no names configured, every discovered extension loads as before.
+    pub fn startup_extension(mut self, name: impl Into<String>) -> Self {
+        self.startup_extensions.push(name.into());
+        self
+    }
+
+    /// Authorizes one host-stamped extension sender to issue runtime
+    /// load/unload/reload commands. Unset means runtime control is disabled.
+    pub fn extension_controller(mut self, name: impl Into<String>) -> Self {
+        self.extension_controller = Some(name.into());
         self
     }
 
@@ -132,6 +156,14 @@ impl Engine {
         self
     }
 
+    /// Attaches the optional wry web-panel module (ADR-006). Requires
+    /// `.window(...)`; it may share that parent with `.renderer()`.
+    #[cfg(feature = "web")]
+    pub fn web(mut self) -> Self {
+        self.web_enabled = true;
+        self
+    }
+
     /// Registers a custom native module (design/modules.md, ADR-017):
     /// runs `init` in registration order at `build()` time, then hooks its
     /// `render`/`present` each `run` iteration. The app is built solely on
@@ -166,6 +198,12 @@ impl Engine {
     /// wouldn't save anything.
     pub fn read_only_persistence(mut self) -> Self {
         self.persistence_read_only = true;
+        self
+    }
+
+    /// Sets the per-frame allowances shared by every WASM extension.
+    pub fn extension_budget(mut self, limits: BudgetLimits) -> Self {
+        self.extension_budget = limits;
         self
     }
 
@@ -221,6 +259,24 @@ impl Engine {
             .provide(bus.clone())
             .expect("no other service registers as Bus");
 
+        #[cfg(feature = "web")]
+        let web_module: Option<Box<dyn Module>> = if self.web_enabled {
+            if platform.is_none() {
+                return Err(wasmtime::Error::msg(".web() needs .window(...) too"));
+            }
+            let window = services
+                .get()
+                .ok_or_else(|| wasmtime::Error::msg("web needs the window-surface service"))?;
+            let backend = web::WryBackend::new(window).map_err(wasmtime::Error::msg)?;
+            Some(Box::new(web::Web::new(
+                bus.clone(),
+                self.logger.clone(),
+                backend,
+            )))
+        } else {
+            None
+        };
+
         let renderer = if renderer_enabled {
             if platform.is_none() {
                 return Err(wasmtime::Error::msg(".renderer() needs .window(...) too"));
@@ -233,6 +289,7 @@ impl Engine {
             }
             let ep = bus.register("renderer", Shared(shared.clone()));
             ep.subscribe(GFX_TOPICS);
+            ep.subscribe(bones_messages::lifecycle::LifecycleEvent::TOPIC);
             Some(shared)
         } else {
             None
@@ -260,6 +317,11 @@ impl Engine {
         // `persistence` registered after every extension's `init` had
         // already run and failed its `send` with `SendError::UnknownEndpoint`.
         let mut modules = Vec::new();
+        #[cfg(feature = "web")]
+        if let Some(module) = web_module {
+            register_module(&bus, &registry, &mut services, &mut modules, module)
+                .map_err(wasmtime::Error::msg)?;
+        }
         for module in self.modules.drain(..) {
             register_module(&bus, &registry, &mut services, &mut modules, module)
                 .map_err(wasmtime::Error::msg)?;
@@ -280,13 +342,13 @@ impl Engine {
         .map_err(wasmtime::Error::msg)?;
 
         let mut tracked = Vec::new();
-        let mut loaded_names = std::collections::HashSet::new();
+        let mut catalog = std::collections::HashMap::new();
 
         if let Some(dir) = &self.extensions_dir {
             let dir = resolve_relative_to_exe(dir.clone());
             for path in find_wasm_files(&dir) {
                 let name = derive_extension_name(&path);
-                if !is_first_occurrence(&mut loaded_names, &name) {
+                if catalog.contains_key(&name) {
                     self.logger.error(
                         "engine",
                         &format!(
@@ -294,6 +356,10 @@ impl Engine {
                             path.display()
                         ),
                     );
+                    continue;
+                }
+                catalog.insert(name.clone(), path.clone());
+                if !self.startup_extensions.is_empty() && !self.startup_extensions.contains(&name) {
                     continue;
                 }
                 match attach_extension(
@@ -305,8 +371,9 @@ impl Engine {
                     &name,
                     &exit_requested,
                     &display_info,
+                    self.extension_budget,
                 ) {
-                    Ok((ep, shared, topics)) => {
+                    Ok((ep, shared, budget, topics)) => {
                         self.logger.info(
                             "engine",
                             &format!(
@@ -321,6 +388,7 @@ impl Engine {
                             path,
                             endpoint: ep,
                             shared,
+                            budget,
                             quarantined: false,
                         });
                     }
@@ -334,6 +402,55 @@ impl Engine {
                 }
             }
         }
+        for name in &self.startup_extensions {
+            if !catalog.contains_key(name) {
+                self.logger.error(
+                    "engine",
+                    &format!("startup extension '{name}' is not in the catalog"),
+                );
+            }
+        }
+
+        let commands = Arc::new(Mutex::new(Vec::new()));
+        let command_sink = commands.clone();
+        let controller = self.extension_controller.clone();
+        let control_logger = self.logger.clone();
+        let control = bus.register("extension-manager", move |envelope: &bus::Envelope| {
+            if controller.as_deref() != Some(envelope.sender.as_str()) {
+                control_logger.error(
+                    "engine",
+                    &format!(
+                        "rejected runtime extension command from '{}' on '{}'",
+                        envelope.sender, envelope.topic
+                    ),
+                );
+                return;
+            }
+            match bones_messages::extension_control::Command::decode(
+                &envelope.topic,
+                &envelope.payload,
+            ) {
+                Ok(Some(command)) => command_sink
+                    .lock()
+                    .unwrap()
+                    .push(crate::supervisor::OwnedCommand::from(command)),
+                Ok(None) => control_logger.warn(
+                    "engine",
+                    &format!(
+                        "ignored unknown extension command topic '{}'",
+                        envelope.topic
+                    ),
+                ),
+                Err(err) => control_logger.warn(
+                    "engine",
+                    &format!(
+                        "could not decode extension command from '{}' on '{}': {err}",
+                        envelope.sender, envelope.topic
+                    ),
+                ),
+            }
+        });
+        control.subscribe("core/extensions/*");
 
         let supervisor = Supervisor::new(
             wasm_engine,
@@ -341,8 +458,11 @@ impl Engine {
             registry,
             self.logger.clone(),
             tracked,
+            catalog,
+            commands,
             exit_requested.clone(),
             display_info,
+            self.extension_budget,
         );
 
         if let Some(platform) = &mut platform {
@@ -357,6 +477,7 @@ impl Engine {
             modules,
             supervisor,
             exit_requested,
+            shutdown_started: false,
         })
     }
 
@@ -377,10 +498,11 @@ impl Engine {
             modules,
             mut supervisor,
             exit_requested,
+            shutdown_started: _,
         } = self.build()?;
 
         let mut last = std::time::Instant::now() - period;
-        loop {
+        let shutdown_sender = loop {
             if let Some(platform) = &mut platform {
                 // ADR-008: offer every raw event to the ui layer first; what
                 // it claims (wants_pointer_input/wants_keyboard_input, as of
@@ -390,20 +512,12 @@ impl Engine {
                 platform.poll_events_with(runner.bus(), "platform", |event| {
                     ui_guard.as_mut().is_some_and(|ui| ui.feed_event(event))
                 });
-                // Minimal shutdown slice: exit cleanly on a window close
-                // request. TODO: no close-request-as-event or shutdown()
-                // call to extensions yet (design/platform.md's full
-                // sequence) — a future roadmap rung.
                 if platform.quit_requested() {
-                    break;
+                    break "platform";
                 }
             }
-            // Same minimal-shutdown-slice stance as quit_requested() above,
-            // just extension-triggered instead of OS-triggered: an
-            // extension's own `request-exit` host-api call, not the full
-            // shutdown sequence.
             if exit_requested.load(Ordering::Relaxed) {
-                break;
+                break ENGINE_SENDER;
             }
 
             supervisor.check();
@@ -445,8 +559,9 @@ impl Engine {
             if elapsed < period {
                 std::thread::sleep(period - elapsed);
             }
-        }
+        };
 
+        run_shutdown(&runner, &mut supervisor, &modules, shutdown_sender);
         Ok(())
     }
 }

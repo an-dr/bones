@@ -50,9 +50,13 @@ function Initialize-NativeBuildEnvironment {
     }
 }
 
-$repoRoot = Resolve-Path "$PSScriptRoot/../.."
+$repoRoot = (Resolve-Path "$PSScriptRoot/../..").Path
 $exeName = if ($IsWindows) { "bones.exe" } else { "bones" }
-$dist = "$PSScriptRoot/dist"
+$dist = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot "dist"))
+$demoRoot = [IO.Path]::GetFullPath($PSScriptRoot)
+if (-not $dist.StartsWith($demoRoot + [IO.Path]::DirectorySeparatorChar)) {
+    throw "Refusing to replace dist outside the game_core_demo directory"
+}
 
 Write-Host "==> Building bones..."
 Push-Location $repoRoot
@@ -64,11 +68,13 @@ try {
     Pop-Location
 }
 
-Remove-Item -Recurse -Force $dist -ErrorAction SilentlyContinue
+if (Test-Path -LiteralPath $dist) {
+    Remove-Item -LiteralPath $dist -Recurse -Force
+}
 New-Item -ItemType Directory -Path "$dist/extensions" -Force | Out-Null
 Copy-Item "$repoRoot/target/release/$exeName" "$dist/$exeName"
+Copy-Item "$PSScriptRoot/bones.toml" "$dist/bones.toml"
 Copy-Item "$PSScriptRoot/target/wasm32-wasip2/release/game_core_demo.wasm" "$dist/extensions/game_core_demo.wasm"
-Set-Content -Path "$dist/bones.toml" -Value "game_core = true`naudio = true`n"
 
 Write-Host ""
 Write-Host "Packaged: $dist/$exeName (extensions/game_core_demo.wasm and bones.toml alongside it)"

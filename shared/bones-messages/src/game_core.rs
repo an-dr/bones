@@ -8,15 +8,21 @@
 mod collision;
 mod entity_op;
 mod entity_op_message;
+mod entity_transform;
 mod load_tilemap;
+mod object_facing;
 mod physics_worlds;
+mod sprite_presentation;
 mod tileset_image;
 
 pub use collision::Collision;
 pub use entity_op::{BodyKind, EntityOp, Shape, Sprite};
 pub use entity_op_message::EntityOpMessage;
+pub use entity_transform::EntityTransform;
 pub use load_tilemap::LoadTilemap;
+pub use object_facing::ObjectFacing;
 pub use physics_worlds::PhysicsWorlds;
+pub use sprite_presentation::SpritePresentation;
 pub use tileset_image::TilesetImage;
 
 #[cfg(test)]

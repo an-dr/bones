@@ -72,9 +72,10 @@ case.
     bounding box. A nonzero `collider_half_w`/`collider_half_h` also gives
     it a collider (`0.0` spawns a purely visual entity, no physics body)
     of the given `body_kind`: `Dynamic` (pushed by other bodies, carries
-    momentum, the default), `Kinematic` (moves exactly as `SetVelocity` commands it and
-    pushes `Dynamic` bodies out of its way, but is never itself pushed —
-    the standard "platform/mover" body type), or `Frictionless` (a
+    momentum, the default), `Kinematic` (moves exactly as `SetVelocity`
+    commands it and pushes `Dynamic` bodies out of its way, but is never
+    itself pushed — the standard "platform/mover" body type), `Fixed`
+    (never moves, for walls and level obstacles), or `Frictionless` (a
     `Dynamic` body that carries no momentum — it settles to rest almost
     immediately once nothing is pushing it, rather than coasting or
     drifting). `worlds` (`PhysicsWorlds`, ADR-021) picks which physics
@@ -95,6 +96,23 @@ case.
     back) without `game-core` itself needing to know about flash timing.
     A no-op for an unknown `entity_id`, or one with no `SquareColor` (a
     sprite entity has none).
+  - `SetSprite` — replaces only an entity's presentation, preserving its
+    transform, collider, velocity, body kind, and physics-world membership.
+    `SpritePresentation` supports row-wrapped sprite sheets, destination
+    scaling independent of source-frame size, horizontal/vertical mirroring,
+    looping or one-shot playback, and opt-in animation while stopped. An
+    unknown `entity_id` is a no-op; applying it to a colored square replaces
+    that square visual without replacing the entity.
+  - `SetSpriteTint` — applies RGBA color modulation to a sprite without
+    replacing its animation or simulation state. White is the default;
+    unknown entities and plain colored squares are no-ops.
+  - `SetCameraFollow` — follows one entity at a caller-supplied logical
+    viewport and zoom, clamped to the loaded tilemap's pixel bounds. Without
+    a loaded tilemap the follow is centered but unclamped.
+  - `SetCameraSmoothing` — sets optional follow responsiveness in inverse
+    seconds. Zero (the default) and negative values follow immediately;
+    positive values ease using tick time, capped so a long frame cannot
+    overshoot, then apply the same level clamp.
   - `SetDebugHitboxes { enabled }` — not addressed by `entity_id`: a
     global toggle (default off) for a yellow unfilled outline drawn over
     every collider-bearing entity's actual physics extent — sprite
@@ -108,6 +126,9 @@ case.
     every entity holds exactly its last-unpaused state. `gfx/*` still
     publishes every tick regardless, so the frame stays visible (frozen)
     rather than going stale or blank.
+  - `Reset` — clears all entities, physics bodies, loaded tilemap state,
+    camera settings, debug state, and pause state while keeping game-core
+    initialized and ready for the next level session.
 - Every `core/tick`: both physics worlds step once each, in full,
   independently. A collider-bearing entity's `Transform` is then
   overwritten from its primary world's post-step position (retro before
@@ -116,8 +137,9 @@ case.
   registered in more than one world, every other world's copy is snapped
   to that same position/velocity before the next tick. A sprite entity's
   animation only advances while its primary world's velocity is above a
-  small threshold — an entity with no collider, or one at rest, freezes on
-  its current frame instead of animating in place. Ground tiles (see
+  small threshold by default — an entity with no collider, or one at rest,
+  freezes on its current frame. A `SetSprite` presentation can opt into
+  advancing while stopped for idle and action animations. Ground tiles (see
   `game-core/load-tilemap` below) publish first, on layer `0`; then
   `gfx::Clear` + `gfx::SetCamera` + one `gfx::DrawSprite`/`gfx::DrawRect`
   per entity, all on layer `1`. The `Clear` matters: without it, the

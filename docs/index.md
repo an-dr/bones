@@ -33,7 +33,7 @@ side effect of applying them.
 - [architecture.md](architecture.md) — engine design overview: core components, messaging, extension model, diagrams.
 - [structure.md](structure.md) — static structure: components, dependency rules, source layout.
 - [code-style.md](code-style.md) — file-layout conventions for Rust source: one-type-per-file, the submodule/tests.rs pattern, README expectations.
-- [roadmap.md](roadmap.md) — remaining implementation increments with demo milestones.
+- [roadmap.md](roadmap.md) — the implementation backlog; currently empty.
 
 ## Detailed design
 
@@ -74,3 +74,7 @@ Immutable ADRs in [adr/](adr/):
 - [ADR-020](adr/ADR-020-persistence-is-kernel-tier-host-lifecycle-and-persistence-merge-into-wasm-extensions.md) — persistence is kernel-tier; host, lifecycle, and persistence merge into wasm-extensions
 - [ADR-021](adr/ADR-021-physics-backend-abstraction-split-rapier2d-out-of-game-core-add-a-retro-backend.md) — physics backend abstraction: split rapier2d out of game-core, add a retro backend (superseded by ADR-022)
 - [ADR-022](adr/ADR-022-physics-stays-inside-game-core-internal-physics-tiles-graphics-grouping-no-separate-crates.md) — physics stays inside game-core: internal physics/tiles/graphics grouping, no separate crates
+- [ADR-023](adr/ADR-023-evolve-game-core-entity-operations-additively.md) — evolve game-core entity operations additively
+- [ADR-024](adr/ADR-024-runtime-managed-extension-activation.md) — runtime-managed extension activation
+- [ADR-025](adr/ADR-025-game-ui-is-a-theme-free-guest-toolkit.md) — game UI is a theme-free guest toolkit
+- [ADR-026](adr/ADR-026-game-core-publishes-authoritative-entity-transform-snapshots.md) — game-core publishes authoritative entity transform snapshots

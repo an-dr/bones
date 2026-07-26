@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use bones_messages::tick::Tick;
 use bones_messages::{EncodeMessage, Message};
-use bus::{Bus, Envelope, Registry};
+use bus::{BudgetLimits, Bus, EndpointBudget, Envelope, Registry};
 use logging::Logger;
 use wasm_extensions::host::{DisplayInfo, Host};
 
@@ -42,6 +42,7 @@ fn main() -> wasmtime::Result<()> {
         Logger::default(),
         Arc::new(AtomicBool::new(false)),
         DisplayInfo::default(),
+        EndpointBudget::new(BudgetLimits::default()),
     )?;
     let topics = hello.requested_topics();
     let ep = bus.register("hello", hello);

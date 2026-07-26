@@ -3,8 +3,8 @@
 Detailed design of the module system. Decisions:
 [ADR-011](../adr/ADR-011-native-core-modules.md) (kernel + consumer-composed
 modules), [ADR-017](../adr/ADR-017-native-module-trait-and-typed-service-registry.md)
-(the concrete `Module` trait and service registry). `renderer` and `audio`
-implement this contract for real; `ui` and `web` don't yet (see
+(the concrete `Module` trait and service registry). `renderer`, `audio`, and
+`web` implement this contract for real; `ui` remains direct-wired (see
 structure.md). `wasm-extensions::persistence` also implements it (reusing
 `init`/`handle`/`respond` rather than duplicating that machinery) but,
 unlike the others, isn't part of the optional consumer-composed set —
@@ -51,8 +51,8 @@ subscription, the same as any extension.
   Default: no reply. `persistence` is the first module to use this (an
   extension's own `init` loading its prior save synchronously); most
   modules have nothing to answer.
-- `shutdown()` — declared, not yet called by `Engine::run` (the full
-  shutdown sequence is a separate roadmap rung, design/platform.md).
+- `shutdown()` — called once after extensions stop during orderly application
+  shutdown.
 
 ## Frame phases
 
@@ -73,12 +73,13 @@ A headless build (no presentation modules) simply has empty `render` and
 ## Services
 
 The bus carries *behavior*; **services** carry in-process plumbing that must
-not be per-frame message traffic. The registry is `TypeId`-keyed and
-single-consumer (`consume` removes the value — no service has more than one
-consumer yet, so ownership transfer is enough; revisit if one needs to,
-e.g. `window-surface` once `web` exists): providers register in `init`,
-consumers look up by type. The allowed services are enumerated here —
-adding one is a design change, not a convenience:
+not be per-frame message traffic. The registry is `TypeId`-keyed. `consume`
+transfers ownership and removes a service; `get` borrows without claiming it.
+Web uses the borrowed SDL window only to derive its native parent handle
+before renderer consumes the window itself. Providers register during engine
+construction or module `init`, and consumers look up by type. The allowed
+services are enumerated here — adding one is a design change, not a
+convenience:
 
 | Service        | Provider          | Consumers      | Carries                     |
 | -------------- | ----------------- | -------------- | --------------------------- |
@@ -86,11 +87,11 @@ adding one is a design change, not a convenience:
 | bus            | kernel, via `Engine::build`        | game-core      | `bus::Bus` |
 | draw-target    | *renderer module*  | *ui*           | *draw-data submission (egui triangles)* |
 
-`window-surface` is real — `renderer`'s `init` consumes it. `bus` is also
-real — unlike `renderer`/`ui`, which get a `Bus` handle from their own
-hardcoded builder sugar (`.renderer()`/`.ui()`), a module injected via the
-generic `.module(...)` path (game-core is the first that needs to publish)
-has no other way to reach one, so `Engine::build` provides it as a service
+`window-surface` is real — web borrows it and `renderer`'s `init` consumes it.
+`bus` is also real — unlike `renderer`/`ui`/`web`, which get a `Bus` handle
+from their own builder sugar, a module injected via the generic
+`.module(...)` path (game-core is the first that needs to publish) has no
+other way to reach one, so `Engine::build` provides it as a service
 unconditionally, the same as `window-surface`. `draw-target` is still
 aspirational: `ui` direct-wires to `renderer`'s crate instead
 (docs/structure.md) rather than consuming a service, pending its own
@@ -114,10 +115,11 @@ module can have.
 
 bones has two first-class distributions built from the same code path:
 
-- **The app** — the engine executable composing the default modules (SDL
-  renderer, egui ui, web). This is the main product and the common case:
-  most projects take the app as-is and implement everything as WASM
-  extensions — no Rust, no build of bones itself.
+- **The app** — the engine executable composing the default SDL renderer and
+  egui UI, plus web when built with the `web` feature and enabled in config.
+  This is the main product and the common case: most projects take the app
+  as-is and implement everything as WASM extensions — no Rust, no build of
+  bones itself.
 - **The library** — the workspace of kernel and module crates plus the
   builder API, for the embedding case: projects that need their own native
   modules (custom renderer, native game core) own the composition root — the

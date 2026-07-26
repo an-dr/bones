@@ -17,5 +17,5 @@ Requires PowerShell 7+ (`pwsh`). Output:
 `target/wasm32-wasip2/release/keyecho.wasm`.
 
 The same script also builds the `bones` engine and assembles a runnable
-`dist/` next to this README — `dist/bones(.exe)` with `dist/extensions/
-keyecho.wasm` already in place, ready to run directly.
+`dist/` next to this README — `dist/bones(.exe)`, `dist/bones.toml`, and
+`dist/extensions/keyecho.wasm`, ready to run directly.

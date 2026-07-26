@@ -2,14 +2,25 @@
 
 A status dashboard rendered as a web page: an HTML/JS frontend in a wry panel,
 fed with data the extension gathers over the bus. Shows the `web/*` backend
-end to end, including a direct request to another extension.
+end to end, including a direct request to another extension. The implementation
+lives in `extensions/dashboard` with its `extensions/metrics` peer.
+
+## Run it
+
+```sh
+pwsh extensions/dashboard/build.ps1
+```
+
+Launch `extensions/dashboard/dist/bones(.exe)`. The package contains the app
+built with its `web` feature, `web = true` configuration, and both components.
 
 ## Setup
 
 1. Manifest: name `dashboard`, version `0.1.0`. The extension package bundles
    its frontend assets (HTML/JS/CSS).
 2. `init`: subscribe to `web/*` events for its panel and to the app-defined
-   topic `metrics/updated`; request panel open with the bundled page.
+   topic `metrics/updated`; directly send `web::Command::Open` to the `web`
+   endpoint with the bundled page.
 
 ## Steady state
 
@@ -31,8 +42,9 @@ sequenceDiagram
     D->>M: send request (deadline)
     M-->>D: reply (history data)
     D->>Page: JSON {history…}
-    Note over Page: user closes panel
-    Page-->>D: web/panel-closed event
+    Page->>D: postMessage {close: true}
+    D->>Page: close panel
+    D->>D: request orderly app exit
 ```
 
 The page never touches the bus directly: everything crosses through the
@@ -41,11 +53,11 @@ owning extension, which decides what its frontend may see and do
 
 ## Behavior under engine rules
 
-- **Request outcome is total:** if `metrics` is faulted or slow, the dashboard
-  gets an error reply by its deadline (ADR-009) and can show "unavailable"
-  instead of hanging its page.
+- **Request outcome is total:** an unavailable peer or invalid peer reply is
+  converted into explicit error JSON, so the page never receives a malformed
+  pseudo-response.
 - **Panel ownership:** if the dashboard extension unloads or faults, the core
   closes its panel automatically (presentation.md).
-- **Optional feature:** on an engine built without the web feature, panel-open
-  requests fail with an error reply — the extension can detect this and
-  degrade (e.g. log and exit cleanly).
+- **Optional feature:** on an engine built without the web feature, the
+  direct open command returns `UnknownEndpoint` — this dashboard logs the
+  failure instead of silently losing the request.

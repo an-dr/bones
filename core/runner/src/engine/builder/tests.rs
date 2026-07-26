@@ -7,6 +7,26 @@ fn tick_hz_defaults_to_60_and_is_overridable() {
 }
 
 #[test]
+fn extension_budget_defaults_and_overrides_are_explicit() {
+    assert_eq!(Engine::new().extension_budget, BudgetLimits::default());
+    let limits = BudgetLimits {
+        max_inbound: 2,
+        max_publishes: 3,
+    };
+    assert_eq!(
+        Engine::new().extension_budget(limits).extension_budget,
+        limits
+    );
+}
+
+#[cfg(feature = "web")]
+#[test]
+fn web_is_opt_in_when_the_feature_is_available() {
+    assert!(!Engine::new().web_enabled);
+    assert!(Engine::new().web().web_enabled);
+}
+
+#[test]
 fn an_absolute_path_passes_through_resolve_relative_to_exe_unchanged() {
     let absolute = if cfg!(windows) {
         PathBuf::from(r"C:\somewhere\saves")

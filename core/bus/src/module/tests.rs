@@ -22,6 +22,16 @@ fn consume_is_single_use() {
 }
 
 #[test]
+fn get_borrows_without_consuming() {
+    let mut registry = ServiceRegistry::new();
+    registry.provide("window".to_string()).unwrap();
+
+    assert_eq!(registry.get::<String>().map(String::as_str), Some("window"));
+    assert_eq!(registry.get::<String>().map(String::as_str), Some("window"));
+    assert_eq!(registry.consume::<String>(), Some("window".to_string()));
+}
+
+#[test]
 fn providing_the_same_type_twice_is_an_error() {
     let mut registry = ServiceRegistry::new();
     registry.provide(1u32).unwrap();
@@ -56,4 +66,14 @@ fn context_forwards_service_provide_and_consume() {
     }
     let mut ctx = ModuleContext::new(&mut registry);
     assert_eq!(ctx.consume_service::<u32>(), Some(99));
+}
+
+#[test]
+fn context_forwards_borrowed_service_access() {
+    let mut registry = ServiceRegistry::new();
+    registry.provide(99u32).unwrap();
+
+    let ctx = ModuleContext::new(&mut registry);
+
+    assert_eq!(ctx.get_service::<u32>(), Some(&99));
 }

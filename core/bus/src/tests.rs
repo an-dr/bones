@@ -1,6 +1,9 @@
 use std::sync::{Arc, Mutex};
 
-use crate::{Bus, Envelope, Handler, Registry, Respond, SendError};
+use crate::{
+    BudgetLimits, Bus, DropCounters, EndpointBudget, Envelope, Handler, Registry, Respond,
+    SendError,
+};
 
 fn envelope(topic: &str, sender: &str) -> Envelope {
     Envelope {
@@ -237,6 +240,77 @@ fn reactive_publish_from_a_handler_waits_for_the_next_dispatch() {
 
     bus.dispatch();
     assert_eq!(received_b.lock().unwrap().len(), 1);
+}
+
+#[test]
+fn a_bounded_endpoint_drops_matching_deliveries_over_its_allowance() {
+    let bus = Bus::new();
+    let budget = EndpointBudget::new(BudgetLimits {
+        max_inbound: 2,
+        max_publishes: 1,
+    });
+    let (handler, received) = recording_handler();
+    let endpoint = bus.register_with_budget("level", handler, budget.clone());
+    endpoint.subscribe("game/*");
+
+    bus.publish(envelope("game/a", "core"));
+    bus.publish(envelope("input/key-down", "platform"));
+    bus.publish(envelope("game/b", "core"));
+    bus.publish(envelope("game/c", "core"));
+    bus.dispatch();
+
+    let topics: Vec<_> = received
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|envelope| envelope.topic.clone())
+        .collect();
+    assert_eq!(topics, vec!["game/a", "game/b"]);
+    assert_eq!(
+        budget.get_drop_counters(),
+        DropCounters {
+            inbound: 1,
+            publishes: 0,
+        }
+    );
+    assert!(budget.has_exceeded());
+}
+
+#[test]
+fn begin_frame_restores_allowances_without_clearing_violation_history() {
+    let budget = EndpointBudget::new(BudgetLimits {
+        max_inbound: 1,
+        max_publishes: 1,
+    });
+
+    assert!(budget.accept_publish());
+    assert!(!budget.accept_publish());
+    budget.begin_frame();
+    assert!(budget.accept_publish());
+
+    assert!(budget.has_exceeded());
+    assert_eq!(budget.get_drop_counters().publishes, 1);
+}
+
+#[test]
+fn budget_clones_share_allowances_and_counters() {
+    let budget = EndpointBudget::new(BudgetLimits {
+        max_inbound: 1,
+        max_publishes: 0,
+    });
+    let clone = budget.clone();
+
+    assert!(budget.accept_inbound());
+    assert!(!clone.accept_inbound());
+    assert!(!clone.accept_publish());
+
+    assert_eq!(
+        budget.get_drop_counters(),
+        DropCounters {
+            inbound: 1,
+            publishes: 1,
+        }
+    );
 }
 
 struct Echo;

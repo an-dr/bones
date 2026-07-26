@@ -1,6 +1,6 @@
 use crate::{DecodeError, Reader, Writer};
 
-use super::PhysicsWorlds;
+use super::{PhysicsWorlds, SpritePresentation};
 
 /// The rapier2d rigid-body type a spawned entity's collider gets, when it
 /// has one at all (`collider_half_w`/`collider_half_h` both `> 0.0`).
@@ -16,6 +16,9 @@ pub enum BodyKind {
     /// rapier2d's standard "platform/mover" body type (`kinematic` in
     /// Unity, Godot, and Box2D alike).
     Kinematic,
+    /// Never moves, even if velocity is set, and displaces pushable bodies
+    /// without being displaced itself. Suitable for level-owned obstacles.
+    Fixed,
     /// A `Dynamic` body (pushed by contact, participates in collision
     /// response) with very high linear damping and rotation locked: it
     /// moves when pushed, but carries no momentum — velocity decays to
@@ -153,6 +156,27 @@ pub enum EntityOp {
         viewport_h: f32,
         zoom: f32,
     },
+    /// Replaces only an existing entity's sprite presentation. Its transform,
+    /// colliders, velocities, body kinds, and physics-world registrations stay
+    /// untouched. A no-op if `entity_id` does not exist.
+    SetSprite {
+        entity_id: u32,
+        presentation: SpritePresentation,
+    },
+    /// Sets RGBA modulation on an existing sprite entity without replacing its
+    /// animation or simulation state. A no-op for unknown or square entities.
+    SetSpriteTint {
+        entity_id: u32,
+        tint: (u8, u8, u8, u8),
+    },
+    /// Sets camera-follow responsiveness in inverse seconds. `0.0` keeps the
+    /// established immediate-follow behavior; positive values ease toward the
+    /// target on each tick before applying the level-edge clamp.
+    SetCameraSmoothing { responsiveness: f32 },
+    /// Clears every entity, physics body, loaded tilemap, camera setting,
+    /// debug toggle, and paused state. The module remains initialized and
+    /// subscribed, ready for a new level session.
+    Reset,
 }
 
 const TAG_SPAWN: u8 = 0;
@@ -162,6 +186,10 @@ const TAG_SET_COLOR: u8 = 3;
 const TAG_SET_DEBUG_HITBOXES: u8 = 4;
 const TAG_SET_PAUSED: u8 = 5;
 const TAG_SET_CAMERA_FOLLOW: u8 = 6;
+const TAG_SET_SPRITE: u8 = 7;
+const TAG_SET_CAMERA_SMOOTHING: u8 = 8;
+const TAG_RESET: u8 = 9;
+const TAG_SET_SPRITE_TINT: u8 = 10;
 
 impl EntityOp {
     pub(super) fn encode_into(&self, writer: Writer) -> Writer {
@@ -205,6 +233,7 @@ impl EntityOp {
                         BodyKind::Dynamic => 0,
                         BodyKind::Kinematic => 1,
                         BodyKind::Frictionless => 2,
+                        BodyKind::Fixed => 3,
                     })
                     .u8(worlds.to_bits())
             }
@@ -241,6 +270,38 @@ impl EntityOp {
                 .f32(*viewport_w)
                 .f32(*viewport_h)
                 .f32(*zoom),
+            EntityOp::SetSprite {
+                entity_id,
+                presentation,
+            } => writer
+                .u8(TAG_SET_SPRITE)
+                .u32(*entity_id)
+                .u32(presentation.sprite.sprite_id)
+                .u32(presentation.sprite.frame_w)
+                .u32(presentation.sprite.frame_h)
+                .u32(presentation.sprite.frame_count)
+                .f32(presentation.sprite.frame_duration)
+                .u32(presentation.frames_per_row)
+                .u32(presentation.draw_w)
+                .u32(presentation.draw_h)
+                .u8(presentation.looping as u8)
+                .u8(presentation.advance_while_stopped as u8)
+                .u8(presentation.flip_h as u8)
+                .u8(presentation.flip_v as u8),
+            EntityOp::SetCameraSmoothing { responsiveness } => {
+                writer.u8(TAG_SET_CAMERA_SMOOTHING).f32(*responsiveness)
+            }
+            EntityOp::Reset => writer.u8(TAG_RESET),
+            EntityOp::SetSpriteTint { entity_id, tint } => {
+                let (r, g, b, a) = *tint;
+                writer
+                    .u8(TAG_SET_SPRITE_TINT)
+                    .u32(*entity_id)
+                    .u8(r)
+                    .u8(g)
+                    .u8(b)
+                    .u8(a)
+            }
         }
     }
 
@@ -279,6 +340,7 @@ impl EntityOp {
                 let body_kind = match reader.read_u8()? {
                     1 => BodyKind::Kinematic,
                     2 => BodyKind::Frictionless,
+                    3 => BodyKind::Fixed,
                     _ => BodyKind::Dynamic,
                 };
                 let worlds = PhysicsWorlds::from_bits(reader.read_u8()?);
@@ -325,6 +387,44 @@ impl EntityOp {
                 viewport_h: reader.read_f32()?,
                 zoom: reader.read_f32()?,
             }),
+            TAG_SET_SPRITE => {
+                let entity_id = reader.read_u32()?;
+                let sprite = Sprite {
+                    sprite_id: reader.read_u32()?,
+                    frame_w: reader.read_u32()?,
+                    frame_h: reader.read_u32()?,
+                    frame_count: reader.read_u32()?,
+                    frame_duration: reader.read_f32()?,
+                };
+                let presentation = SpritePresentation {
+                    sprite,
+                    frames_per_row: reader.read_u32()?,
+                    draw_w: reader.read_u32()?,
+                    draw_h: reader.read_u32()?,
+                    looping: reader.read_u8()? != 0,
+                    advance_while_stopped: reader.read_u8()? != 0,
+                    flip_h: reader.read_u8()? != 0,
+                    flip_v: reader.read_u8()? != 0,
+                };
+                Ok(EntityOp::SetSprite {
+                    entity_id,
+                    presentation,
+                })
+            }
+            TAG_SET_CAMERA_SMOOTHING => Ok(EntityOp::SetCameraSmoothing {
+                responsiveness: reader.read_f32()?,
+            }),
+            TAG_RESET => Ok(EntityOp::Reset),
+            TAG_SET_SPRITE_TINT => {
+                let entity_id = reader.read_u32()?;
+                let tint = (
+                    reader.read_u8()?,
+                    reader.read_u8()?,
+                    reader.read_u8()?,
+                    reader.read_u8()?,
+                );
+                Ok(EntityOp::SetSpriteTint { entity_id, tint })
+            }
             _ => Err(DecodeError::InvalidTag {
                 message: "game-core entity op",
                 tag,

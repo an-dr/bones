@@ -11,3 +11,4 @@ crate-type = ["cdylib"]
 [dependencies]
 wit-bindgen = "0.59.0"
 bones-messages = { path = "../../shared/bones-messages" }
+game-ui = { path = "../../shared/game-ui" }

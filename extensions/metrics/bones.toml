@@ -1,0 +1,4 @@
+extensions_dir = "extensions"
+window_title = "Bones metrics demo"
+renderer = false
+ui = false

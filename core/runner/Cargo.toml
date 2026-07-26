@@ -3,6 +3,10 @@ name = "runner"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+default = []
+web = ["dep:web"]
+
 [dependencies]
 bones-messages = { path = "../../shared/bones-messages" }
 bus = { path = "../bus" }
@@ -11,6 +15,7 @@ logging = { path = "../logging" }
 platform = { path = "../platform" }
 renderer = { path = "../renderer" }
 ui = { path = "../ui" }
+web = { path = "../web", features = ["wry-backend"], optional = true }
 wasmtime = { version = "47.0.0", features = ["component-model"] }
 
 [dev-dependencies]

@@ -1,6 +1,10 @@
 # bones — engine architecture
 
-bones is a universal extendable engine: a small native core that owns the platform (windows, tray icon, input via SDL), logging, rendering, and a message bus. All product behavior — game logic, GUI applications, tools — lives in extensions\*\*: WASM components written in any language, exchanging messages through the core.
+bones is a universal extendable engine: a small native core that owns the
+platform (windows, tray icon, input via SDL), logging, rendering, and a message
+bus. All product behavior — game logic, GUI applications, tools — lives in
+extensions: WASM components written in any language, exchanging messages
+through the core.
 
 The core itself is two tiers ([ADR-011](adr/ADR-011-native-core-modules.md)):
 a fixed **kernel** (bus, host, platform, logging, runner) and swappable
@@ -55,7 +59,9 @@ graph TD
   and interaction events flow back over the bus.
 * **Web panels** — optional wry-based OS webviews (ADR-006). Extensions manage
   panels and exchange JSON with their web frontends over `web/*` topics;
-  feature-flagged so minimal builds carry no webview dependency.
+  feature-flagged so minimal builds carry no webview dependency. The
+  `dashboard` and `metrics` example components demonstrate pushed data,
+  synchronous pull requests, and page IPC end to end.
 * **Message bus** — the single communication fabric (ADR-003). Pub/sub topics
   for broadcast-style flows (input, tick, draw commands) plus direct
   request/reply between named endpoints when a response is required.

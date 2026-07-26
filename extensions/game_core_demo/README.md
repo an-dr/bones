@@ -35,6 +35,9 @@ The H key toggles `EntityOp::SetDebugHitboxes`: a yellow unfilled
 outline over every collider-bearing entity's actual `rapier2d` extent,
 drawn by `game-core` itself — useful for checking a sprite's visible
 frame or a square's fill actually lines up with what it collides as.
+Its game-rendered pause/settings menu uses the shared theme-free
+`game-ui` crate for button geometry, gfx command generation, and scaled
+mouse hit-testing while retaining this demo's own grid layout and colors.
 
 ## Build
 

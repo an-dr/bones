@@ -3,13 +3,12 @@ use std::collections::HashMap;
 
 /// `TypeId`-keyed store for the services modules provide to and consume
 /// from each other (`window-surface`, `draw-target`, design/modules.md).
-/// Single-consumer, ownership-transfer semantics — `consume` removes the
-/// value, matching how `Platform::take_window` already works. TODO:
-/// revisit (e.g. `Arc`-wrapped services) once a service needs more than
-/// one consumer (modules.md lists `web` as a second `window-surface`
-/// consumer, once it exists). Not `Send`-bounded: `Engine::build` uses this
-/// synchronously on one thread, and some real services (e.g. `sdl3::video::
-/// Window`) aren't `Send` themselves.
+/// Owned services retain single-consumer transfer semantics through
+/// `consume`. `get` additionally permits build-time borrowing for consumers
+/// such as web that only need to derive a native child handle before the
+/// renderer takes ownership of the SDL window. Not `Send`-bounded:
+/// `Engine::build` uses this synchronously on one thread, and some real
+/// services (e.g. `sdl3::video::Window`) aren't `Send` themselves.
 #[derive(Default)]
 pub struct ServiceRegistry {
     services: HashMap<TypeId, Box<dyn Any>>,
@@ -41,5 +40,12 @@ impl ServiceRegistry {
         self.services
             .remove(&TypeId::of::<T>())
             .map(|boxed| *boxed.downcast::<T>().expect("service TypeId mismatch"))
+    }
+
+    /// Borrows a provided service without claiming its ownership.
+    pub fn get<T: 'static>(&self) -> Option<&T> {
+        self.services
+            .get(&TypeId::of::<T>())
+            .and_then(|boxed| boxed.downcast_ref())
     }
 }

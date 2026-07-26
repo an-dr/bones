@@ -201,10 +201,8 @@ impl Platform {
 
     /// Whether the OS asked to close the window (e.g. the close button)
     /// since this `Platform` was created. Sticky — once true, stays true;
-    /// the caller is expected to exit rather than keep polling.
-    /// TODO: no `window/*` close-request event or `shutdown()` call yet
-    /// (design/platform.md's full shutdown sequence) — this only reports
-    /// the signal, exiting cleanly is the caller's job.
+    /// the runner begins the orderly shutdown sequence instead of polling
+    /// another frame.
     pub fn quit_requested(&self) -> bool {
         self.quit_requested
     }

@@ -22,11 +22,18 @@ settings dialog on `ui/*`).
   extension's own stream deterministic).
 - A batch fully replaces that extension's previous batch on the same layer —
   retained until replaced, so a paused extension keeps its last frame visible.
+- `gfx/clear-draw-batch` publishes an explicit empty batch for its sender,
+  removing only that sender's retained draws on the next render pass.
+- `renderer/logical-canvas` announces the renderer's fixed coordinate space
+  whenever an extension loads or reloads.
 - A single world-to-screen camera transform (position + zoom) applies to
   every draw — one viewport for the whole scene, not per-extension or
   per-layer.
 - The command vocabulary (clear, sprite, shapes, text, …) is a versioned core
   API; its exact set is an implementation-increment concern.
+- WASM guests may use the optional `game-ui` shared crate for logical-canvas
+  menu layout, selection, hit-testing, and owned `gfx/*` command generation.
+  It is theme-free and adds no native backend or bus protocol (ADR-025).
 
 ## ui — widgets
 
@@ -40,15 +47,19 @@ settings dialog on `ui/*`).
 
 ## web — panels
 
-- Panel lifecycle: an extension requests open (with bundled HTML or a URL),
-  close, or navigate; the core confirms via events. Each panel belongs to
-  exactly one extension and is closed automatically when its owner unloads.
+- Panel lifecycle: an extension directly sends typed open (with inline HTML
+  or a URL), close, or navigate commands to the `web` endpoint; the core
+  confirms via `web/*` events. A missing optional module is therefore an
+  immediate `UnknownEndpoint`, not a silently ignored publish.
+- Each panel belongs to exactly one extension and is closed automatically when
+  its owner unloads. Panel ids are local to that owner. Events include both
+  the host-derived owner and panel id because bus topics are broadcast.
 - Messages between the extension and its page are opaque JSON, bridged
   between the bus and the page's script environment. The page cannot reach the
   bus directly — everything passes through (and is attributable to) the
   owning extension.
-- Panels are OS webviews composited above the SDL content — child views where
-  the platform supports it, separate top-level windows as fallback (ADR-006).
+- Panels are OS webviews composited above the SDL content as native children
+  of the SDL window on supported desktop window systems.
 
 ## Input routing
 
