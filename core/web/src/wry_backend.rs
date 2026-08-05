@@ -8,6 +8,7 @@ use wry::{Rect, WebView, WebViewBuilder};
 
 use crate::{Backend, BackendEvent};
 
+mod page_source;
 mod parent_handle;
 use parent_handle::ParentHandle;
 
@@ -85,7 +86,16 @@ impl Backend for WryBackend {
                 }
             });
         let builder = match source {
-            PanelSource::Html(html) => builder.with_html(html),
+            // Served rather than set as a string, so the page gets a real
+            // origin — see `page_source` for what an opaque one costs.
+            PanelSource::Html(html) => {
+                let page = html.as_bytes().to_vec();
+                builder
+                    .with_custom_protocol(page_source::PROTOCOL.to_string(), move |_id, _request| {
+                        page_source::response(&page)
+                    })
+                    .with_url(page_source::URL)
+            }
             PanelSource::Url(url) => builder.with_url(url),
         };
         let view = builder

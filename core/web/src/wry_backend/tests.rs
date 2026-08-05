@@ -39,6 +39,13 @@ fn child_webview_opens_resizes_receives_script_and_closes() {
                  window.addEventListener('bones-message', event => {\
                    if (event.detail === 'report-size') {\
                      window.ipc.postMessage(`size:${window.innerWidth}x${window.innerHeight}`);\
+                   } else if (event.detail === 'report-storage') {\
+                     try {\
+                       localStorage.setItem('bones-smoke', 'kept');\
+                       window.ipc.postMessage(`storage:${localStorage.getItem('bones-smoke')}`);\
+                     } catch (error) {\
+                       window.ipc.postMessage('storage:blocked');\
+                     }\
                    } else {\
                      window.ipc.postMessage(event.detail);\
                    }\
@@ -59,6 +66,17 @@ fn child_webview_opens_resizes_receives_script_and_closes() {
         wait_for_message(&mut backend, &mut events),
         Some(r#"{"ready":true}"#.to_string())
     );
+    // Storage is what an opaque origin denies, so a page served with a real
+    // origin has to be able to reach it.
+    backend.send_json("smoke", "panel", "report-storage").unwrap();
+    assert_eq!(
+        wait_for_message_matching(&mut backend, &mut events, |message| {
+            message.starts_with("storage:")
+        }),
+        Some("storage:kept".to_string()),
+        "an html panel should load at an origin that allows storage"
+    );
+
     backend.send_json("smoke", "panel", "report-size").unwrap();
     let initial_size = wait_for_message_matching(&mut backend, &mut events, |message| {
         message.starts_with("size:")
