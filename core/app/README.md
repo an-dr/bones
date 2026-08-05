@@ -6,7 +6,12 @@ builder API (ADR-011) — no access an embedder using the same API lacks.
 Package is `app`, built binary is `bones`.
 
 Opens one window (800x600 by default), feeds keyboard events onto `input/*`,
-and renders `gfx/*` draw commands (`core/renderer`). Drop `.wasm` extensions
+and renders `gfx/*` draw commands (`core/renderer`).
+
+A release build is a windowed Windows binary, so no console appears behind the
+window; launched from a terminal it attaches to that terminal's console, so log
+output and a fatal startup error still land where the operator can read them.
+Debug builds are console binaries throughout. Drop `.wasm` extensions
 into an `extensions/` directory next to the executable file itself (not the
 shell's current directory — the binary can be launched from anywhere and
 still finds its own `extensions/`); `cargo run -p app` (or the built binary)
