@@ -49,8 +49,9 @@ subscription, the same as any extension.
 - `respond(sender, payload)` — answers a direct `send` (ADR-010) addressed
   to this module by name, the same capability WASM extensions already have.
   Default: no reply. `persistence` is the first module to use this (an
-  extension's own `init` loading its prior save synchronously); most
-  modules have nothing to answer.
+  extension's own `init` loading its prior save synchronously), and `files`
+  the second (reading a granted directory); most modules have nothing to
+  answer.
 - `shutdown()` — called once after extensions stop during orderly application
   shutdown.
 

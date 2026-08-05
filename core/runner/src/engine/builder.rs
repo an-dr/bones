@@ -22,6 +22,7 @@ use ui::Ui;
 use wasm_extensions::host::DisplayInfo;
 use wasm_extensions::lifecycle;
 use wasm_extensions::lifecycle::Event;
+use wasm_extensions::files::{self, Files};
 use wasm_extensions::persistence::Persistence;
 
 use crate::loading::{
@@ -80,6 +81,7 @@ pub struct Engine {
     modules: Vec<Box<dyn Module>>,
     saves_dir: PathBuf,
     persistence_read_only: bool,
+    files_root: Option<PathBuf>,
     extension_budget: BudgetLimits,
 }
 
@@ -103,6 +105,7 @@ impl Engine {
             modules: Vec::new(),
             saves_dir: PathBuf::from("saves"),
             persistence_read_only: false,
+            files_root: None,
             extension_budget: BudgetLimits::default(),
         }
     }
@@ -225,6 +228,19 @@ impl Engine {
     /// wouldn't save anything.
     pub fn read_only_persistence(mut self) -> Self {
         self.persistence_read_only = true;
+        self
+    }
+
+    /// Grants extensions read access to one directory through the `files`
+    /// endpoint (`wasm_extensions::files`). A relative path resolves against
+    /// the running executable's own directory, the same convention
+    /// `saves_dir` uses.
+    ///
+    /// No default: unset means the capability does not exist, which is the
+    /// right default for a grant over someone else's files. Reads are capped
+    /// at `files::DEFAULT_MAX_BYTES` per file.
+    pub fn files_root(mut self, path: impl Into<PathBuf>) -> Self {
+        self.files_root = Some(path.into());
         self
     }
 
@@ -377,6 +393,14 @@ impl Engine {
             Box::new(persistence),
         )
         .map_err(wasmtime::Error::msg)?;
+
+        // Opt-in, unlike persistence: without a granted root there is no
+        // endpoint, so an extension's read fails as an unknown endpoint.
+        if let Some(root) = self.files_root.clone() {
+            let files = Files::new(resolve_relative_to_exe(root), files::DEFAULT_MAX_BYTES);
+            register_module(&bus, &registry, &mut services, &mut modules, Box::new(files))
+                .map_err(wasmtime::Error::msg)?;
+        }
 
         let mut tracked = Vec::new();
         let mut catalog = std::collections::HashMap::new();

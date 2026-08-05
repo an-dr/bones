@@ -11,6 +11,12 @@ opposed to what it can currently *do* (that's `renderer`/`ui`/`audio`):
 - **`lifecycle`** — the topic every extension state transition (Loaded,
   Faulted, Reloading, Reloaded, Stopped) is published on, so tooling and
   other extensions can observe loads, faults, and reloads.
+- **`files`** — lets an extension read files inside one directory the
+  embedder granted (`Engine::files_root`), mediated through the bus rather
+  than a filesystem capability grant. Opt-in: without a root the endpoint
+  does not exist. Both root and target are canonicalised before the
+  containment check, so no `..`, absolute path or symlink reaches outside,
+  and a per-file size limit bounds one reply.
 - **`persistence`** — lets an extension save and restore its own state
   across a reload, mediated through the bus instead of a filesystem
   capability grant. Unconditional (`Engine::build` always registers it,
