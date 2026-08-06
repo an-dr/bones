@@ -326,6 +326,17 @@ impl Engine {
         services
             .provide(bus.clone())
             .expect("no other service registers as Bus");
+        // `registry` service: the direct-send half of the same stance.
+        // `register_module` already inserts every module as a *callable*
+        // target, so modules could be called by name but had no way to call
+        // anything themselves — an asymmetry against WASM extensions, which
+        // get `send` as a host import. Modules registered before extensions
+        // attach, so this is also the only way to reach an endpoint like
+        // `web` during the window between the window opening and the first
+        // extension finishing `init`.
+        services
+            .provide(registry.clone())
+            .expect("no other service registers as Registry");
 
         #[cfg(feature = "web")]
         let web_module: Option<Box<dyn Module>> = if self.web_enabled {
