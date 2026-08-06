@@ -55,11 +55,10 @@ fn map_send_error(err: bus::SendError) -> SendError {
 /// wall-clock terms; runs for the engine's lifetime, no shutdown needed for
 /// a process-lifetime `Engine`.
 pub fn new_engine() -> wasmtime::Result<Engine> {
-    let engine = Engine::new(
-        Config::new()
-            .wasm_component_model(true)
-            .epoch_interruption(true),
-    )?;
+    let mut config = Config::new();
+    config.wasm_component_model(true).epoch_interruption(true);
+    enable_compilation_cache(&mut config);
+    let engine = Engine::new(&config)?;
     let ticker = engine.clone();
     std::thread::spawn(move || loop {
         std::thread::sleep(EPOCH_TICK_INTERVAL);
@@ -78,6 +77,22 @@ pub fn new_engine() -> wasmtime::Result<Engine> {
 pub struct DisplayInfo {
     pub modes: Vec<(u32, u32)>,
     pub native: Option<(u32, u32)>,
+}
+
+/// Reuses compiled code across runs, keyed by the component's own bytes.
+///
+/// - Without it every launch runs Cranelift over the whole component again.
+///   For a small extension that is unnoticeable; for a large one it is most of
+///   the startup, and it is repeated identically every single time.
+/// - Wasmtime owns the invalidation, so a rebuilt component or a different
+///   engine version simply misses and recompiles. There is no stale-artifact
+///   failure mode to guard against.
+/// - Best effort: a read-only or unwritable cache directory is a slower start,
+///   never a failed one, so a failure here is deliberately ignored.
+fn enable_compilation_cache(config: &mut Config) {
+    if let Ok(cache) = wasmtime::Cache::from_file(None) {
+        config.cache(Some(cache));
+    }
 }
 
 /// Converts a wall-clock load budget into the epoch ticks
