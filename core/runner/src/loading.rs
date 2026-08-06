@@ -8,11 +8,11 @@ mod shared_host;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 use bus::{BudgetLimits, Bus, Endpoint, EndpointBudget, Registry};
 use logging::Logger;
-use wasm_extensions::host::{DisplayInfo, Host};
+use wasm_extensions::host::{DisplayInfo, ExtensionTimeouts, Host};
 
 pub(crate) use shared_host::SharedHost;
 
@@ -38,7 +38,7 @@ pub(crate) fn attach_extension(
     exit_requested: &Arc<AtomicBool>,
     display_info: &DisplayInfo,
     budget_limits: BudgetLimits,
-    load_timeout: Duration,
+    timeouts: ExtensionTimeouts,
 ) -> wasmtime::Result<(Endpoint, SharedHost, EndpointBudget, Vec<String>)> {
     let budget = EndpointBudget::new(budget_limits);
     let mut extension = Host::load(
@@ -51,7 +51,7 @@ pub(crate) fn attach_extension(
         exit_requested.clone(),
         display_info.clone(),
         budget.clone(),
-        load_timeout,
+        timeouts,
     )?;
     let topics = extension.requested_topics();
     let shared = SharedHost(Arc::new(Mutex::new(extension)));

@@ -19,7 +19,7 @@ use logging::Logger;
 use renderer::Renderer;
 #[cfg(feature = "presentation")]
 use ui::Ui;
-use wasm_extensions::host::{DisplayInfo, DEFAULT_LOAD_TIMEOUT};
+use wasm_extensions::host::{DisplayInfo, ExtensionTimeouts};
 use wasm_extensions::lifecycle;
 use wasm_extensions::lifecycle::Event;
 use wasm_extensions::files::{self, Files};
@@ -83,7 +83,7 @@ pub struct Engine {
     persistence_read_only: bool,
     files_root: Option<PathBuf>,
     extension_budget: BudgetLimits,
-    extension_load_timeout: Duration,
+    extension_timeouts: ExtensionTimeouts,
 }
 
 impl Engine {
@@ -108,7 +108,7 @@ impl Engine {
             persistence_read_only: false,
             files_root: None,
             extension_budget: BudgetLimits::default(),
-            extension_load_timeout: DEFAULT_LOAD_TIMEOUT,
+            extension_timeouts: ExtensionTimeouts::default(),
         }
     }
 
@@ -255,7 +255,8 @@ impl Engine {
     /// Sets how long `instantiate` + `init` may take per extension, for the
     /// initial load and for every hot reload after it.
     ///
-    /// - Defaults to `DEFAULT_LOAD_TIMEOUT`, which suits a small component.
+    /// - Defaults to `ExtensionTimeouts::default().load`, which suits a small
+    ///   component.
     /// - Raise it for a large one — megabytes carrying an embedded language
     ///   runtime routinely need longer than a second to start.
     /// - The budget is wall clock, so it must also absorb the host being
@@ -263,7 +264,23 @@ impl Engine {
     ///   tight deadline on a loaded one, and a missed deadline is a trap in
     ///   `init`, not a retry.
     pub fn extension_load_timeout(mut self, timeout: Duration) -> Self {
-        self.extension_load_timeout = timeout;
+        self.extension_timeouts.load = timeout;
+        self
+    }
+
+    /// Sets how long any single guest call may take -- `on-message`,
+    /// `on-tick`, or answering a direct `send`.
+    ///
+    /// - Defaults to `ExtensionTimeouts::default().call`, tight enough that a
+    ///   call blocking that long reads as a runaway.
+    /// - Raise it where that assumption is wrong: an extension whose messages
+    ///   trigger real work (reading a repository, parsing a large document)
+    ///   is judged on its slowest call, not its typical one.
+    /// - Overrunning faults the extension and quarantines it, so the cost of
+    ///   setting this too low is an app that stops responding mid-session,
+    ///   not one that merely stutters.
+    pub fn extension_call_timeout(mut self, timeout: Duration) -> Self {
+        self.extension_timeouts.call = timeout;
         self
     }
 
@@ -470,7 +487,7 @@ impl Engine {
                 &exit_requested,
                 &display_info,
                 self.extension_budget,
-                self.extension_load_timeout,
+                self.extension_timeouts,
             ) {
                 Ok((ep, shared, budget, topics)) => {
                     self.logger.info(
@@ -561,7 +578,7 @@ impl Engine {
             exit_requested.clone(),
             display_info,
             self.extension_budget,
-            self.extension_load_timeout,
+            self.extension_timeouts,
         );
 
         #[cfg(feature = "presentation")]

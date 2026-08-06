@@ -5,9 +5,13 @@
 //! requested by the extension itself via the `subscribe` import during
 //! `init` (messaging.md).
 
+mod extension_timeouts;
+
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+
+pub use extension_timeouts::ExtensionTimeouts;
 
 use bones_messages::tick::Tick;
 use bones_messages::{DecodeMessage, Message};
@@ -21,19 +25,6 @@ use wasmtime::{Config, Engine, Store};
 /// How often the background thread `new_engine` spawns advances the shared
 /// epoch counter every loaded extension's calls are budgeted against.
 pub const EPOCH_TICK_INTERVAL: Duration = Duration::from_millis(5);
-/// Per-call timeout (ADR-007's time budget), in epoch ticks: 10 * 5ms =
-/// 50ms. A call that hasn't returned by then traps, faulting the extension.
-const CALL_TIMEOUT_TICKS: u64 = 10;
-/// Default budget for `instantiate` + `init`: cold JIT compilation is a
-/// legitimate one-time cost `CALL_TIMEOUT_TICKS` isn't meant to cover.
-///
-/// - Wall clock, not work: scheduling delay on a loaded machine spends this
-///   as fast as the extension itself does.
-/// - Sized for a small component. One carrying an embedded language runtime
-///   takes longer than this to start, and on a busy or cold host misses the
-///   deadline outright — raise it through `Engine::extension_load_timeout`
-///   rather than letting `init` trap.
-pub const DEFAULT_LOAD_TIMEOUT: Duration = Duration::from_secs(1);
 
 fn map_send_error(err: bus::SendError) -> SendError {
     match err {
@@ -95,13 +86,13 @@ fn enable_compilation_cache(config: &mut Config) {
     }
 }
 
-/// Converts a wall-clock load budget into the epoch ticks
+/// Converts a wall-clock budget into the epoch ticks
 /// `Store::set_epoch_deadline` counts.
 ///
 /// - Rounds up, so a budget shorter than one tick still buys one.
 /// - Saturates instead of wrapping, so an enormous budget reads as "no
 ///   practical limit" rather than a tiny one.
-fn load_timeout_ticks(timeout: Duration) -> u64 {
+fn timeout_ticks(timeout: Duration) -> u64 {
     let interval = EPOCH_TICK_INTERVAL.as_millis().max(1);
     let ticks = timeout.as_millis().div_ceil(interval);
     u64::try_from(ticks).unwrap_or(u64::MAX).max(1)
@@ -204,6 +195,8 @@ pub struct Host {
     // already serializes per-endpoint calls, ADR-013).
     store: Mutex<Store<State>>,
     bindings: Extension,
+    /// Applied before every guest call after `init`, which got `load`.
+    call_timeout: Duration,
     /// Set once a call traps or exceeds its time budget (ADR-007) and never
     /// cleared — a faulted `Host` is done; quarantining it (dropping this
     /// instance, releasing its registrations) is whoever holds it's job,
@@ -222,8 +215,8 @@ impl Host {
     /// `exit_requested` is what `request-exit` sets (the caller's own clone
     /// is how it later reads that request), `display_info` backs the two
     /// display-mode query imports, and `budget` rejects guest publish floods.
-    /// `load_timeout` is the wall-clock budget for `instantiate` + `init`
-    /// together; overrunning it traps, and the extension does not load.
+    /// `timeouts` carries the wall-clock budgets for loading and for every
+    /// call after it; overrunning either traps.
     #[allow(clippy::too_many_arguments)]
     pub fn load(
         engine: &Engine,
@@ -235,7 +228,7 @@ impl Host {
         exit_requested: Arc<AtomicBool>,
         display_info: DisplayInfo,
         budget: EndpointBudget,
-        load_timeout: Duration,
+        timeouts: ExtensionTimeouts,
     ) -> wasmtime::Result<Self> {
         let component = Component::from_file(engine, wasm_path)?;
         let mut linker = Linker::new(engine);
@@ -260,13 +253,14 @@ impl Host {
         // Epoch interruption traps immediately on any check once enabled
         // (Config::epoch_interruption) until a deadline is set — must be
         // set before instantiate, which can itself run guest code.
-        store.set_epoch_deadline(load_timeout_ticks(load_timeout));
+        store.set_epoch_deadline(timeout_ticks(timeouts.load));
         let bindings = Extension::instantiate(&mut store, &component, &linker)?;
         bindings.call_init(&mut store)?;
 
         Ok(Self {
             store: Mutex::new(store),
             bindings,
+            call_timeout: timeouts.call,
             faulted: AtomicBool::new(false),
         })
     }
@@ -290,7 +284,7 @@ impl Host {
             ));
         }
         let store = self.store.get_mut().unwrap();
-        store.set_epoch_deadline(CALL_TIMEOUT_TICKS);
+        store.set_epoch_deadline(timeout_ticks(self.call_timeout));
         match self.bindings.call_shutdown(&mut *store) {
             Ok(()) => Ok(()),
             Err(err) => {
@@ -322,7 +316,7 @@ impl Host {
             return None;
         }
         let store = self.store.get_mut().unwrap();
-        store.set_epoch_deadline(CALL_TIMEOUT_TICKS);
+        store.set_epoch_deadline(timeout_ticks(self.call_timeout));
         match self
             .bindings
             .call_on_message(&mut *store, "", sender, payload)
@@ -354,7 +348,7 @@ impl Handler for Host {
             return;
         }
         let store = self.store.get_mut().unwrap();
-        store.set_epoch_deadline(CALL_TIMEOUT_TICKS);
+        store.set_epoch_deadline(timeout_ticks(self.call_timeout));
         let result = match read_tick_dt(envelope) {
             Some(dt) => self.bindings.call_on_tick(&mut *store, dt).map(|()| None),
             None => self.bindings.call_on_message(

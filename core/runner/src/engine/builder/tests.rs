@@ -20,18 +20,25 @@ fn extension_budget_defaults_and_overrides_are_explicit() {
 }
 
 #[test]
-fn extension_load_timeout_defaults_and_overrides_are_explicit() {
+fn extension_timeouts_default_and_override_one_at_a_time() {
     assert_eq!(
-        Engine::new().extension_load_timeout,
-        DEFAULT_LOAD_TIMEOUT
+        Engine::new().extension_timeouts,
+        ExtensionTimeouts::default()
     );
-    let timeout = Duration::from_secs(30);
-    assert_eq!(
-        Engine::new()
-            .extension_load_timeout(timeout)
-            .extension_load_timeout,
-        timeout
-    );
+
+    let load = Duration::from_secs(30);
+    let call = Duration::from_secs(10);
+    let engine = Engine::new()
+        .extension_load_timeout(load)
+        .extension_call_timeout(call);
+
+    assert_eq!(engine.extension_timeouts.load, load);
+    assert_eq!(engine.extension_timeouts.call, call);
+
+    // Setting one must not quietly reset the other to its default.
+    let only_call = Engine::new().extension_call_timeout(call);
+    assert_eq!(only_call.extension_timeouts.load, ExtensionTimeouts::default().load);
+    assert_eq!(only_call.extension_timeouts.call, call);
 }
 
 #[test]

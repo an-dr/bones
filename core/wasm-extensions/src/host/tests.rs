@@ -26,7 +26,7 @@ fn load_hello(bus: Bus, logger: Logger) -> Host {
         Arc::new(AtomicBool::new(false)),
         DisplayInfo::default(),
         EndpointBudget::new(bus::BudgetLimits::default()),
-        DEFAULT_LOAD_TIMEOUT,
+        ExtensionTimeouts::default(),
     )
     .expect("build extensions/hello first: pwsh extensions/hello/build.ps1")
 }
@@ -256,7 +256,7 @@ fn a_call_that_never_returns_traps_and_faults_instead_of_hanging_forever() {
         Arc::new(AtomicBool::new(false)),
         DisplayInfo::default(),
         EndpointBudget::new(bus::BudgetLimits::default()),
-        DEFAULT_LOAD_TIMEOUT,
+        ExtensionTimeouts::default(),
     )
     .expect("build extensions/runaway_demo first: pwsh extensions/runaway_demo/build.ps1");
     assert!(!host.is_faulted(), "must not start out faulted");
@@ -289,7 +289,7 @@ fn a_faulted_host_ignores_further_deliveries_instead_of_hanging_again() {
         Arc::new(AtomicBool::new(false)),
         DisplayInfo::default(),
         EndpointBudget::new(bus::BudgetLimits::default()),
-        DEFAULT_LOAD_TIMEOUT,
+        ExtensionTimeouts::default(),
     )
     .expect("build extensions/runaway_demo first: pwsh extensions/runaway_demo/build.ps1");
     host.handle(&tick_envelope());
@@ -302,14 +302,14 @@ fn a_faulted_host_ignores_further_deliveries_instead_of_hanging_again() {
 }
 
 #[test]
-fn a_load_budget_converts_to_whole_epoch_ticks_and_never_to_zero() {
-    assert_eq!(load_timeout_ticks(DEFAULT_LOAD_TIMEOUT), 200);
-    assert_eq!(load_timeout_ticks(Duration::from_secs(10)), 2_000);
+fn a_budget_converts_to_whole_epoch_ticks_and_never_to_zero() {
+    assert_eq!(timeout_ticks(ExtensionTimeouts::default().load), 200);
+    assert_eq!(timeout_ticks(Duration::from_secs(10)), 2_000);
     // Rounds up rather than down: a sub-tick budget still buys one tick,
     // because a zero deadline traps on the very first epoch check.
-    assert_eq!(load_timeout_ticks(Duration::from_millis(1)), 1);
-    assert_eq!(load_timeout_ticks(Duration::ZERO), 1);
+    assert_eq!(timeout_ticks(Duration::from_millis(1)), 1);
+    assert_eq!(timeout_ticks(Duration::ZERO), 1);
     // Saturates instead of wrapping, so "effectively unlimited" stays that
     // way rather than becoming a tiny deadline.
-    assert_eq!(load_timeout_ticks(Duration::MAX), u64::MAX);
+    assert_eq!(timeout_ticks(Duration::MAX), u64::MAX);
 }
