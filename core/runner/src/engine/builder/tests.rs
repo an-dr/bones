@@ -20,6 +20,21 @@ fn extension_budget_defaults_and_overrides_are_explicit() {
 }
 
 #[test]
+fn extension_load_timeout_defaults_and_overrides_are_explicit() {
+    assert_eq!(
+        Engine::new().extension_load_timeout,
+        DEFAULT_LOAD_TIMEOUT
+    );
+    let timeout = Duration::from_secs(30);
+    assert_eq!(
+        Engine::new()
+            .extension_load_timeout(timeout)
+            .extension_load_timeout,
+        timeout
+    );
+}
+
+#[test]
 fn explicit_catalog_entries_preserve_embedder_identity_and_path() {
     let path = PathBuf::from("validated/session-counter.wasm");
     let engine = Engine::new().catalog_extension("session-counter", path.clone());

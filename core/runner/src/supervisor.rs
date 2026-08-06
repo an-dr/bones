@@ -48,6 +48,9 @@ pub struct Supervisor {
     exit_requested: Arc<AtomicBool>,
     display_info: DisplayInfo,
     budget_limits: BudgetLimits,
+    /// Hot reload re-runs `instantiate` + `init`, so it needs the same
+    /// wall-clock budget the initial load was given.
+    load_timeout: Duration,
 }
 
 impl Supervisor {
@@ -63,6 +66,7 @@ impl Supervisor {
         exit_requested: Arc<AtomicBool>,
         display_info: DisplayInfo,
         budget_limits: BudgetLimits,
+        load_timeout: Duration,
     ) -> Self {
         Self {
             wasm_engine,
@@ -76,6 +80,7 @@ impl Supervisor {
             exit_requested,
             display_info,
             budget_limits,
+            load_timeout,
         }
     }
 
@@ -145,6 +150,7 @@ impl Supervisor {
                 &self.exit_requested,
                 &self.display_info,
                 self.budget_limits,
+                self.load_timeout,
             ) {
                 Ok((ep, shared, budget, topics)) => {
                     if !extension.quarantined {
@@ -221,6 +227,7 @@ impl Supervisor {
             &self.exit_requested,
             &self.display_info,
             self.budget_limits,
+            self.load_timeout,
         ) {
             Ok((endpoint, shared, budget, topics)) => {
                 self.tracked.retain(|extension| extension.name != name);
@@ -286,6 +293,7 @@ impl Supervisor {
             &self.exit_requested,
             &self.display_info,
             self.budget_limits,
+            self.load_timeout,
         ) {
             Ok((endpoint, shared, budget, topics)) => {
                 let extension = &mut self.tracked[index];

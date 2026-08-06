@@ -20,14 +20,20 @@ use wasmtime::{Config, Engine, Store};
 
 /// How often the background thread `new_engine` spawns advances the shared
 /// epoch counter every loaded extension's calls are budgeted against.
-const EPOCH_TICK_INTERVAL: Duration = Duration::from_millis(5);
+pub const EPOCH_TICK_INTERVAL: Duration = Duration::from_millis(5);
 /// Per-call timeout (ADR-007's time budget), in epoch ticks: 10 * 5ms =
 /// 50ms. A call that hasn't returned by then traps, faulting the extension.
 const CALL_TIMEOUT_TICKS: u64 = 10;
-/// Timeout for `instantiate` + `init` (200 ticks * 5ms = 1s): cold JIT
-/// compilation is a legitimate one-time cost `CALL_TIMEOUT_TICKS` isn't
-/// meant to cover.
-const LOAD_TIMEOUT_TICKS: u64 = 200;
+/// Default budget for `instantiate` + `init`: cold JIT compilation is a
+/// legitimate one-time cost `CALL_TIMEOUT_TICKS` isn't meant to cover.
+///
+/// - Wall clock, not work: scheduling delay on a loaded machine spends this
+///   as fast as the extension itself does.
+/// - Sized for a small component. One carrying an embedded language runtime
+///   takes longer than this to start, and on a busy or cold host misses the
+///   deadline outright — raise it through `Engine::extension_load_timeout`
+///   rather than letting `init` trap.
+pub const DEFAULT_LOAD_TIMEOUT: Duration = Duration::from_secs(1);
 
 fn map_send_error(err: bus::SendError) -> SendError {
     match err {
@@ -72,6 +78,18 @@ pub fn new_engine() -> wasmtime::Result<Engine> {
 pub struct DisplayInfo {
     pub modes: Vec<(u32, u32)>,
     pub native: Option<(u32, u32)>,
+}
+
+/// Converts a wall-clock load budget into the epoch ticks
+/// `Store::set_epoch_deadline` counts.
+///
+/// - Rounds up, so a budget shorter than one tick still buys one.
+/// - Saturates instead of wrapping, so an enormous budget reads as "no
+///   practical limit" rather than a tiny one.
+fn load_timeout_ticks(timeout: Duration) -> u64 {
+    let interval = EPOCH_TICK_INTERVAL.as_millis().max(1);
+    let ticks = timeout.as_millis().div_ceil(interval);
+    u64::try_from(ticks).unwrap_or(u64::MAX).max(1)
 }
 
 fn read_tick_dt(envelope: &Envelope) -> Option<f32> {
@@ -189,6 +207,8 @@ impl Host {
     /// `exit_requested` is what `request-exit` sets (the caller's own clone
     /// is how it later reads that request), `display_info` backs the two
     /// display-mode query imports, and `budget` rejects guest publish floods.
+    /// `load_timeout` is the wall-clock budget for `instantiate` + `init`
+    /// together; overrunning it traps, and the extension does not load.
     #[allow(clippy::too_many_arguments)]
     pub fn load(
         engine: &Engine,
@@ -200,6 +220,7 @@ impl Host {
         exit_requested: Arc<AtomicBool>,
         display_info: DisplayInfo,
         budget: EndpointBudget,
+        load_timeout: Duration,
     ) -> wasmtime::Result<Self> {
         let component = Component::from_file(engine, wasm_path)?;
         let mut linker = Linker::new(engine);
@@ -224,7 +245,7 @@ impl Host {
         // Epoch interruption traps immediately on any check once enabled
         // (Config::epoch_interruption) until a deadline is set — must be
         // set before instantiate, which can itself run guest code.
-        store.set_epoch_deadline(LOAD_TIMEOUT_TICKS);
+        store.set_epoch_deadline(load_timeout_ticks(load_timeout));
         let bindings = Extension::instantiate(&mut store, &component, &linker)?;
         bindings.call_init(&mut store)?;
 

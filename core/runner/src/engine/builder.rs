@@ -19,7 +19,7 @@ use logging::Logger;
 use renderer::Renderer;
 #[cfg(feature = "presentation")]
 use ui::Ui;
-use wasm_extensions::host::DisplayInfo;
+use wasm_extensions::host::{DisplayInfo, DEFAULT_LOAD_TIMEOUT};
 use wasm_extensions::lifecycle;
 use wasm_extensions::lifecycle::Event;
 use wasm_extensions::files::{self, Files};
@@ -83,6 +83,7 @@ pub struct Engine {
     persistence_read_only: bool,
     files_root: Option<PathBuf>,
     extension_budget: BudgetLimits,
+    extension_load_timeout: Duration,
 }
 
 impl Engine {
@@ -107,6 +108,7 @@ impl Engine {
             persistence_read_only: false,
             files_root: None,
             extension_budget: BudgetLimits::default(),
+            extension_load_timeout: DEFAULT_LOAD_TIMEOUT,
         }
     }
 
@@ -247,6 +249,21 @@ impl Engine {
     /// Sets the per-frame allowances shared by every WASM extension.
     pub fn extension_budget(mut self, limits: BudgetLimits) -> Self {
         self.extension_budget = limits;
+        self
+    }
+
+    /// Sets how long `instantiate` + `init` may take per extension, for the
+    /// initial load and for every hot reload after it.
+    ///
+    /// - Defaults to `DEFAULT_LOAD_TIMEOUT`, which suits a small component.
+    /// - Raise it for a large one — megabytes carrying an embedded language
+    ///   runtime routinely need longer than a second to start.
+    /// - The budget is wall clock, so it must also absorb the host being
+    ///   busy: an extension that loads on an idle machine can still miss a
+    ///   tight deadline on a loaded one, and a missed deadline is a trap in
+    ///   `init`, not a retry.
+    pub fn extension_load_timeout(mut self, timeout: Duration) -> Self {
+        self.extension_load_timeout = timeout;
         self
     }
 
@@ -442,6 +459,7 @@ impl Engine {
                 &exit_requested,
                 &display_info,
                 self.extension_budget,
+                self.extension_load_timeout,
             ) {
                 Ok((ep, shared, budget, topics)) => {
                     self.logger.info(
@@ -532,6 +550,7 @@ impl Engine {
             exit_requested.clone(),
             display_info,
             self.extension_budget,
+            self.extension_load_timeout,
         );
 
         #[cfg(feature = "presentation")]

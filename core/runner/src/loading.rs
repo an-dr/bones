@@ -8,7 +8,7 @@ mod shared_host;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 use bus::{BudgetLimits, Bus, Endpoint, EndpointBudget, Registry};
 use logging::Logger;
@@ -24,6 +24,9 @@ pub(crate) const ENGINE_SENDER: &str = "engine";
 /// whatever topics it requested via `subscribe` during `init`. `exit_requested`
 /// is shared with every extension this way — any one of them calling
 /// `request-exit` sets the same flag the caller's own run loop reads.
+/// `load_timeout` bounds `instantiate` + `init`; a component too large for it
+/// traps instead of attaching, so it travels with the budget rather than being
+/// fixed here.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn attach_extension(
     wasm_engine: &wasmtime::Engine,
@@ -35,6 +38,7 @@ pub(crate) fn attach_extension(
     exit_requested: &Arc<AtomicBool>,
     display_info: &DisplayInfo,
     budget_limits: BudgetLimits,
+    load_timeout: Duration,
 ) -> wasmtime::Result<(Endpoint, SharedHost, EndpointBudget, Vec<String>)> {
     let budget = EndpointBudget::new(budget_limits);
     let mut extension = Host::load(
@@ -47,6 +51,7 @@ pub(crate) fn attach_extension(
         exit_requested.clone(),
         display_info.clone(),
         budget.clone(),
+        load_timeout,
     )?;
     let topics = extension.requested_topics();
     let shared = SharedHost(Arc::new(Mutex::new(extension)));
