@@ -24,6 +24,16 @@ fn a_platform_window_is_resizable() {
 }
 
 #[test]
+fn set_min_size_floors_how_small_the_window_can_be_resized() {
+    let _guard = sdl_test_lock().lock().unwrap();
+    let mut platform = Platform::new("test", 64, 64).expect("needs a real display");
+    platform.set_min_size(32, 16).expect("window should be available");
+    let window = platform.take_window().expect("window should be available");
+
+    assert_eq!(window.minimum_size(), (32, 16));
+}
+
+#[test]
 fn key_down_becomes_an_input_key_down_envelope() {
     let event = Event::KeyDown {
         timestamp: 0,

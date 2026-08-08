@@ -73,6 +73,8 @@ pub struct Engine {
     #[cfg(feature = "presentation")]
     window: Option<(String, u32, u32)>,
     #[cfg(feature = "presentation")]
+    min_window_size: Option<(u32, u32)>,
+    #[cfg(feature = "presentation")]
     renderer_enabled: bool,
     #[cfg(feature = "presentation")]
     ui_enabled: bool,
@@ -97,6 +99,8 @@ impl Engine {
             tick_hz: DEFAULT_TICK_HZ,
             #[cfg(feature = "presentation")]
             window: None,
+            #[cfg(feature = "presentation")]
+            min_window_size: None,
             #[cfg(feature = "presentation")]
             renderer_enabled: false,
             #[cfg(feature = "presentation")]
@@ -164,6 +168,14 @@ impl Engine {
     #[cfg(feature = "presentation")]
     pub fn window(mut self, title: impl Into<String>, width: u32, height: u32) -> Self {
         self.window = Some((title.into(), width, height));
+        self
+    }
+
+    /// Floors how small `.window(...)`'s window can be resized. No effect
+    /// without `.window(...)` — `build` applies it only if a window opened.
+    #[cfg(feature = "presentation")]
+    pub fn min_window_size(mut self, width: u32, height: u32) -> Self {
+        self.min_window_size = Some((width, height));
         self
     }
 
@@ -303,9 +315,18 @@ impl Engine {
         let exit_requested = Arc::new(AtomicBool::new(false));
 
         #[cfg(feature = "presentation")]
+        let min_window_size = self.min_window_size.take();
+        #[cfg(feature = "presentation")]
         let mut platform = match window {
             Some((title, width, height)) => {
-                Some(platform::Platform::new(&title, width, height).map_err(wasmtime::Error::msg)?)
+                let mut platform =
+                    platform::Platform::new(&title, width, height).map_err(wasmtime::Error::msg)?;
+                if let Some((min_width, min_height)) = min_window_size {
+                    platform
+                        .set_min_size(min_width, min_height)
+                        .map_err(wasmtime::Error::msg)?;
+                }
+                Some(platform)
             }
             None => None,
         };

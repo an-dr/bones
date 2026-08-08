@@ -88,6 +88,18 @@ impl Platform {
         })
     }
 
+    /// Floors how small the window can be resized, in addition to whatever
+    /// size it opened at (`new`'s `width`/`height`). No-op if the window was
+    /// already handed away via `take_window`.
+    pub fn set_min_size(&mut self, width: u32, height: u32) -> Result<(), String> {
+        match &mut self.window {
+            Some(window) => window
+                .set_minimum_size(width, height)
+                .map_err(|e| e.to_string()),
+            None => Ok(()),
+        }
+    }
+
     /// Every fullscreen-capable resolution the window's own display
     /// reports, deduped and ascending — see this struct's own field doc
     /// comment. Empty, not an error, if the query failed.
