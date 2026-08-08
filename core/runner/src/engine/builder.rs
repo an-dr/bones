@@ -104,7 +104,7 @@ impl Engine {
             #[cfg(feature = "web")]
             web_enabled: false,
             modules: Vec::new(),
-            saves_dir: PathBuf::from("saves"),
+            saves_dir: PathBuf::from("states"),
             persistence_read_only: false,
             files_root: None,
             extension_budget: BudgetLimits::default(),
@@ -213,7 +213,7 @@ impl Engine {
     }
 
     /// Where `persistence` (unconditional, see its own doc comment) keeps
-    /// `<sender>.bin` save files. Defaults to `"saves"`, relative to the
+    /// `<sender>.bin` save files. Defaults to `"states"`, relative to the
     /// running executable's own directory if not absolute
     /// (`resolve_relative_to_exe`) -- the same convention `extensions_dir`
     /// uses, not the process's cwd (which a double-clicked or
