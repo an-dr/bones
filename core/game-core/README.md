@@ -192,7 +192,7 @@ Unlike `audio`, this module also needs to publish (not just receive), so
 `Module::init` consumes the `bus` service `Engine::build` provides
 unconditionally (design/modules.md) — `init` fails if none is available.
 
-See `extensions/game_core_demo` for a runnable example: a tilemap, a
+See `examples/game_core_demo` for a runnable example: a tilemap, a
 WASD/gamepad-controlled sprite entity, red `Dynamic` obstacles, and blue
 `Frictionless` squares, all colliding — plus `core/audio` footstep and
 hit-flash sound driven entirely from the demo's own `game-core/collision`

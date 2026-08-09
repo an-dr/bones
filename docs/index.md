@@ -28,12 +28,35 @@ conventions themselves — code-level by definition, not a violation of the
 rule above since it changes only when the conventions change, never as a
 side effect of applying them.
 
+**Tutorials are not here.** Getting started, writing an extension, and
+embedding are code-level by nature — exact commands, exact paths — so they
+live in READMEs beside the code they describe, which keeps the altitude rule
+above intact rather than carving another exception into it.
+
+## Getting started
+
+Not documentation of the design, but the path through it:
+
+- [README](../README.md) — what bones is, prerequisites, quickstart.
+- [extensions/hello](../extensions/hello/README.md) — write your first
+  extension; walks the whole WIT contract.
+- [examples/](../examples/README.md) — eleven runnable examples, one
+  capability each.
+- [examples/embedding-demo](../examples/embedding-demo/README.md) — embed the
+  engine and inject your own native module.
+- [CONTRIBUTING](../CONTRIBUTING.md) — build, test, and commit conventions.
+
+Directory-level READMEs explain what belongs where:
+[core/](../core/README.md), [extensions/](../extensions/README.md),
+[examples/](../examples/README.md), [shared/](../shared/README.md),
+[wit/](../wit/README.md).
+
 ## Architecture
 
 - [architecture.md](architecture.md) — engine design overview: core components, messaging, extension model, diagrams.
 - [structure.md](structure.md) — static structure: components, dependency rules, source layout.
 - [code-style.md](code-style.md) — file-layout conventions for Rust source: one-type-per-file, the submodule/tests.rs pattern, README expectations.
-- [roadmap.md](roadmap.md) — the implementation backlog; currently empty.
+- [roadmap.md](roadmap.md) — the implementation backlog: remaining work only.
 
 ## Detailed design
 
@@ -44,6 +67,9 @@ side effect of applying them.
 - [design/platform.md](design/platform.md) — window, tray, input, frame loop, shutdown.
 
 ## Examples
+
+Behavior walkthroughs of two extensions; their runnable code is under
+[examples/](../examples/README.md).
 
 - [examples/egui-app.md](examples/egui-app.md) — worked example: "notes", a widget-UI extension.
 - [examples/web-app.md](examples/web-app.md) — worked example: "dashboard", a web-panel extension.

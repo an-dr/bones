@@ -1,0 +1,11 @@
+[workspace]
+
+[package]
+name = "embedding-demo"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+runner = { path = "../../core/runner" }
+bus = { path = "../../core/bus" }
+logging = { path = "../../core/logging" }

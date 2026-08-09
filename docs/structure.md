@@ -110,8 +110,8 @@ bones/
 │   └── game-ui/   # optional theme-free game menu layout and interaction
 ├── vendor/        # tracked upstream dependencies (submodules)
 │   └── pubsub-bus/   # the bus's underlying pub/sub primitive
-├── extensions/    # first-party examples, including dashboard + metrics
-└── embedding-demo/ # separate workspace proving .module(...) needs no privileged access
+├── extensions/    # hello: the reference extension, the only one shipped
+└── examples/      # runnable examples, incl. embedding-demo (see its README)
 ```
 
 How directories map to build units (workspace members, features) is an

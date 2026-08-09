@@ -3,15 +3,15 @@
 A status dashboard rendered as a web page: an HTML/JS frontend in a wry panel,
 fed with data the extension gathers over the bus. Shows the `web/*` backend
 end to end, including a direct request to another extension. The implementation
-lives in `extensions/dashboard` with its `extensions/metrics` peer.
+lives in `examples/dashboard` with its `examples/metrics` peer.
 
 ## Run it
 
 ```sh
-pwsh extensions/dashboard/build.ps1
+pwsh examples/dashboard/build.ps1
 ```
 
-Launch `extensions/dashboard/dist/bones(.exe)`. The package contains the app
+Launch `examples/dashboard/dist/bones(.exe)`. The package contains the app
 built with its `web` feature, `web = true` configuration, and both components.
 
 ## Setup
