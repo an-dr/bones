@@ -59,7 +59,12 @@ settings dialog on `ui/*`).
   bus directly — everything passes through (and is attributable to) the
   owning extension.
 - Panels are OS webviews composited above the SDL content as native children
-  of the SDL window on supported desktop window systems.
+  of the resizable SDL window on supported desktop window systems. Their
+  bounds track the live client area.
+- A service embedder may attach a temporary wry presentation to its existing
+  headless engine's bus. Closing removes the `web` endpoint and destroys the
+  native window; reopening creates a fresh presentation without rebuilding or
+  restarting that engine.
 
 ## Input routing
 

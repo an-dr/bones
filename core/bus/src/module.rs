@@ -7,10 +7,12 @@
 //! `Handler`.
 
 mod module_context;
+mod module_registration;
 mod module_trait;
 mod service_registry;
 
 pub use module_context::ModuleContext;
+pub use module_registration::ModuleRegistration;
 pub use module_trait::Module;
 pub use service_registry::ServiceRegistry;
 

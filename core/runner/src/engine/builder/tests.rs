@@ -19,6 +19,39 @@ fn extension_budget_defaults_and_overrides_are_explicit() {
     );
 }
 
+#[test]
+fn extension_timeouts_default_and_override_one_at_a_time() {
+    assert_eq!(
+        Engine::new().extension_timeouts,
+        ExtensionTimeouts::default()
+    );
+
+    let load = Duration::from_secs(30);
+    let call = Duration::from_secs(10);
+    let engine = Engine::new()
+        .extension_load_timeout(load)
+        .extension_call_timeout(call);
+
+    assert_eq!(engine.extension_timeouts.load, load);
+    assert_eq!(engine.extension_timeouts.call, call);
+
+    // Setting one must not quietly reset the other to its default.
+    let only_call = Engine::new().extension_call_timeout(call);
+    assert_eq!(only_call.extension_timeouts.load, ExtensionTimeouts::default().load);
+    assert_eq!(only_call.extension_timeouts.call, call);
+}
+
+#[test]
+fn explicit_catalog_entries_preserve_embedder_identity_and_path() {
+    let path = PathBuf::from("validated/session-counter.wasm");
+    let engine = Engine::new().catalog_extension("session-counter", path.clone());
+
+    assert_eq!(
+        engine.catalog_extensions,
+        vec![("session-counter".to_string(), path)]
+    );
+}
+
 #[cfg(feature = "web")]
 #[test]
 fn web_is_opt_in_when_the_feature_is_available() {

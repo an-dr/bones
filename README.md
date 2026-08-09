@@ -47,6 +47,12 @@ exchange pushed metrics and direct history requests through an embedded page.
 Start at [docs/index.md](docs/index.md) — map of the architecture,
 detailed designs, decisions (ADRs), and worked examples.
 
+## AI agents
+
+The base agent policy — flows, roles, and skills — lives in
+[an-dr/agents](https://github.com/an-dr/agents). Install it globally for your
+AI tools; [AGENTS.md](AGENTS.md) holds the repo-specific rules that extend it.
+
 ## Demos
 
 Game:

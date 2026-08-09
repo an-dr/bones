@@ -1,21 +1,25 @@
-use raw_window_handle::{HandleError, HasWindowHandle, RawWindowHandle, WindowHandle};
+use raw_window_handle::{HandleError, HasWindowHandle, WindowHandle};
+use sdl3::video::Window;
 
-/// Borrowable parent handle retained while the SDL window remains alive.
+/// Shared owner of the SDL parent window used by wry child views.
 pub(super) struct ParentHandle {
-    raw: RawWindowHandle,
+    window: Window,
 }
 
 impl ParentHandle {
-    pub(super) fn new(raw: RawWindowHandle) -> Self {
-        Self { raw }
+    pub(super) fn new(window: &Window) -> Self {
+        Self {
+            window: window.clone(),
+        }
+    }
+
+    pub(super) fn pixel_size(&self) -> (u32, u32) {
+        self.window.size_in_pixels()
     }
 }
 
 impl HasWindowHandle for ParentHandle {
     fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
-        // SAFETY: `WryBackend::new` obtains this handle from its live SDL
-        // window, and the backend contract requires that window to outlive
-        // every child webview created through this wrapper.
-        Ok(unsafe { WindowHandle::borrow_raw(self.raw) })
+        self.window.window_handle()
     }
 }

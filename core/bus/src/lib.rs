@@ -14,7 +14,7 @@ pub use bus::Bus;
 pub use endpoint::Endpoint;
 pub use envelope::Envelope;
 pub use handler::Handler;
-pub use module::{Module, ModuleContext, ServiceRegistry};
+pub use module::{Module, ModuleContext, ModuleRegistration, ServiceRegistry};
 pub use registry::Registry;
 pub use respond::Respond;
 pub use send_error::SendError;

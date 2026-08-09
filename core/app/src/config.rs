@@ -52,7 +52,7 @@ impl Default for Config {
             // reason to make it opt-in). Only read-only mode — a policy
             // choice, not a resource one — is configurable, and defaults
             // off (extensions can save).
-            saves_dir: "saves".to_string(),
+            saves_dir: "states".to_string(),
             persistence_read_only: false,
             extension_max_inbound: 1_024,
             extension_max_publishes: 1_024,
@@ -94,7 +94,7 @@ mod tests {
             "not every deployment target has a working audio device"
         );
         assert!(!config.game_core, "not every project is a game");
-        assert_eq!(config.saves_dir, "saves");
+        assert_eq!(config.saves_dir, "states");
         assert!(
             !config.persistence_read_only,
             "extensions can save by default"

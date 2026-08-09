@@ -5,12 +5,22 @@
 //! process's current working directory; every field defaults to what was
 //! previously hardcoded.
 
+// A release build is a windowed application:
+// - without this, Windows opens a console behind the SDL window;
+// - debug builds keep the console subsystem, which is where their log output
+//   goes while developing.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 mod config;
+#[cfg(windows)]
+mod parent_console;
 mod paths;
 
 use config::Config;
 
 fn main() {
+    #[cfg(windows)]
+    parent_console::attach();
     if let Err(err) = run() {
         eprintln!("fatal: {err}");
         std::process::exit(1);

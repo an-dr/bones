@@ -59,7 +59,9 @@ graph TD
   and interaction events flow back over the bus.
 * **Web panels** — optional wry-based OS webviews (ADR-006). Extensions manage
   panels and exchange JSON with their web frontends over `web/*` topics;
-  feature-flagged so minimal builds carry no webview dependency. The
+  feature-flagged so minimal builds carry no webview dependency. A detachable
+  presentation may attach to a live headless engine and release its native
+  window completely when closed (ADR-028). The
   `dashboard` and `metrics` example components demonstrate pushed data,
   synchronous pull requests, and page IPC end to end.
 * **Message bus** — the single communication fabric (ADR-003). Pub/sub topics

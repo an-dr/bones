@@ -548,6 +548,23 @@ fn a_window_with_no_renderer_or_module_is_not_dropped_with_the_service_registry(
 }
 
 #[test]
+fn min_window_size_is_applied_to_the_built_platform_window() {
+    let _guard = sdl_test_lock().lock().unwrap();
+    let BuiltEngine { mut platform, .. } = Engine::new()
+        .window("test", 64, 64)
+        .min_window_size(32, 16)
+        .build()
+        .unwrap();
+    let window = platform
+        .as_mut()
+        .unwrap()
+        .take_window()
+        .expect("window should be available");
+
+    assert_eq!(window.minimum_size(), (32, 16));
+}
+
+#[test]
 fn a_custom_module_can_consume_window_surface_without_renderer() {
     // The whole point of a generic service registry (ADR-017) over a
     // renderer-only shortcut: an embedder's own `.module(...)` replacement
@@ -750,6 +767,51 @@ fn web_and_renderer_share_a_real_window_and_register_the_web_endpoint() {
         .expect("web should publish confirmation after opening the native panel");
     assert_eq!((event.owner, event.panel), ("dashboard", "main"));
     drop(opened);
+
+    engine.shutdown();
+}
+
+#[cfg(all(feature = "web", target_os = "windows"))]
+#[test]
+fn a_headless_engine_can_repeatedly_attach_and_close_wry_presentation() {
+    use bones_messages::web::{Command, OpenPanel, PanelSource, ENDPOINT};
+    use web::WryPresentation;
+
+    let _guard = sdl_test_lock().lock().unwrap();
+    let mut engine = Engine::new().build().unwrap();
+    assert!(engine.is_headless());
+
+    for cycle in 0..2 {
+        let mut presentation = WryPresentation::open(
+            engine.runner.bus().clone(),
+            engine.supervisor.registry.clone(),
+            Logger::default(),
+            format!("lazy web {cycle}"),
+            160,
+            120,
+        )
+        .unwrap();
+        assert!(presentation.is_open());
+        assert!(engine.supervisor.registry.contains(ENDPOINT));
+
+        let reply = engine.supervisor.registry.call(
+            "dashboard",
+            ENDPOINT,
+            &Command::Open(OpenPanel {
+                panel: "main",
+                source: PanelSource::Html("<!doctype html><title>lazy</title>"),
+            })
+            .encode(),
+        );
+        assert_eq!(reply, Ok(Vec::new()));
+        assert!(!presentation.update());
+        engine.runner.bus().dispatch();
+
+        presentation.close();
+        assert!(!presentation.is_open());
+        assert!(!engine.supervisor.registry.contains(ENDPOINT));
+        assert!(engine.is_headless());
+    }
 
     engine.shutdown();
 }

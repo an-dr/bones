@@ -4,17 +4,18 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-default = []
-web = ["dep:web"]
+default = ["presentation"]
+presentation = ["dep:platform", "dep:renderer", "dep:ui"]
+web = ["presentation", "dep:web"]
 
 [dependencies]
 bones-messages = { path = "../../shared/bones-messages" }
 bus = { path = "../bus" }
 wasm-extensions = { path = "../wasm-extensions" }
 logging = { path = "../logging" }
-platform = { path = "../platform" }
-renderer = { path = "../renderer" }
-ui = { path = "../ui" }
+platform = { path = "../platform", optional = true }
+renderer = { path = "../renderer", optional = true }
+ui = { path = "../ui", optional = true }
 web = { path = "../web", features = ["wry-backend"], optional = true }
 wasmtime = { version = "47.0.0", features = ["component-model"] }
 

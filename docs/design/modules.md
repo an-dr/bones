@@ -49,8 +49,9 @@ subscription, the same as any extension.
 - `respond(sender, payload)` — answers a direct `send` (ADR-010) addressed
   to this module by name, the same capability WASM extensions already have.
   Default: no reply. `persistence` is the first module to use this (an
-  extension's own `init` loading its prior save synchronously); most
-  modules have nothing to answer.
+  extension's own `init` loading its prior save synchronously), and `files`
+  the second (reading a granted directory); most modules have nothing to
+  answer.
 - `shutdown()` — called once after extensions stop during orderly application
   shutdown.
 
@@ -75,11 +76,11 @@ A headless build (no presentation modules) simply has empty `render` and
 The bus carries *behavior*; **services** carry in-process plumbing that must
 not be per-frame message traffic. The registry is `TypeId`-keyed. `consume`
 transfers ownership and removes a service; `get` borrows without claiming it.
-Web uses the borrowed SDL window only to derive its native parent handle
-before renderer consumes the window itself. Providers register during engine
-construction or module `init`, and consumers look up by type. The allowed
-services are enumerated here — adding one is a design change, not a
-convenience:
+Web borrows the SDL window and retains a cloned handle so its native child
+views can follow the live client area after renderer consumes the original
+handle. Providers register during engine construction or module `init`, and
+consumers look up by type. The allowed services are enumerated here — adding
+one is a design change, not a convenience:
 
 | Service        | Provider          | Consumers      | Carries                     |
 | -------------- | ----------------- | -------------- | --------------------------- |

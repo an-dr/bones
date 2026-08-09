@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 
 use bus::{BudgetLimits, Bus, Registry};
 use logging::Logger;
-use wasm_extensions::host::DisplayInfo;
+use wasm_extensions::host::{DisplayInfo, ExtensionTimeouts};
 use wasm_extensions::lifecycle;
 use wasm_extensions::lifecycle::Event;
 
@@ -48,6 +48,9 @@ pub struct Supervisor {
     exit_requested: Arc<AtomicBool>,
     display_info: DisplayInfo,
     budget_limits: BudgetLimits,
+    /// Hot reload re-runs `instantiate` + `init`, so it needs the same
+    /// wall-clock budget the initial load was given.
+    timeouts: ExtensionTimeouts,
 }
 
 impl Supervisor {
@@ -63,6 +66,7 @@ impl Supervisor {
         exit_requested: Arc<AtomicBool>,
         display_info: DisplayInfo,
         budget_limits: BudgetLimits,
+        timeouts: ExtensionTimeouts,
     ) -> Self {
         Self {
             wasm_engine,
@@ -76,6 +80,7 @@ impl Supervisor {
             exit_requested,
             display_info,
             budget_limits,
+            timeouts,
         }
     }
 
@@ -145,6 +150,7 @@ impl Supervisor {
                 &self.exit_requested,
                 &self.display_info,
                 self.budget_limits,
+                self.timeouts,
             ) {
                 Ok((ep, shared, budget, topics)) => {
                     if !extension.quarantined {
@@ -221,6 +227,7 @@ impl Supervisor {
             &self.exit_requested,
             &self.display_info,
             self.budget_limits,
+            self.timeouts,
         ) {
             Ok((endpoint, shared, budget, topics)) => {
                 self.tracked.retain(|extension| extension.name != name);
@@ -286,6 +293,7 @@ impl Supervisor {
             &self.exit_requested,
             &self.display_info,
             self.budget_limits,
+            self.timeouts,
         ) {
             Ok((endpoint, shared, budget, topics)) => {
                 let extension = &mut self.tracked[index];

@@ -46,6 +46,7 @@ impl Platform {
         let window = video
             .window(title, width, height)
             .position_centered()
+            .resizable()
             .build()
             .map_err(|e| e.to_string())?;
         // Started unconditionally, before the window can be handed away via
@@ -61,7 +62,12 @@ impl Platform {
         let mut display_modes: Vec<(u32, u32)> = display
             .as_ref()
             .and_then(|display| display.get_fullscreen_modes().ok())
-            .map(|modes| modes.iter().map(|mode| (mode.w as u32, mode.h as u32)).collect())
+            .map(|modes| {
+                modes
+                    .iter()
+                    .map(|mode| (mode.w as u32, mode.h as u32))
+                    .collect()
+            })
             .unwrap_or_default();
         display_modes.sort_unstable();
         display_modes.dedup();
@@ -80,6 +86,18 @@ impl Platform {
             display_modes,
             native_display_mode,
         })
+    }
+
+    /// Floors how small the window can be resized, in addition to whatever
+    /// size it opened at (`new`'s `width`/`height`). No-op if the window was
+    /// already handed away via `take_window`.
+    pub fn set_min_size(&mut self, width: u32, height: u32) -> Result<(), String> {
+        match &mut self.window {
+            Some(window) => window
+                .set_minimum_size(width, height)
+                .map_err(|e| e.to_string()),
+            None => Ok(()),
+        }
     }
 
     /// Every fullscreen-capable resolution the window's own display

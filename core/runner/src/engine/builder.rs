@@ -9,14 +9,20 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+#[cfg(feature = "presentation")]
 use bones_messages::Message;
-use bus::{BudgetLimits, Module, ModuleContext, Registry, ServiceRegistry};
+#[cfg(feature = "presentation")]
+use bus::ModuleContext;
+use bus::{BudgetLimits, Module, Registry, ServiceRegistry};
 use logging::Logger;
+#[cfg(feature = "presentation")]
 use renderer::Renderer;
+#[cfg(feature = "presentation")]
 use ui::Ui;
-use wasm_extensions::host::DisplayInfo;
+use wasm_extensions::host::{DisplayInfo, ExtensionTimeouts};
 use wasm_extensions::lifecycle;
 use wasm_extensions::lifecycle::Event;
+use wasm_extensions::files::{self, Files};
 use wasm_extensions::persistence::Persistence;
 
 use crate::loading::{
@@ -28,9 +34,11 @@ use crate::Supervisor;
 
 use super::built_engine::{run_shutdown, BuiltEngine};
 use super::register_module::register_module;
+#[cfg(feature = "presentation")]
 use super::shared::Shared;
 
 const DEFAULT_TICK_HZ: f64 = 60.0;
+#[cfg(feature = "presentation")]
 const GFX_TOPICS: &str = "gfx/*";
 
 /// A relative `extensions_dir`/`saves_dir` resolves against the running
@@ -57,38 +65,54 @@ fn exe_dir() -> Option<PathBuf> {
 
 pub struct Engine {
     extensions_dir: Option<PathBuf>,
+    catalog_extensions: Vec<(String, PathBuf)>,
     startup_extensions: Vec<String>,
     extension_controller: Option<String>,
     logger: Logger,
     tick_hz: f64,
+    #[cfg(feature = "presentation")]
     window: Option<(String, u32, u32)>,
+    #[cfg(feature = "presentation")]
+    min_window_size: Option<(u32, u32)>,
+    #[cfg(feature = "presentation")]
     renderer_enabled: bool,
+    #[cfg(feature = "presentation")]
     ui_enabled: bool,
     #[cfg(feature = "web")]
     web_enabled: bool,
     modules: Vec<Box<dyn Module>>,
     saves_dir: PathBuf,
     persistence_read_only: bool,
+    files_root: Option<PathBuf>,
     extension_budget: BudgetLimits,
+    extension_timeouts: ExtensionTimeouts,
 }
 
 impl Engine {
     pub fn new() -> Self {
         Self {
             extensions_dir: None,
+            catalog_extensions: Vec::new(),
             startup_extensions: Vec::new(),
             extension_controller: None,
             logger: Logger::default(),
             tick_hz: DEFAULT_TICK_HZ,
+            #[cfg(feature = "presentation")]
             window: None,
+            #[cfg(feature = "presentation")]
+            min_window_size: None,
+            #[cfg(feature = "presentation")]
             renderer_enabled: false,
+            #[cfg(feature = "presentation")]
             ui_enabled: false,
             #[cfg(feature = "web")]
             web_enabled: false,
             modules: Vec::new(),
-            saves_dir: PathBuf::from("saves"),
+            saves_dir: PathBuf::from("states"),
             persistence_read_only: false,
+            files_root: None,
             extension_budget: BudgetLimits::default(),
+            extension_timeouts: ExtensionTimeouts::default(),
         }
     }
 
@@ -99,6 +123,15 @@ impl Engine {
     /// extensions load.
     pub fn extensions_dir(mut self, path: impl Into<PathBuf>) -> Self {
         self.extensions_dir = Some(path.into());
+        self
+    }
+
+    /// Adds one explicitly named component to the extension catalog.
+    ///
+    /// This complements directory discovery for embedders whose validated
+    /// extension catalog spans multiple roots.
+    pub fn catalog_extension(mut self, name: impl Into<String>, path: impl Into<PathBuf>) -> Self {
+        self.catalog_extensions.push((name.into(), path.into()));
         self
     }
 
@@ -132,8 +165,17 @@ impl Engine {
     /// Opens one SDL window (platform/design.md) and feeds its keyboard
     /// events onto `input/*` each frame of `run`'s loop. No window
     /// configured here means no platform at all — a headless engine.
+    #[cfg(feature = "presentation")]
     pub fn window(mut self, title: impl Into<String>, width: u32, height: u32) -> Self {
         self.window = Some((title.into(), width, height));
+        self
+    }
+
+    /// Floors how small `.window(...)`'s window can be resized. No effect
+    /// without `.window(...)` — `build` applies it only if a window opened.
+    #[cfg(feature = "presentation")]
+    pub fn min_window_size(mut self, width: u32, height: u32) -> Self {
+        self.min_window_size = Some((width, height));
         self
     }
 
@@ -141,6 +183,7 @@ impl Engine {
     /// executes `gfx/*` draw commands published by extensions and presents
     /// once per `run` iteration. Requires `.window(...)` — `build`/`run`
     /// error if this is set without one.
+    #[cfg(feature = "presentation")]
     pub fn renderer(mut self) -> Self {
         self.renderer_enabled = true;
         self
@@ -151,6 +194,7 @@ impl Engine {
     /// Requires `.renderer()` too (ui draws through it, direct-wired for
     /// now — see docs/structure.md) — `build`/`run` error if this is set
     /// without one.
+    #[cfg(feature = "presentation")]
     pub fn ui(mut self) -> Self {
         self.ui_enabled = true;
         self
@@ -181,7 +225,7 @@ impl Engine {
     }
 
     /// Where `persistence` (unconditional, see its own doc comment) keeps
-    /// `<sender>.bin` save files. Defaults to `"saves"`, relative to the
+    /// `<sender>.bin` save files. Defaults to `"states"`, relative to the
     /// running executable's own directory if not absolute
     /// (`resolve_relative_to_exe`) -- the same convention `extensions_dir`
     /// uses, not the process's cwd (which a double-clicked or
@@ -201,9 +245,54 @@ impl Engine {
         self
     }
 
+    /// Grants extensions read access to one directory through the `files`
+    /// endpoint (`wasm_extensions::files`). A relative path resolves against
+    /// the running executable's own directory, the same convention
+    /// `saves_dir` uses.
+    ///
+    /// No default: unset means the capability does not exist, which is the
+    /// right default for a grant over someone else's files. Reads are capped
+    /// at `files::DEFAULT_MAX_BYTES` per file.
+    pub fn files_root(mut self, path: impl Into<PathBuf>) -> Self {
+        self.files_root = Some(path.into());
+        self
+    }
+
     /// Sets the per-frame allowances shared by every WASM extension.
     pub fn extension_budget(mut self, limits: BudgetLimits) -> Self {
         self.extension_budget = limits;
+        self
+    }
+
+    /// Sets how long `instantiate` + `init` may take per extension, for the
+    /// initial load and for every hot reload after it.
+    ///
+    /// - Defaults to `ExtensionTimeouts::default().load`, which suits a small
+    ///   component.
+    /// - Raise it for a large one — megabytes carrying an embedded language
+    ///   runtime routinely need longer than a second to start.
+    /// - The budget is wall clock, so it must also absorb the host being
+    ///   busy: an extension that loads on an idle machine can still miss a
+    ///   tight deadline on a loaded one, and a missed deadline is a trap in
+    ///   `init`, not a retry.
+    pub fn extension_load_timeout(mut self, timeout: Duration) -> Self {
+        self.extension_timeouts.load = timeout;
+        self
+    }
+
+    /// Sets how long any single guest call may take -- `on-message`,
+    /// `on-tick`, or answering a direct `send`.
+    ///
+    /// - Defaults to `ExtensionTimeouts::default().call`, tight enough that a
+    ///   call blocking that long reads as a runaway.
+    /// - Raise it where that assumption is wrong: an extension whose messages
+    ///   trigger real work (reading a repository, parsing a large document)
+    ///   is judged on its slowest call, not its typical one.
+    /// - Overrunning faults the extension and quarantines it, so the cost of
+    ///   setting this too low is an app that stops responding mid-session,
+    ///   not one that merely stutters.
+    pub fn extension_call_timeout(mut self, timeout: Duration) -> Self {
+        self.extension_timeouts.call = timeout;
         self
     }
 
@@ -214,23 +303,37 @@ impl Engine {
     /// publicly (not just used by `run`) for a future driver that wants
     /// the wired-up pieces without `run`'s sleep-loop attached.
     pub fn build(mut self) -> wasmtime::Result<BuiltEngine> {
+        #[cfg(feature = "presentation")]
         let window = self.window.take();
+        #[cfg(feature = "presentation")]
         let renderer_enabled = self.renderer_enabled;
+        #[cfg(feature = "presentation")]
         let ui_enabled = self.ui_enabled;
         let bus = bus::Bus::new();
         let registry = Registry::new();
         let wasm_engine = wasm_extensions::host::new_engine()?;
         let exit_requested = Arc::new(AtomicBool::new(false));
 
+        #[cfg(feature = "presentation")]
+        let min_window_size = self.min_window_size.take();
+        #[cfg(feature = "presentation")]
         let mut platform = match window {
             Some((title, width, height)) => {
-                Some(platform::Platform::new(&title, width, height).map_err(wasmtime::Error::msg)?)
+                let mut platform =
+                    platform::Platform::new(&title, width, height).map_err(wasmtime::Error::msg)?;
+                if let Some((min_width, min_height)) = min_window_size {
+                    platform
+                        .set_min_size(min_width, min_height)
+                        .map_err(wasmtime::Error::msg)?;
+                }
+                Some(platform)
             }
             None => None,
         };
         // Queried once here, independent of the window hand-off below
         // (`Platform` resolves it at construction, not from the live
         // window) - every loaded extension gets the same static snapshot.
+        #[cfg(feature = "presentation")]
         let display_info = match &platform {
             Some(platform) => DisplayInfo {
                 modes: platform.display_modes().to_vec(),
@@ -238,6 +341,8 @@ impl Engine {
             },
             None => DisplayInfo::default(),
         };
+        #[cfg(not(feature = "presentation"))]
+        let display_info = DisplayInfo::default();
 
         // Build-time-only (ADR-017): every module's `init` runs against
         // this. Seeded with `window-surface` unconditionally (not just for
@@ -247,6 +352,7 @@ impl Engine {
         // nothing ends up consuming it, so an unclaimed window stays open
         // instead of closing with the registry it briefly lived in.
         let mut services = ServiceRegistry::new();
+        #[cfg(feature = "presentation")]
         if let Some(platform) = &mut platform {
             platform.provide_window(&mut services);
         }
@@ -258,6 +364,17 @@ impl Engine {
         services
             .provide(bus.clone())
             .expect("no other service registers as Bus");
+        // `registry` service: the direct-send half of the same stance.
+        // `register_module` already inserts every module as a *callable*
+        // target, so modules could be called by name but had no way to call
+        // anything themselves — an asymmetry against WASM extensions, which
+        // get `send` as a host import. Modules registered before extensions
+        // attach, so this is also the only way to reach an endpoint like
+        // `web` during the window between the window opening and the first
+        // extension finishing `init`.
+        services
+            .provide(registry.clone())
+            .expect("no other service registers as Registry");
 
         #[cfg(feature = "web")]
         let web_module: Option<Box<dyn Module>> = if self.web_enabled {
@@ -277,6 +394,7 @@ impl Engine {
             None
         };
 
+        #[cfg(feature = "presentation")]
         let renderer = if renderer_enabled {
             if platform.is_none() {
                 return Err(wasmtime::Error::msg(".renderer() needs .window(...) too"));
@@ -295,6 +413,7 @@ impl Engine {
             None
         };
 
+        #[cfg(feature = "presentation")]
         let ui = if ui_enabled {
             renderer
                 .as_ref()
@@ -341,64 +460,81 @@ impl Engine {
         )
         .map_err(wasmtime::Error::msg)?;
 
+        // Opt-in, unlike persistence: without a granted root there is no
+        // endpoint, so an extension's read fails as an unknown endpoint.
+        if let Some(root) = self.files_root.clone() {
+            let files = Files::new(resolve_relative_to_exe(root), files::DEFAULT_MAX_BYTES);
+            register_module(&bus, &registry, &mut services, &mut modules, Box::new(files))
+                .map_err(wasmtime::Error::msg)?;
+        }
+
         let mut tracked = Vec::new();
         let mut catalog = std::collections::HashMap::new();
+        let mut catalog_entries = Vec::new();
 
         if let Some(dir) = &self.extensions_dir {
             let dir = resolve_relative_to_exe(dir.clone());
             for path in find_wasm_files(&dir) {
-                let name = derive_extension_name(&path);
-                if catalog.contains_key(&name) {
-                    self.logger.error(
+                catalog_entries.push((derive_extension_name(&path), path));
+            }
+        }
+        catalog_entries.extend(
+            self.catalog_extensions
+                .drain(..)
+                .map(|(name, path)| (name, resolve_relative_to_exe(path))),
+        );
+        for (name, path) in catalog_entries {
+            if catalog.contains_key(&name) {
+                self.logger.error(
+                    "engine",
+                    &format!(
+                        "skipping {}: an extension named '{name}' is already cataloged",
+                        path.display()
+                    ),
+                );
+                continue;
+            }
+            catalog.insert(name.clone(), path.clone());
+            if !self.startup_extensions.is_empty() && !self.startup_extensions.contains(&name) {
+                continue;
+            }
+            match attach_extension(
+                &wasm_engine,
+                &bus,
+                &registry,
+                &self.logger,
+                &path,
+                &name,
+                &exit_requested,
+                &display_info,
+                self.extension_budget,
+                self.extension_timeouts,
+            ) {
+                Ok((ep, shared, budget, topics)) => {
+                    self.logger.info(
                         "engine",
                         &format!(
-                            "skipping {}: an extension named '{name}' is already loaded",
+                            "loaded '{name}' from {} (subscribed: {topics:?})",
                             path.display()
                         ),
                     );
-                    continue;
+                    lifecycle::publish(&bus, ENGINE_SENDER, &name, Event::Loaded);
+                    tracked.push(TrackedExtension {
+                        name,
+                        mtime: read_file_mtime(&path),
+                        path,
+                        endpoint: ep,
+                        shared,
+                        budget,
+                        quarantined: false,
+                    });
                 }
-                catalog.insert(name.clone(), path.clone());
-                if !self.startup_extensions.is_empty() && !self.startup_extensions.contains(&name) {
-                    continue;
-                }
-                match attach_extension(
-                    &wasm_engine,
-                    &bus,
-                    &registry,
-                    &self.logger,
-                    &path,
-                    &name,
-                    &exit_requested,
-                    &display_info,
-                    self.extension_budget,
-                ) {
-                    Ok((ep, shared, budget, topics)) => {
-                        self.logger.info(
-                            "engine",
-                            &format!(
-                                "loaded '{name}' from {} (subscribed: {topics:?})",
-                                path.display()
-                            ),
-                        );
-                        lifecycle::publish(&bus, ENGINE_SENDER, &name, Event::Loaded);
-                        tracked.push(TrackedExtension {
-                            name,
-                            mtime: read_file_mtime(&path),
-                            path,
-                            endpoint: ep,
-                            shared,
-                            budget,
-                            quarantined: false,
-                        });
-                    }
-                    Err(err) => {
-                        self.logger.error(
-                            "engine",
-                            &format!("failed to load {}: {err}", path.display()),
-                        );
-                        lifecycle::publish(&bus, ENGINE_SENDER, &name, Event::Faulted);
-                    }
+                Err(err) => {
+                    self.logger.error(
+                        "engine",
+                        &format!("failed to load {}: {err}", path.display()),
+                    );
+                    lifecycle::publish(&bus, ENGINE_SENDER, &name, Event::Faulted);
                 }
             }
         }
@@ -463,16 +599,21 @@ impl Engine {
             exit_requested.clone(),
             display_info,
             self.extension_budget,
+            self.extension_timeouts,
         );
 
+        #[cfg(feature = "presentation")]
         if let Some(platform) = &mut platform {
             platform.reclaim_window(&mut services);
         }
 
         Ok(BuiltEngine {
             runner: Runner::new(bus, self.logger),
+            #[cfg(feature = "presentation")]
             platform,
+            #[cfg(feature = "presentation")]
             renderer,
+            #[cfg(feature = "presentation")]
             ui,
             modules,
             supervisor,
@@ -492,8 +633,11 @@ impl Engine {
         let period = Duration::from_secs_f64(1.0 / self.tick_hz);
         let BuiltEngine {
             runner,
+            #[cfg(feature = "presentation")]
             mut platform,
+            #[cfg(feature = "presentation")]
             renderer,
+            #[cfg(feature = "presentation")]
             ui,
             modules,
             mut supervisor,
@@ -503,6 +647,7 @@ impl Engine {
 
         let mut last = std::time::Instant::now() - period;
         let shutdown_sender = loop {
+            #[cfg(feature = "presentation")]
             if let Some(platform) = &mut platform {
                 // ADR-008: offer every raw event to the ui layer first; what
                 // it claims (wants_pointer_input/wants_keyboard_input, as of
@@ -533,6 +678,7 @@ impl Engine {
             // happened synchronously via `Handler::handle` during `step`'s
             // dispatch above, so `render` is a no-op for renderer today —
             // still called for any module that does need it.
+            #[cfg(feature = "presentation")]
             if let Some(renderer) = &renderer {
                 renderer.lock().unwrap().render();
             }
@@ -542,12 +688,14 @@ impl Engine {
 
             // ui draws above every gfx layer (design/presentation.md), so
             // its `update` runs between `render` and `present`.
+            #[cfg(feature = "presentation")]
             if let (Some(ui), Some(renderer)) = (&ui, &renderer) {
                 let mut renderer = renderer.lock().unwrap();
                 let (width, height) = renderer.size();
                 ui.lock().unwrap().update(&mut renderer, width, height);
             }
 
+            #[cfg(feature = "presentation")]
             if let Some(renderer) = &renderer {
                 renderer.lock().unwrap().present();
             }

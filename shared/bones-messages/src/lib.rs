@@ -5,6 +5,7 @@
 pub mod audio;
 pub mod codec;
 pub mod extension_control;
+pub mod files;
 pub mod game_core;
 pub mod gfx;
 pub mod input;

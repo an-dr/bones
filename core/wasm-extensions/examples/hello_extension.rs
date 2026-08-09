@@ -43,6 +43,7 @@ fn main() -> wasmtime::Result<()> {
         Arc::new(AtomicBool::new(false)),
         DisplayInfo::default(),
         EndpointBudget::new(BudgetLimits::default()),
+        wasm_extensions::host::ExtensionTimeouts::default(),
     )?;
     let topics = hello.requested_topics();
     let ep = bus.register("hello", hello);
