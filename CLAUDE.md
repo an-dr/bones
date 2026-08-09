@@ -1,8 +1,8 @@
 # CLAUDE.md
 
-**Before every task:** Read `agents/AGENTS.md` and `AGENTS.md`.
+**Before every task:** Read the base agent policy and [AGENTS.md](AGENTS.md).
 Open your response by stating the active flow and phase — or that no flow
-applies (pure question/analysis, or edits to the agents repo itself) — and why.
+applies (pure question/analysis) — and why.
 
-`agents/AGENTS.md` is the base instruction set; the root `AGENTS.md` extends it
-with repo-specific context.
+The base policy is installed globally for your AI tools rather than vendored
+here. If it is not installed, the root `AGENTS.md` stands on its own.

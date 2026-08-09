@@ -4,18 +4,15 @@ Notes for AI agents working on this repo that cannot be deduced from the code al
 
 ## Primary instructions
 
-- Use `agents/AGENTS.md` as the base instruction
+- Use the globally installed base agent policy, when your tools have one
 - Use `AGENTS.md` in the repo root and in the subfolders as scoped extensions of the base rules
 - Priority (later entries extend or overwrite earlier ones):
-  1. `REPO/agents/AGENTS.md` — base
+  1. the global base policy, when installed
   2. `REPO/AGENTS.md` — this file
   3. `REPO/**/AGENTS.md` — any subdirectory AGENTS.md, chained by depth
 
 ## Conventions
 
-- `docs/reviews/` (the `code-review` skill's output) is local-only —
-  gitignored, never committed. It's working material for the current
-  session, not project history.
 - **One type per file. Tests live in their own file.** See
   [docs/code-style.md](docs/code-style.md) for the precise pattern (the
   submodule shape, the `command.rs` dispatcher convention, stated

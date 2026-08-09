@@ -4,10 +4,10 @@ Precise, code-level conventions for Rust source in this repo: how to lay
 out files and modules, and what a crate's README should say. This is the
 one exception to [index.md](index.md)'s "behavior and boundaries, not
 code" altitude rule — file layout *is* the subject here, not a side
-effect of it. `agents/AGENTS.md` states the underlying rules (one type
-per file, tests out of line); this document is the precise pattern that
-satisfies them, kept in sync with whatever the codebase actually
-converged on.
+effect of it. The root [AGENTS.md](../AGENTS.md) states the underlying
+rules (one type per file, tests out of line); this document is the
+precise pattern that satisfies them, kept in sync with whatever the
+codebase actually converged on.
 
 ## One type per file
 
