@@ -6,8 +6,10 @@ use super::*;
 fn two_overlapping_dynamic_bodies_separate_after_stepping() {
     let mut backend = Rapier2dBackend::new();
 
-    let (body_a, _) = backend.spawn_body(Vec2::new(0.0, 0.0), Vec2::new(1.0, 1.0), BodyKind::Dynamic);
-    let (body_b, _) = backend.spawn_body(Vec2::new(0.5, 0.0), Vec2::new(1.0, 1.0), BodyKind::Dynamic);
+    let (body_a, _) =
+        backend.spawn_body(Vec2::new(0.0, 0.0), Vec2::new(1.0, 1.0), BodyKind::Dynamic);
+    let (body_b, _) =
+        backend.spawn_body(Vec2::new(0.5, 0.0), Vec2::new(1.0, 1.0), BodyKind::Dynamic);
 
     for _ in 0..60 {
         backend.step(1.0 / 60.0);
@@ -90,7 +92,11 @@ fn contact_normals_ignores_speculative_only_contacts() {
     let mut backend = Rapier2dBackend::new();
     let (_, collider_a) =
         backend.spawn_body(Vec2::new(0.0, 0.0), Vec2::new(1.0, 1.0), BodyKind::Fixed);
-    backend.spawn_body(Vec2::new(2.001, 0.0), Vec2::new(1.0, 1.0), BodyKind::Dynamic);
+    backend.spawn_body(
+        Vec2::new(2.001, 0.0),
+        Vec2::new(1.0, 1.0),
+        BodyKind::Dynamic,
+    );
 
     backend.step(1.0 / 60.0);
 
@@ -111,8 +117,7 @@ fn a_fixed_body_never_moves() {
 fn an_unknown_handle_returns_none() {
     let mut backend_a = Rapier2dBackend::new();
     let backend_b = Rapier2dBackend::new();
-    let (stray_handle, _) =
-        backend_a.spawn_body(Vec2::ZERO, Vec2::new(1.0, 1.0), BodyKind::Fixed);
+    let (stray_handle, _) = backend_a.spawn_body(Vec2::ZERO, Vec2::new(1.0, 1.0), BodyKind::Fixed);
 
     assert_eq!(backend_b.body_translation(stray_handle), None);
 }
@@ -188,8 +193,11 @@ fn has_real_contact_is_false_for_colliders_within_the_speculative_margin_only() 
     // isolates the margin behavior rather than the fixed-fixed caveat.
     let (_, collider_a) =
         backend.spawn_body(Vec2::new(0.0, 0.0), Vec2::new(1.0, 1.0), BodyKind::Fixed);
-    let (_, collider_b) =
-        backend.spawn_body(Vec2::new(2.001, 0.0), Vec2::new(1.0, 1.0), BodyKind::Dynamic);
+    let (_, collider_b) = backend.spawn_body(
+        Vec2::new(2.001, 0.0),
+        Vec2::new(1.0, 1.0),
+        BodyKind::Dynamic,
+    );
 
     backend.step(1.0 / 60.0);
 

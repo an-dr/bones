@@ -7,5 +7,15 @@ name = "bones-messages"
 # moves only when the guest contract changes.
 version = "1.0.0"
 edition = "2021"
+license = "MIT"
+repository = "https://github.com/an-dr/bones"
+readme = "README.md"
+description = "Typed core messages and payload codecs for the bones engine bus, shared byte-for-byte by the native host and WASM guests."
+
+# Not on crates.io: it would package cleanly, but nothing that depends on it could be
+# published alongside it, so a registry copy would serve no one.
+# The 1.0 line is consumed by git tag; the repository README carries the
+# exact dependency snippets and what support that promises.
+publish = false
 
 [dependencies]

@@ -1,10 +1,23 @@
 #!/usr/bin/env pwsh
-# Builds every extension fixture the test suite needs, then runs all tests.
-# One command from a clean clone to green tests. Run with: pwsh test.ps1
+# Builds every extension fixture the test suite needs, then runs the gates and
+# the whole test matrix. One command from a clean clone to a release-green
+# tree. Run with: pwsh test.ps1
+#
+# This script is where formatting, lints, and the optional-feature suite are
+# enforced. There is no CI (docs/roadmap.md tracks adding it), so a gate that
+# lives only in a reviewer's habits is a gate that does not exist.
 $ErrorActionPreference = "Stop"
 
 . "$PSScriptRoot/scripts/native-build-env.ps1"
 Initialize-NativeBuildEnvironment
+
+# Excluded from the root workspace (see its Cargo.toml) because they must also
+# compile for wasm32-wasip2 guests, so every check below runs them separately,
+# from inside their own directories.
+$standaloneCrates = @(
+    "crates/bones-messages"
+    "crates/bones-wasm-sdk"
+)
 
 # Integration tests load these as prebuilt .wasm files by path, so they must
 # exist before cargo test runs -- a missing one fails the test rather than
@@ -18,49 +31,84 @@ $fixtures = @(
     "examples/flood_demo"
     "examples/audio_demo"
     "examples/persistence_demo"
-    # dashboard and metrics back the web-panel test, which is gated behind
+    # dashboard and metrics back the web-panel tests, which are gated behind
     # --features web on Windows. Built unconditionally: cheap, and it keeps
-    # this script's output identical whether or not that test runs.
+    # this script's output identical whether or not those tests run.
     "examples/dashboard"
     "examples/metrics"
 )
 
-Write-Host "==> Ensuring the wasm32-wasip2 target is installed..."
-rustup target add wasm32-wasip2
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+function Invoke-Step {
+    param([string]$Description, [scriptblock]$Step)
+
+    Write-Host "==> $Description..."
+    & $Step
+    if ($LASTEXITCODE -ne 0) { throw "$Description failed" }
+}
+
+function Invoke-InEach {
+    param([string[]]$Directories, [string]$Description, [scriptblock]$Step)
+
+    foreach ($directory in $Directories) {
+        Push-Location (Join-Path $PSScriptRoot $directory)
+        try {
+            Invoke-Step "$Description ($directory)" $Step
+        } finally {
+            Pop-Location
+        }
+    }
+}
+
+Invoke-Step "Ensuring the wasm32-wasip2 target is installed" { rustup target add wasm32-wasip2 }
+
+# Each guest build below prints one `function signature mismatch: shutdown`
+# warning from rust-lld. It is expected, understood, and cannot be fixed
+# without an ABI break -- wit/README.md's known-issue section has the cause.
+Write-Host "    (guest builds warn about the 'shutdown' export name; see wit/README.md)"
 
 foreach ($fixture in $fixtures) {
-    Write-Host "==> Building fixture '$fixture'..."
     Push-Location (Join-Path $PSScriptRoot $fixture)
     try {
         # Built directly rather than through the fixture's own build.ps1:
         # that script also builds the engine and assembles a dist/ beside
         # itself, which the test suite does not need and which would rebuild
         # SDL once per fixture.
-        cargo build --target wasm32-wasip2 --release
-        if ($LASTEXITCODE -ne 0) { throw "fixture build failed: $fixture" }
+        Invoke-Step "Building fixture '$fixture'" { cargo build --target wasm32-wasip2 --release }
     } finally {
         Pop-Location
     }
 }
 
-Write-Host "==> Running workspace tests..."
-cargo test --workspace
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+# Deliberately not `cargo fmt --all`: that also formats local path
+# dependencies, which here means rewriting the vendored pubsub-bus submodule
+# even though the workspace excludes it. Asking cargo which packages the
+# workspace actually owns keeps this correct when a crate is added.
+$members = (cargo metadata --no-deps --format-version 1 | ConvertFrom-Json).packages.name
+if ($LASTEXITCODE -ne 0) { throw "cargo metadata failed" }
 
-# Excluded from the root workspace (see its Cargo.toml) because they must
-# also compile for wasm32-wasip2 guests, so their tests need their own run.
-foreach ($crate in "crates/bones-messages", "crates/bones-wasm-sdk") {
-    Write-Host "==> Running $crate tests (excluded from the main workspace)..."
-    Push-Location (Join-Path $PSScriptRoot $crate)
-    try {
-        # --all-features so the SDK optional game-ui module is covered too.
-        cargo test --all-features
-        if ($LASTEXITCODE -ne 0) { throw "$crate tests failed" }
-    } finally {
-        Pop-Location
-    }
+foreach ($member in $members) {
+    Invoke-Step "Checking formatting of $member" { cargo fmt -p $member -- --check }
+}
+Invoke-InEach $standaloneCrates "Checking formatting" { cargo fmt -- --check }
+
+Invoke-Step "Linting the workspace" {
+    cargo clippy --workspace --all-targets --all-features -- -D warnings
+}
+Invoke-InEach $standaloneCrates "Linting" { cargo clippy --all-targets --all-features -- -D warnings }
+
+# Both feature sets, because they exercise different code: the default build is
+# what a distribution ships, and --all-features is the only thing that compiles
+# and runs the optional wry web panels.
+Invoke-Step "Running workspace tests (default features)" { cargo test --workspace }
+Invoke-Step "Running workspace tests (all features)" { cargo test --workspace --all-features }
+
+# --all-features so the SDK optional game-ui module is covered too.
+Invoke-InEach $standaloneCrates "Running tests" { cargo test --all-features }
+
+Invoke-Step "Checking the documentation build" {
+    $env:RUSTDOCFLAGS = "-D warnings"
+    cargo doc --workspace --all-features --no-deps
 }
 
 Write-Host ""
-Write-Host "All tests passed."
+Write-Host "All gates and tests passed."

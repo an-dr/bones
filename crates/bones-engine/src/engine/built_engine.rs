@@ -1,12 +1,12 @@
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
+use bones_kernel::bus::{Envelope, Module};
 use bones_messages::window::CloseRequested;
 use bones_messages::{EncodeMessage, Message};
-use bones_kernel::bus::{Envelope, Module};
 
-use bones_kernel::wasm_extensions::loading::ENGINE_SENDER;
 use bones_kernel::runner::Runner;
+use bones_kernel::wasm_extensions::loading::ENGINE_SENDER;
 use bones_kernel::wasm_extensions::supervisor::Supervisor;
 
 /// Everything `Engine::build` wires up: the step-driven `Runner`, the
@@ -18,11 +18,31 @@ use bones_kernel::wasm_extensions::supervisor::Supervisor;
 /// Modules are held as `dyn Module` rather than as typed fields. An
 /// embedder drives them through the frame-phase methods below; nothing
 /// here exposes a type `bones-engine` does not also re-export.
+///
+/// **The fields are public, and that is the stable API.** An embedder driving
+/// its own loop instead of calling `run` needs all of them at once, and
+/// destructuring is how it takes them — `let BuiltEngine { runner, modules,
+/// .. } = engine.build()?;`. Accessors would return borrows of one value and
+/// make that impossible, so the fields stay public and are covered by the
+/// engine version line like any other public item.
 pub struct BuiltEngine {
+    /// The frame loop (ADR-014): owns the bus, dispatches, and ticks
+    /// subscribers. Drive it with `step(dt)` for one frame's worth of work.
     pub runner: Runner,
+    /// The OS window and its event source, present only if `.window(...)`
+    /// was set. `None` is a headless engine, which is a supported
+    /// composition and not a failure — see [`BuiltEngine::is_headless`].
     #[cfg(feature = "presentation")]
-    pub platform: Option<bones_kernel::platform::Platform>,
+    pub platform: Option<crate::platform::Platform>,
+    /// Every registered native module, in registration order.
+    ///
+    /// That order is the layering: `render` and `present` walk it forward so
+    /// a later module draws above an earlier one, and input walks it backward
+    /// so the topmost is offered an event first (ADR-031).
     pub modules: Vec<Arc<Mutex<Box<dyn Module>>>>,
+    /// Watches loaded extensions for faults, quarantine, and file changes
+    /// (ADR-007, ADR-024). Call `check()` once per frame; `run` does it twice,
+    /// before and after `step`.
     pub supervisor: Supervisor,
     /// Set by any loaded extension's `request-exit` host-api call; `run`'s
     /// loop breaks once true, the same as `Platform::quit_requested()`.

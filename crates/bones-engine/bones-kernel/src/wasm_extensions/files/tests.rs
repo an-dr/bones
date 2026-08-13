@@ -66,7 +66,11 @@ fn has_nothing_to_return_for_a_missing_entry_or_a_directory() {
     let mut files = scratch.files(DEFAULT_MAX_BYTES);
 
     assert_eq!(read(&mut files, "nested/missing.txt"), None);
-    assert_eq!(read(&mut files, "nested"), None, "a directory is not a file");
+    assert_eq!(
+        read(&mut files, "nested"),
+        None,
+        "a directory is not a file"
+    );
     assert_eq!(read(&mut files, ""), None);
 
     scratch.cleanup();

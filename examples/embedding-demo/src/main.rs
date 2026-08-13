@@ -47,11 +47,10 @@ impl Module for Clock {
     }
 }
 
-fn main() -> Result<(), String> {
+fn main() -> bones_engine::Result<()> {
     let logger = Logger::default();
     bones_engine::Engine::new()
         .logger(logger.clone())
         .module(Clock::new(logger))
         .run()
-        .map_err(|err| err.to_string())
 }

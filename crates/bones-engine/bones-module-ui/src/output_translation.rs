@@ -1,5 +1,5 @@
-use bones_messages::EncodeMessage;
 use bones_kernel::bus::{Bus, Envelope};
+use bones_messages::EncodeMessage;
 
 pub(crate) fn publish<M: EncodeMessage>(bus: &Bus, message: M) {
     bus.publish(Envelope {

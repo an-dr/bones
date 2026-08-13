@@ -41,6 +41,31 @@ Both are first-class products; the app is the common case.
 | Rust SDK | `bones-wasm-sdk`: the WIT, its generated bindings, and the message vocabulary | Extension authors writing Rust |
 | ABI | `bones:core` and the message wire format | Extension authors in any other language |
 
+### How each one is obtained
+
+**1.0 is a git-tag distribution, not a registry one.** Every package in this repository carries `publish = false`, and each manifest states why it cannot produce a self-contained archive: `bindgen!` and `generate!` read `wit/` from outside their own package roots, `pubsub-bus` is a submodule rather than a registry dependency, and the internal crates depend on each other by path with no versions. Adding versions alone would not fix it — the archives would still be missing the WIT they generate from. Publishing to crates.io stays open as a later 1.x decision; what it is not is a 1.0 promise made by omission.
+
+A consumer therefore pins a tag:
+
+```toml
+[dependencies]
+bones-engine = { git = "https://github.com/an-dr/bones", tag = "v1.0.0" }
+```
+
+```toml
+# An extension author writing Rust, on the ABI line rather than the engine line.
+bones-wasm-sdk = { git = "https://github.com/an-dr/bones", tag = "abi-v1.0.0" }
+```
+
+Both need `--recurse-submodules` on clone, since `vendor/pubsub-bus` is one.
+
+What the tag promises:
+
+- **The two version lines mean what ADR-029 says.** An engine tag moves when the Rust API changes; an ABI tag moves only when the guest contract does. They start equal at 1.0.0 (ADR-029) and are expected to diverge.
+- **A tag is immutable.** Fixes arrive as a new tag, never by moving an old one, because a git dependency has no checksum a consumer can verify against.
+- **`bones-engine` is the supported library surface.** Reaching past it into `bones-kernel` or a `bones-module-*` crate is possible in a git dependency in a way it would not be on a registry, and is not covered by the version line.
+- **Support is best-effort on the platforms the release notes list.** See the root [README](../README.md) for which those are and how a release is produced.
+
 ## Dependency rules
 
 ```mermaid

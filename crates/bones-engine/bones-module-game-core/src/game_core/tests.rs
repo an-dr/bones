@@ -1,13 +1,13 @@
 use std::sync::{Arc, Mutex};
 
 use super::*;
+use bones_kernel::bus::ServiceRegistry;
 use bones_messages::game_core::{
     BodyKind, Collision, EntityOp, EntityOpMessage, EntityTransform, LoadTilemap, PhysicsWorlds,
     Shape as WireShape, Sprite, SpritePresentation,
 };
 use bones_messages::gfx;
 use bones_messages::EncodeMessage;
-use bones_kernel::bus::ServiceRegistry;
 
 /// Records every envelope delivered to it — the minimal way to observe
 /// what a module publishes without a real renderer subscribed.

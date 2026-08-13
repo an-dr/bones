@@ -27,9 +27,9 @@
 
 use std::path::PathBuf;
 
+use crate::bus::{Envelope, Handler, Module, ModuleContext};
 use bones_messages::persistence::Save;
 use bones_messages::{DecodeMessage, Message};
-use crate::bus::{Envelope, Handler, Module, ModuleContext};
 
 pub struct Persistence {
     dir: PathBuf,

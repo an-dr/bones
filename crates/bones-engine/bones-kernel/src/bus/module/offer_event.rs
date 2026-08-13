@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use super::Module;
+use super::{Module, PlatformEvent};
 
 /// Offers one raw platform event to every registered module, topmost
 /// first, stopping at the first that claims it (ADR-008).
@@ -25,7 +25,7 @@ use super::Module;
 /// whole poll: the locks are uncontended (dispatch is single-threaded) and
 /// holding them across the entire poll would mean a module could not be
 /// reached by anything else while events drain.
-pub fn offer_event(modules: &[Arc<Mutex<Box<dyn Module>>>], event: &sdl3::event::Event) -> bool {
+pub fn offer_event(modules: &[Arc<Mutex<Box<dyn Module>>>], event: &PlatformEvent) -> bool {
     modules
         .iter()
         .rev()

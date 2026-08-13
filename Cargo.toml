@@ -1,14 +1,48 @@
 [workspace]
 resolver = "2"
 members = ["crates/bones-engine", "crates/bones-engine/bones-kernel", "crates/bones-engine/bones-module-renderer", "crates/bones-engine/bones-module-ui", "crates/bones-engine/bones-module-audio", "crates/bones-engine/bones-module-game-core", "crates/bones-engine/bones-module-web", "crates/bones"]
-exclude = ["crates/bones-messages", "crates/bones-wasm-sdk"]
+# bones-messages and bones-wasm-sdk must also compile for wasm32-wasip2 guests,
+# so they carry their own workspaces. vendor/pubsub-bus is a submodule: cargo
+# would otherwise adopt it as a member because a member depends on it by path,
+# which puts a vendored tree under `cargo fmt --all` and makes cargo warn that
+# its [profile] sections are ignored.
+exclude = ["crates/bones-messages", "crates/bones-wasm-sdk", "vendor/pubsub-bus"]
 
 # The engine version line: every member below moves together, and one number
 # is what an embedder pins. The ABI line -- wit/core.wit's `bones:core` and
 # crates/bones-messages -- is deliberately not inherited from here, because it
 # moves only when the guest contract changes.
+# SDL3 is compiled from source by sdl3-sys's build script, which asks cmake for
+# a build type derived from these two values. Left at the dev defaults it picks
+# `Debug`, and on Windows that means SDL links the debug CRT (`/MDd`) while
+# rustc links the release one in every profile -- the mismatch behind
+# `LNK4098: defaultlib 'MSVCRTD' conflicts`. Two CRTs in one process have
+# separate heaps, so this is worth removing rather than silencing with
+# /NODEFAULTLIB.
+#
+# Building a vendored C dependency optimized costs nothing that matters here:
+# nobody steps through SDL's source from this repository, and the test suite
+# gets faster.
+[profile.dev.package.sdl3-sys]
+opt-level = 2
+debug = false
+
+[profile.dev.package.sdl3-image-sys]
+opt-level = 2
+debug = false
+
 [workspace.package]
 version = "1.0.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/an-dr/bones"
+
+# Nothing here goes to crates.io. `bindgen!` and `generate!` read wit/ from
+# outside their own package roots and pubsub-bus is a submodule, so no archive
+# cargo can build from this tree is self-contained -- and adding versions to the
+# path dependencies would not change that. The 1.0 line is consumed by git tag;
+# the README carries the snippets and what pinning one promises.
+#
+# Inherited rather than repeated: this is a property of the repository, not of
+# any one package, and eight copies of it is eight chances to disagree.
+publish = false

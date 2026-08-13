@@ -6,12 +6,22 @@
 
 use std::collections::HashMap;
 
+use crate::bus::{Bus, Envelope};
 use bones_messages::input::{
     GamepadAxis, GamepadButtonDown, GamepadButtonUp, GamepadConnected, GamepadDisconnected,
     KeyDown, KeyUp, MouseDown, MouseMove, MouseUp, MouseWheel,
 };
 use bones_messages::{EncodeMessage, Message};
-use crate::bus::{Bus, Envelope};
+
+/// The value registered under the `window-surface` service: the OS window
+/// itself, handed to whichever module claims it (design/modules.md).
+///
+/// An alias rather than a wrapper, for the reason
+/// [`PlatformEvent`](crate::bus::PlatformEvent) is one: a module consuming
+/// this service must name the exact type the provider registered, and it
+/// should be able to do that through the engine's public surface instead of
+/// depending on `sdl3` at a matching version.
+pub type WindowSurface = sdl3::video::Window;
 
 pub struct Platform {
     sdl: sdl3::Sdl,

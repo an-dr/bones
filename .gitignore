@@ -1,5 +1,11 @@
 target
 dist
+# Release archives and their checksums, produced by dist.ps1. Built artifacts
+# belong on a release page, not in history.
+bones-*.zip
+bones-*.zip.sha256
+bones-*.tar.gz
+bones-*.tar.gz.sha256
 docs/reviews/
 docs/progress/
 .verify-scratch/

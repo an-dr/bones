@@ -18,7 +18,11 @@ macro_rules! mouse_button_message {
 
         impl EncodeMessage for $name {
             fn encode(&self) -> Vec<u8> {
-                Writer::new().u8(self.button).f32(self.x).f32(self.y).finish()
+                Writer::new()
+                    .u8(self.button)
+                    .f32(self.x)
+                    .f32(self.y)
+                    .finish()
             }
         }
 

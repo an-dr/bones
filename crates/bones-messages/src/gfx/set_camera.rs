@@ -20,7 +20,11 @@ impl Message for SetCamera {
 
 impl EncodeMessage for SetCamera {
     fn encode(&self) -> Vec<u8> {
-        Writer::new().f32(self.x).f32(self.y).f32(self.zoom).finish()
+        Writer::new()
+            .f32(self.x)
+            .f32(self.y)
+            .f32(self.zoom)
+            .finish()
     }
 }
 

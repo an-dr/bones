@@ -3,23 +3,82 @@
 //! dependent, unlike `cargo test -p runner --lib`'s fast, fixture-free
 //! unit tests — kept in their own binary for that reason.
 
+use std::panic::AssertUnwindSafe;
+use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
-use bones_messages::extension_control::{Load, Reload, Unload};
-use bones_messages::lifecycle::{Event, LifecycleEvent};
-use bones_messages::{DecodeMessage, EncodeMessage, Message};
 use bones_engine::bus::{Envelope, Handler, Module, ModuleContext};
 use bones_engine::logging::{Logger, RecordingSink};
 use bones_engine::{BuiltEngine, Engine};
+use bones_messages::extension_control::{Load, Reload, Unload};
+use bones_messages::lifecycle::{Event, LifecycleEvent};
+use bones_messages::{DecodeMessage, EncodeMessage, Message};
 
-// SDL can't create windows concurrently across threads even with the
-// test-mode feature (which only lifts the main-thread-only check) —
-// cargo runs tests in parallel by default, so tests that open a real
-// window take this lock to never run concurrently with each other.
-fn sdl_test_lock() -> &'static Mutex<()> {
-    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    LOCK.get_or_init(|| Mutex::new(()))
+/// One long-lived thread that owns SDL for this whole test binary.
+///
+/// SDL3 stamps whichever thread first calls `SDL_Init` as its main thread
+/// and asserts inside `SDL_PumpEventsInternal` on every later pump from a
+/// different one. libtest runs each `#[test]` on its own freshly spawned
+/// thread — parallel or not, `--test-threads=1` included — so a suite in
+/// which several tests touch SDL is guaranteed to pump from a thread that
+/// is not the one that initialized it. That is why a test could pass alone
+/// (it was first, so it *was* the main thread) and abort in the suite.
+///
+/// A mutex cannot fix that: serializing does not make two threads one.
+/// Sending the work to a single thread does, and it subsumes the mutex —
+/// jobs run one at a time, in order, so no two windows exist at once
+/// either.
+fn sdl_jobs() -> &'static Sender<Box<dyn FnOnce() + Send>> {
+    static JOBS: OnceLock<Sender<Box<dyn FnOnce() + Send>>> = OnceLock::new();
+    JOBS.get_or_init(|| {
+        let (jobs, queue) = mpsc::channel::<Box<dyn FnOnce() + Send>>();
+        std::thread::Builder::new()
+            .name("bones-sdl".to_string())
+            // A debug-build egui frame plus wasmtime instantiation needs
+            // more than the 2 MiB a spawned thread gets by default; libtest
+            // gives its own test threads 8 MiB, so match that.
+            .stack_size(8 * 1024 * 1024)
+            .spawn(move || {
+                for job in queue {
+                    job();
+                }
+            })
+            .expect("the SDL thread spawns");
+        jobs
+    })
+}
+
+/// Runs one test body on [`sdl_jobs`]'s thread and waits for it.
+///
+/// A panic inside the body is caught and re-raised here, on the calling
+/// test's own thread, so an ordinary failed assertion is reported as that
+/// test failing — rather than killing the shared thread and leaving every
+/// later SDL test blocked on a channel nobody reads.
+fn on_the_sdl_thread<T: Send + 'static>(body: impl FnOnce() -> T + Send + 'static) -> T {
+    let (done, wait) = mpsc::channel();
+    sdl_jobs()
+        .send(Box::new(move || {
+            let outcome = std::panic::catch_unwind(AssertUnwindSafe(body));
+            let _ = done.send(outcome);
+        }))
+        .expect("the SDL thread outlives every test");
+    match wait.recv().expect("the SDL thread reports an outcome") {
+        Ok(value) => value,
+        Err(panic) => std::panic::resume_unwind(panic),
+    }
+}
+
+/// Declares a test whose body must run on the SDL-owning thread — anything
+/// that opens a window, pumps events, or drives a wry panel.
+macro_rules! sdl_test {
+    ($(#[$attr:meta])* fn $name:ident() $body:block) => {
+        $(#[$attr])*
+        #[test]
+        fn $name() {
+            on_the_sdl_thread(move || $body)
+        }
+    };
 }
 
 // Built by crates/bones-extension-hello/build.ps1 (see its README).
@@ -82,7 +141,9 @@ fn build_discovers_loads_and_registers_a_real_extension() {
         .extensions_dir(HELLO_DIR)
         .logger(logger)
         .build()
-        .expect("build crates/bones-extension-hello first: pwsh crates/bones-extension-hello/build.ps1");
+        .expect(
+            "build crates/bones-extension-hello first: pwsh crates/bones-extension-hello/build.ps1",
+        );
     assert!(platform.is_none(), "no .window() was set");
     let names: Vec<String> = modules
         .iter()
@@ -119,7 +180,9 @@ fn shutdown_all_calls_cleanup_unregisters_and_publishes_stopped() {
         .extensions_dir(HELLO_DIR)
         .logger(Logger::new(Arc::new(sink.clone())))
         .build()
-        .expect("build crates/bones-extension-hello first: pwsh crates/bones-extension-hello/build.ps1");
+        .expect(
+            "build crates/bones-extension-hello first: pwsh crates/bones-extension-hello/build.ps1",
+        );
     let events = Arc::new(Mutex::new(Vec::new()));
     let captured = events.clone();
     let endpoint = runner
@@ -129,13 +192,19 @@ fn shutdown_all_calls_cleanup_unregisters_and_publishes_stopped() {
         });
     endpoint.subscribe(LifecycleEvent::TOPIC);
     assert!(
-        supervisor.registry.call("test", "bones_extension_hello", &[]).is_ok(),
+        supervisor
+            .registry
+            .call("test", "bones_extension_hello", &[])
+            .is_ok(),
         "bones_extension_hello must be running before the shutdown sequence"
     );
 
     supervisor.shutdown_all();
     assert!(
-        supervisor.registry.call("test", "bones_extension_hello", &[]).is_err(),
+        supervisor
+            .registry
+            .call("test", "bones_extension_hello", &[])
+            .is_err(),
         "a stopped extension must no longer accept direct sends"
     );
     runner.bus().dispatch();
@@ -161,7 +230,9 @@ fn orderly_shutdown_dispatches_close_cleanup_and_stopped_in_order() {
         .extensions_dir(HELLO_DIR)
         .module(module.clone())
         .build()
-        .expect("build crates/bones-extension-hello first: pwsh crates/bones-extension-hello/build.ps1");
+        .expect(
+            "build crates/bones-extension-hello first: pwsh crates/bones-extension-hello/build.ps1",
+        );
     let observed = Arc::new(Mutex::new(Vec::new()));
     let captured = observed.clone();
     let endpoint = engine
@@ -351,15 +422,13 @@ fn build_skips_a_component_that_fails_to_load_without_failing_the_engine() {
     );
 }
 
-#[test]
-fn a_key_down_envelope_reaches_an_extension_through_a_real_window() {
+sdl_test! { fn a_key_down_envelope_reaches_an_extension_through_a_real_window() {
     // Real SDL event *pumping* (Platform::poll_events) asserts on the
     // OS-level main thread inside SDL's own C code — a check test-mode
     // doesn't lift, and cargo test's worker threads aren't it. That exact
     // mechanism is already proven in isolation by core/platform's own test
     // suite. Here, publish the envelope directly to prove Engine's wiring
     // (window + extension + subscription) without pumping real SDL events.
-    let _guard = sdl_test_lock().lock().unwrap();
     let sink = RecordingSink::new();
     let logger = Logger::new(Arc::new(sink.clone()));
 
@@ -388,14 +457,12 @@ fn a_key_down_envelope_reaches_an_extension_through_a_real_window() {
             .any(|(_, _, msg)| msg.contains("key pressed: A")),
         "expected keyecho to log the injected keypress, got {records:?}"
     );
-}
+}}
 
-#[test]
-fn a_mouse_down_envelope_reaches_an_extension_through_a_real_window() {
+sdl_test! { fn a_mouse_down_envelope_reaches_an_extension_through_a_real_window() {
     // Same reasoning as the key-down test above: publish directly rather
     // than pumping a real SDL mouse event — that mechanism is proven in
     // isolation by core/platform's own tests.
-    let _guard = sdl_test_lock().lock().unwrap();
     let sink = RecordingSink::new();
     let logger = Logger::new(Arc::new(sink.clone()));
 
@@ -429,7 +496,7 @@ fn a_mouse_down_envelope_reaches_an_extension_through_a_real_window() {
             .any(|(_, _, msg)| msg.contains("mouse button 1 pressed at (10, 20)")),
         "expected keyecho to log the injected mouse-down, got {records:?}"
     );
-}
+}}
 
 #[test]
 fn audio_demo_loads_plays_music_and_reacts_to_a_key_press_through_a_real_audio_module() {
@@ -475,7 +542,7 @@ fn audio_demo_loads_plays_music_and_reacts_to_a_key_press_through_a_real_audio_m
 #[test]
 fn persistence_demo_state_survives_a_full_engine_rebuild() {
     // A full rebuild against the same save directory (not in-place hot
-    // reload, which core/runner's own supervisor already covers
+    // reload, which the kernel's own supervisor already covers
     // elsewhere) — the closer analogue to what a player experiences when
     // they close and reopen the game.
     let dir = std::env::temp_dir().join("bones-persistence-demo-test-reload");
@@ -489,9 +556,7 @@ fn persistence_demo_state_survives_a_full_engine_rebuild() {
         .logger(Logger::new(Arc::new(sink_a.clone())))
         .saves_dir(&dir)
         .build()
-        .expect(
-            "build examples/persistence_demo first: pwsh examples/persistence_demo/build.ps1",
-        );
+        .expect("build examples/persistence_demo first: pwsh examples/persistence_demo/build.ps1");
 
     // dt=1.5 clears the demo's 1-second save throttle in a single tick;
     // the `persistence/save` it reactively publishes from inside that
@@ -538,25 +603,21 @@ fn persistence_demo_state_survives_a_full_engine_rebuild() {
     std::fs::remove_dir_all(&dir).ok();
 }
 
-#[test]
-fn a_window_with_no_renderer_or_module_is_not_dropped_with_the_service_registry() {
+sdl_test! { fn a_window_with_no_renderer_or_module_is_not_dropped_with_the_service_registry() {
     // window-surface is now seeded into the registry unconditionally
     // (ADR-017, so a .module()-injected renderer can consume it too, not
     // just .renderer()) — this proves an unclaimed one is handed back to
     // `platform` instead of being dropped (and closing the window) with
     // the registry it briefly lived in.
-    let _guard = sdl_test_lock().lock().unwrap();
     let BuiltEngine { mut platform, .. } = Engine::new().window("test", 64, 64).build().unwrap();
 
     assert!(
         platform.as_mut().unwrap().take_window().is_some(),
         "the window should still be available on `platform` when nothing claimed it"
     );
-}
+}}
 
-#[test]
-fn min_window_size_is_applied_to_the_built_platform_window() {
-    let _guard = sdl_test_lock().lock().unwrap();
+sdl_test! { fn min_window_size_is_applied_to_the_built_platform_window() {
     let BuiltEngine { mut platform, .. } = Engine::new()
         .window("test", 64, 64)
         .min_window_size(32, 16)
@@ -569,16 +630,13 @@ fn min_window_size_is_applied_to_the_built_platform_window() {
         .expect("window should be available");
 
     assert_eq!(window.minimum_size(), (32, 16));
-}
+}}
 
-#[test]
-fn a_custom_module_can_consume_window_surface_without_renderer() {
+sdl_test! { fn a_custom_module_can_consume_window_surface_without_renderer() {
     // The whole point of a generic service registry (ADR-017) over a
     // renderer-only shortcut: an embedder's own `.module(...)` replacement
     // renderer must be able to get the window the same way the built-in
     // one does, with no `.renderer()` call and no privileged access.
-    let _guard = sdl_test_lock().lock().unwrap();
-
     struct WantsWindow(Arc<Mutex<bool>>);
     impl Handler for WantsWindow {
         fn handle(&mut self, _envelope: &Envelope) {}
@@ -604,11 +662,9 @@ fn a_custom_module_can_consume_window_surface_without_renderer() {
         *got_window.lock().unwrap(),
         "expected the custom module to consume window-surface"
     );
-}
+}}
 
-#[test]
-fn a_real_extension_draws_a_sprite_through_a_real_renderer() {
-    let _guard = sdl_test_lock().lock().unwrap();
+sdl_test! { fn a_real_extension_draws_a_sprite_through_a_real_renderer() {
     let sink = RecordingSink::new();
     let logger = Logger::new(Arc::new(sink.clone()));
 
@@ -648,14 +704,19 @@ fn a_real_extension_draws_a_sprite_through_a_real_renderer() {
             .all(|(_, category, _)| category != "renderer"),
         "expected no renderer errors (bad PNG decode or unknown sprite id), got {records:?}"
     );
-}
+}}
 
 #[test]
 fn a_runaway_extension_is_quarantined_while_the_engine_keeps_running() {
     let dir = std::env::temp_dir().join("bones-engine-test-runaway");
     std::fs::create_dir_all(&dir).unwrap();
-    std::fs::copy(format!("{HELLO_DIR}/bones_extension_hello.wasm"), dir.join("hello.wasm"))
-        .expect("build crates/bones-extension-hello first: pwsh crates/bones-extension-hello/build.ps1");
+    std::fs::copy(
+        format!("{HELLO_DIR}/bones_extension_hello.wasm"),
+        dir.join("hello.wasm"),
+    )
+    .expect(
+        "build crates/bones-extension-hello first: pwsh crates/bones-extension-hello/build.ps1",
+    );
     std::fs::copy(
         format!("{RUNAWAY_DEMO_DIR}/runaway_demo.wasm"),
         dir.join("runaway_demo.wasm"),
@@ -735,11 +796,9 @@ fn a_runaway_extension_is_quarantined_while_the_engine_keeps_running() {
 }
 
 #[cfg(all(feature = "web", target_os = "windows"))]
-#[test]
-fn web_and_renderer_share_a_real_window_and_register_the_web_endpoint() {
+sdl_test! { fn web_and_renderer_share_a_real_window_and_register_the_web_endpoint() {
     use bones_messages::web::{Command, OpenPanel, PanelOpened, PanelSource};
 
-    let _guard = sdl_test_lock().lock().unwrap();
     let mut engine = Engine::new()
         .window("bones web composition", 160, 120)
         .renderer()
@@ -778,15 +837,13 @@ fn web_and_renderer_share_a_real_window_and_register_the_web_endpoint() {
     drop(opened);
 
     engine.shutdown();
-}
+}}
 
 #[cfg(all(feature = "web", target_os = "windows"))]
-#[test]
-fn a_headless_engine_can_repeatedly_attach_and_close_wry_presentation() {
+sdl_test! { fn a_headless_engine_can_repeatedly_attach_and_close_wry_presentation() {
     use bones_messages::web::{Command, OpenPanel, PanelSource, ENDPOINT};
     use bones_module_web::WryPresentation;
 
-    let _guard = sdl_test_lock().lock().unwrap();
     let mut engine = Engine::new().build().unwrap();
     assert!(engine.is_headless());
 
@@ -823,7 +880,7 @@ fn a_headless_engine_can_repeatedly_attach_and_close_wry_presentation() {
     }
 
     engine.shutdown();
-}
+}}
 
 #[cfg(feature = "web")]
 #[test]
@@ -837,9 +894,7 @@ fn web_without_a_window_is_a_build_error() {
 }
 
 #[cfg(all(feature = "web", target_os = "windows"))]
-#[test]
-fn dashboard_and_metrics_exchange_push_pull_and_page_ipc() {
-    let _guard = sdl_test_lock().lock().unwrap();
+sdl_test! { fn dashboard_and_metrics_exchange_push_pull_and_page_ipc() {
     let dir = std::env::temp_dir().join("bones-dashboard-integration");
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::copy(DASHBOARD_WASM, dir.join("dashboard.wasm"))
@@ -903,14 +958,19 @@ fn dashboard_and_metrics_exchange_push_pull_and_page_ipc() {
     engine.shutdown();
     drop(engine);
     std::fs::remove_dir_all(&dir).ok();
-}
+}}
 
 #[test]
 fn a_flooding_extension_is_faulted_without_starving_its_peer() {
     let dir = std::env::temp_dir().join("bones-engine-test-flood");
     std::fs::create_dir_all(&dir).unwrap();
-    std::fs::copy(format!("{HELLO_DIR}/bones_extension_hello.wasm"), dir.join("hello.wasm"))
-        .expect("build crates/bones-extension-hello first: pwsh crates/bones-extension-hello/build.ps1");
+    std::fs::copy(
+        format!("{HELLO_DIR}/bones_extension_hello.wasm"),
+        dir.join("hello.wasm"),
+    )
+    .expect(
+        "build crates/bones-extension-hello first: pwsh crates/bones-extension-hello/build.ps1",
+    );
     std::fs::copy(
         format!("{FLOOD_DEMO_DIR}/flood_demo.wasm"),
         dir.join("flood_demo.wasm"),
@@ -990,7 +1050,9 @@ fn exceeding_the_publish_allowance_quarantines_with_drop_counters() {
     supervisor.check();
 
     assert_eq!(
-        supervisor.registry.call("test", "bones_extension_hello", &[]),
+        supervisor
+            .registry
+            .call("test", "bones_extension_hello", &[]),
         Err(bones_engine::bus::SendError::UnknownEndpoint)
     );
     assert!(sink.records().iter().any(|(_, _, message)| {
@@ -1029,7 +1091,9 @@ fn exceeding_the_inbound_allowance_quarantines_with_drop_counters() {
     supervisor.check();
 
     assert_eq!(
-        supervisor.registry.call("test", "bones_extension_hello", &[]),
+        supervisor
+            .registry
+            .call("test", "bones_extension_hello", &[]),
         Err(bones_engine::bus::SendError::UnknownEndpoint)
     );
     assert!(sink.records().iter().any(|(_, _, message)| {
@@ -1130,6 +1194,126 @@ fn a_custom_module_is_initialized_subscribed_and_hooked() {
     );
 }
 
+/// Claims every event it is offered, recording that it saw one — an
+/// interactive overlay reduced to the one behaviour ADR-008 is about.
+#[derive(Clone)]
+struct Overlay {
+    name: &'static str,
+    claims: bool,
+    offered: Arc<Mutex<Vec<&'static str>>>,
+}
+
+impl Handler for Overlay {
+    fn handle(&mut self, _envelope: &Envelope) {}
+}
+
+impl Module for Overlay {
+    fn name(&self) -> &str {
+        self.name
+    }
+
+    fn init(&mut self, _ctx: &mut ModuleContext) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn filter_event(&mut self, _event: &sdl3::event::Event) -> bool {
+        self.offered.lock().unwrap().push(self.name);
+        self.claims
+    }
+}
+
+fn a_left_click() -> sdl3::event::Event {
+    sdl3::event::Event::MouseButtonDown {
+        timestamp: 0,
+        window_id: 0,
+        which: 0,
+        mouse_btn: sdl3::mouse::MouseButton::Left,
+        clicks: 1,
+        x: 8.0,
+        y: 8.0,
+    }
+}
+
+#[test]
+fn the_module_registered_last_is_offered_input_first() {
+    // ADR-008 through the public builder rather than the kernel helper:
+    // whichever overlay an embedder composes *last* draws above the rest,
+    // so it is the one that gets the click. Registering them the other way
+    // round is how an embedder puts one underneath the other.
+    let offered = Arc::new(Mutex::new(Vec::new()));
+    let BuiltEngine { modules, .. } = Engine::new()
+        .module(Overlay {
+            name: "underneath",
+            claims: true,
+            offered: offered.clone(),
+        })
+        .module(Overlay {
+            name: "on-top",
+            claims: true,
+            offered: offered.clone(),
+        })
+        .build()
+        .unwrap();
+
+    assert!(bones_engine::bus::offer_event(&modules, &a_left_click()));
+    assert_eq!(
+        *offered.lock().unwrap(),
+        vec!["on-top"],
+        "the module composed first sits underneath and must not see a click the one above it claimed"
+    );
+}
+
+sdl_test! { fn an_injected_overlay_claims_a_click_above_ui_and_the_gfx_bus() {
+    // The same rule against the real shipped composition: `.renderer()`
+    // and `.ui()` are sugar over `.module(...)`, so an overlay injected
+    // after them is above them, and a click it claims reaches neither the
+    // egui layer nor `input/*`.
+    let offered = Arc::new(Mutex::new(Vec::new()));
+    let BuiltEngine { modules, .. } = Engine::new()
+        .window("test", 64, 64)
+        .renderer()
+        .ui()
+        .module(Overlay {
+            name: "on-top",
+            claims: true,
+            offered: offered.clone(),
+        })
+        .build()
+        .unwrap();
+
+    assert!(
+        bones_engine::bus::offer_event(&modules, &a_left_click()),
+        "a claimed event never becomes an input/* message"
+    );
+    assert_eq!(
+        *offered.lock().unwrap(),
+        vec!["on-top"],
+        "the overlay is above renderer and ui, so it is offered the click first"
+    );
+}}
+
+#[test]
+fn an_overlay_that_declines_lets_the_click_fall_through_to_input() {
+    // The other half of the layer rule: an overlay that does not want the
+    // event must not swallow it, so the gfx scene underneath still
+    // receives it on `input/*`.
+    let offered = Arc::new(Mutex::new(Vec::new()));
+    let BuiltEngine { modules, .. } = Engine::new()
+        .module(Overlay {
+            name: "declines",
+            claims: false,
+            offered: offered.clone(),
+        })
+        .build()
+        .unwrap();
+
+    assert!(
+        !bones_engine::bus::offer_event(&modules, &a_left_click()),
+        "nothing claimed it, so platform still publishes input/*"
+    );
+    assert_eq!(*offered.lock().unwrap(), vec!["declines"]);
+}
+
 #[test]
 fn a_custom_module_answers_a_direct_send_through_the_call_registry() {
     let module = RecordingModule::default();
@@ -1152,8 +1336,13 @@ fn a_changed_wasm_file_is_hot_reloaded_in_place() {
     let dir = std::env::temp_dir().join("bones-engine-test-hot-reload");
     std::fs::create_dir_all(&dir).unwrap();
     let wasm_path = dir.join("level.wasm");
-    std::fs::copy(format!("{HELLO_DIR}/bones_extension_hello.wasm"), &wasm_path)
-        .expect("build crates/bones-extension-hello first: pwsh crates/bones-extension-hello/build.ps1");
+    std::fs::copy(
+        format!("{HELLO_DIR}/bones_extension_hello.wasm"),
+        &wasm_path,
+    )
+    .expect(
+        "build crates/bones-extension-hello first: pwsh crates/bones-extension-hello/build.ps1",
+    );
 
     let sink = RecordingSink::new();
     let logger = Logger::new(Arc::new(sink.clone()));

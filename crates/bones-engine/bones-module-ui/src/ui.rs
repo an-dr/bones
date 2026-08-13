@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 use std::time::Instant;
 
-use bones_messages::ui::{Changed, Clicked, Spec};
-use bones_messages::{DecodeMessage, Message};
 use bones_kernel::bus::{Bus, Envelope, Handler, Module, ModuleContext};
 use bones_kernel::draw_target::{DrawTargetService, UiMesh, UiVertex};
 use bones_kernel::logging::Logger;
+use bones_messages::ui::{Changed, Clicked, Spec};
+use bones_messages::{DecodeMessage, Message};
 
 use crate::input_translation::{compute_modifiers, translate_key, translate_mouse_button};
 use crate::output_translation::{

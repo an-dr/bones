@@ -13,12 +13,14 @@ use std::time::Duration;
 
 pub use extension_timeouts::ExtensionTimeouts;
 
-use bones_messages::tick::Tick;
-use bones_messages::{DecodeMessage, Message};
 use crate::bus::{Bus, EndpointBudget, Envelope, Handler, Registry};
-use crate::contract::bones::core::host_api::{DisplayMode, Host as HostApiImports, Level, SendError};
+use crate::contract::bones::core::host_api::{
+    DisplayMode, Host as HostApiImports, Level, SendError,
+};
 use crate::contract::Extension;
 use crate::logging::Logger;
+use bones_messages::tick::Tick;
+use bones_messages::{DecodeMessage, Message};
 use wasmtime::component::{Component, HasSelf, Linker};
 use wasmtime::{Config, Engine, Store};
 
@@ -35,7 +37,9 @@ fn map_send_error(err: crate::bus::SendError) -> SendError {
         // to a wrong variant — bus.rs's own doc comment says dispatch is
         // single-threaded, so nothing constructs this today; the panic is
         // the signal to add a real WIT case the day something does.
-        crate::bus::SendError::Timeout => unreachable!("crate::bus::SendError::Timeout is not constructed yet"),
+        crate::bus::SendError::Timeout => {
+            unreachable!("crate::bus::SendError::Timeout is not constructed yet")
+        }
     }
 }
 

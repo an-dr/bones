@@ -2,11 +2,11 @@
 //! delivery order (ADR-009).
 //! Run with: cargo run -p runner --example kernel_demo
 
-use bones_messages::tick::Tick;
-use bones_messages::Message;
 use bones_engine::bus::{Bus, Envelope, Handler};
 use bones_engine::logging::Logger;
 use bones_engine::Runner;
+use bones_messages::tick::Tick;
+use bones_messages::Message;
 
 struct Printer {
     name: &'static str,

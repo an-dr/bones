@@ -8,6 +8,7 @@
 
 use std::collections::HashMap;
 
+use bones_kernel::bus::{Bus, Envelope, Handler, Module, ModuleContext};
 use bones_messages::game_core::{
     BodyKind as WireBodyKind, Collision, EntityOp, EntityOpMessage, EntityTransform, LoadTilemap,
     PhysicsWorlds, Shape as WireShape,
@@ -15,7 +16,6 @@ use bones_messages::game_core::{
 use bones_messages::gfx::{Clear, DrawRect, DrawSprite, DrawTriangle, LoadSprite};
 use bones_messages::tick::Tick;
 use bones_messages::{DecodeMessage, EncodeMessage, Message};
-use bones_kernel::bus::{Bus, Envelope, Handler, Module, ModuleContext};
 use glam::Vec2;
 
 use crate::camera::Camera;

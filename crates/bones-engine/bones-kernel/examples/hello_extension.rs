@@ -7,11 +7,11 @@
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
-use bones_messages::tick::Tick;
-use bones_messages::{EncodeMessage, Message};
 use bones_kernel::bus::{BudgetLimits, Bus, EndpointBudget, Envelope, Registry};
 use bones_kernel::logging::Logger;
 use bones_kernel::wasm_extensions::host::{DisplayInfo, Host};
+use bones_messages::tick::Tick;
+use bones_messages::{EncodeMessage, Message};
 
 const HELLO_WASM: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),

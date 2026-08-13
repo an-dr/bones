@@ -15,7 +15,8 @@ impl PhysicsWorldKind {
     /// with every lower-priority world's copy snapped to match afterward
     /// (ADR-021). `Retro` outranks `Rapier2d` — the ADR's own example
     /// order.
-    pub const PRIORITY: [PhysicsWorldKind; 2] = [PhysicsWorldKind::Retro, PhysicsWorldKind::Rapier2d];
+    pub const PRIORITY: [PhysicsWorldKind; 2] =
+        [PhysicsWorldKind::Retro, PhysicsWorldKind::Rapier2d];
 }
 
 #[cfg(test)]

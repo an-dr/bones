@@ -11,6 +11,8 @@ mod module_registration;
 mod module_trait;
 #[cfg(feature = "platform")]
 mod offer_event;
+#[cfg(feature = "platform")]
+mod platform_event;
 mod service_registry;
 
 pub use module_context::ModuleContext;
@@ -18,6 +20,8 @@ pub use module_registration::ModuleRegistration;
 pub use module_trait::Module;
 #[cfg(feature = "platform")]
 pub use offer_event::offer_event;
+#[cfg(feature = "platform")]
+pub use platform_event::PlatformEvent;
 pub use service_registry::ServiceRegistry;
 
 #[cfg(test)]

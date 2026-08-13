@@ -15,22 +15,22 @@ use std::time::Duration;
 
 use bones_kernel::bus::{BudgetLimits, Module, Registry, ServiceRegistry};
 use bones_kernel::logging::Logger;
+use bones_kernel::wasm_extensions::files::{self, Files};
+use bones_kernel::wasm_extensions::host::{DisplayInfo, ExtensionTimeouts};
+use bones_kernel::wasm_extensions::lifecycle;
+use bones_kernel::wasm_extensions::lifecycle::Event;
+use bones_kernel::wasm_extensions::persistence::Persistence;
 #[cfg(feature = "presentation")]
 use bones_module_renderer::Renderer;
 #[cfg(feature = "presentation")]
 use bones_module_ui::Ui;
-use bones_kernel::wasm_extensions::host::{DisplayInfo, ExtensionTimeouts};
-use bones_kernel::wasm_extensions::lifecycle;
-use bones_kernel::wasm_extensions::lifecycle::Event;
-use bones_kernel::wasm_extensions::files::{self, Files};
-use bones_kernel::wasm_extensions::persistence::Persistence;
 
+use bones_kernel::runner::Runner;
 use bones_kernel::wasm_extensions::loading::{
     attach_extension, derive_extension_name, find_wasm_files, read_file_mtime, ENGINE_SENDER,
 };
-use bones_kernel::wasm_extensions::supervisor::TrackedExtension;
-use bones_kernel::runner::Runner;
 use bones_kernel::wasm_extensions::supervisor::Supervisor;
+use bones_kernel::wasm_extensions::supervisor::TrackedExtension;
 
 use super::built_engine::{run_frame_phases, run_shutdown, BuiltEngine};
 use super::register_module::register_module;
@@ -52,6 +52,29 @@ fn resolve_relative_to_exe(path: PathBuf) -> PathBuf {
     }
 }
 
+/// The frame period `run` sleeps to, or an error naming the offending rate.
+///
+/// `Duration::from_secs_f64` panics on a negative, NaN, or overflowing value,
+/// and `1.0 / tick_hz` produces exactly those from a zero, negative, or NaN
+/// rate. A panic is the wrong failure here: `tick_hz` takes an `f64` that
+/// routinely comes from a config file, so an invalid one is ordinary bad
+/// input, and this builder already has a `Result` to report it through.
+///
+/// The overflow arm is not theoretical either — a rate small enough to be
+/// finite still divides into a period no `Duration` can hold.
+fn tick_period(tick_hz: f64) -> crate::Result<Duration> {
+    if !tick_hz.is_finite() || tick_hz <= 0.0 {
+        return Err(crate::Error::msg(format!(
+            "tick_hz must be finite and greater than zero, got {tick_hz}"
+        )));
+    }
+    Duration::try_from_secs_f64(1.0 / tick_hz).map_err(|err| {
+        crate::Error::msg(format!(
+            "tick_hz {tick_hz} is too small to be a frame period: {err}"
+        ))
+    })
+}
+
 fn exe_dir() -> Option<PathBuf> {
     std::env::current_exe()
         .ok()?
@@ -59,6 +82,16 @@ fn exe_dir() -> Option<PathBuf> {
         .map(Path::to_path_buf)
 }
 
+/// The composition root: everything the engine will be made of, before it is
+/// made (design/modules.md, ADR-017).
+///
+/// - Every method takes and returns `self`, so a composition reads as one
+///   chain and nothing is half-configured in between.
+/// - Nothing here touches the OS or loads a component. `build` does that and
+///   reports what went wrong; the chain itself cannot fail.
+/// - Native modules arrive through `.module(...)`, including the ones the
+///   engine ships — `.renderer()` and `.ui()` are sugar over it, so an
+///   injected module has no less access than a built-in one.
 pub struct Engine {
     extensions_dir: Option<PathBuf>,
     catalog_extensions: Vec<(String, PathBuf)>,
@@ -85,6 +118,12 @@ pub struct Engine {
 }
 
 impl Engine {
+    /// An engine with no window, no extensions directory, no native modules,
+    /// and a 60 Hz tick — a headless engine that builds and steps as-is.
+    ///
+    /// Everything beyond that is opt-in, so what a composition does is what
+    /// its own chain says, with nothing inherited from a default that is not
+    /// written down at the call site.
     pub fn new() -> Self {
         Self {
             extensions_dir: None,
@@ -146,6 +185,12 @@ impl Engine {
         self
     }
 
+    /// The sink every engine log line goes to (ADR-012), resolved once at
+    /// construction rather than looked up per call.
+    ///
+    /// Defaults to `Logger::default()`, which writes to stdout. Pass a clone
+    /// of the same `Logger` to a module that logs, so the whole composition
+    /// shares one destination.
     pub fn logger(mut self, logger: Logger) -> Self {
         self.logger = logger;
         self
@@ -153,6 +198,10 @@ impl Engine {
 
     /// Target rate for `run`'s loop. Extensions that never subscribe to
     /// `core/tick` (ADR-004) are unaffected by this either way.
+    ///
+    /// Must be finite and greater than zero. An invalid rate is reported by
+    /// `build`/`run` rather than here, so a builder chain stays infallible
+    /// and the error arrives with every other composition error.
     pub fn tick_hz(mut self, hz: f64) -> Self {
         self.tick_hz = hz;
         self
@@ -305,7 +354,14 @@ impl Engine {
     /// logged and skipped rather than failing the whole engine. Exposed
     /// publicly (not just used by `run`) for a future driver that wants
     /// the wired-up pieces without `run`'s sleep-loop attached.
-    pub fn build(mut self) -> wasmtime::Result<BuiltEngine> {
+    pub fn build(mut self) -> crate::Result<BuiltEngine> {
+        // Validated here, not only in `run`: a caller driving `Runner::step`
+        // itself never calls `run`, and reads `tick_hz` back as the rate it
+        // is meant to step at. Rejecting it at the same point as every other
+        // composition error keeps that caller from inheriting a rate the
+        // engine already knows is unusable.
+        tick_period(self.tick_hz)?;
+
         #[cfg(feature = "presentation")]
         let window = self.window.take();
         #[cfg(feature = "presentation")]
@@ -322,12 +378,12 @@ impl Engine {
         #[cfg(feature = "presentation")]
         let mut platform = match window {
             Some((title, width, height)) => {
-                let mut platform =
-                    bones_kernel::platform::Platform::new(&title, width, height).map_err(wasmtime::Error::msg)?;
+                let mut platform = bones_kernel::platform::Platform::new(&title, width, height)
+                    .map_err(crate::Error::msg)?;
                 if let Some((min_width, min_height)) = min_window_size {
                     platform
                         .set_min_size(min_width, min_height)
-                        .map_err(wasmtime::Error::msg)?;
+                        .map_err(crate::Error::msg)?;
                 }
                 Some(platform)
             }
@@ -382,12 +438,12 @@ impl Engine {
         #[cfg(feature = "web")]
         let web_module: Option<Box<dyn Module>> = if self.web_enabled {
             if platform.is_none() {
-                return Err(wasmtime::Error::msg(".web() needs .window(...) too"));
+                return Err(crate::Error::msg(".web() needs .window(...) too"));
             }
             let window = services
                 .get()
-                .ok_or_else(|| wasmtime::Error::msg("web needs the window-surface service"))?;
-            let backend = bones_module_web::WryBackend::new(window).map_err(wasmtime::Error::msg)?;
+                .ok_or_else(|| crate::Error::msg("web needs the window-surface service"))?;
+            let backend = bones_module_web::WryBackend::new(window).map_err(crate::Error::msg)?;
             Some(Box::new(bones_module_web::Web::new(
                 bus.clone(),
                 self.logger.clone(),
@@ -423,7 +479,7 @@ impl Engine {
             // embedder who typed `.renderer()` has never heard of the
             // service, and needs to be told about `.window(...)`.
             if platform.is_none() {
-                return Err(wasmtime::Error::msg(".renderer() needs .window(...) too"));
+                return Err(crate::Error::msg(".renderer() needs .window(...) too"));
             }
             let renderer = Renderer::new(bus.clone(), self.logger.clone());
             register_module(
@@ -433,23 +489,23 @@ impl Engine {
                 &mut modules,
                 Box::new(renderer),
             )
-            .map_err(wasmtime::Error::msg)?;
+            .map_err(crate::Error::msg)?;
         }
         #[cfg(feature = "presentation")]
         if ui_enabled {
             let ui = Ui::new(bus.clone(), self.logger.clone());
             register_module(&bus, &registry, &mut services, &mut modules, Box::new(ui))
-                .map_err(wasmtime::Error::msg)?;
+                .map_err(crate::Error::msg)?;
         }
 
         #[cfg(feature = "web")]
         if let Some(module) = web_module {
             register_module(&bus, &registry, &mut services, &mut modules, module)
-                .map_err(wasmtime::Error::msg)?;
+                .map_err(crate::Error::msg)?;
         }
         for module in self.modules.drain(..) {
             register_module(&bus, &registry, &mut services, &mut modules, module)
-                .map_err(wasmtime::Error::msg)?;
+                .map_err(crate::Error::msg)?;
         }
 
         // Unconditional (persistence's own doc comment explains why) —
@@ -464,14 +520,20 @@ impl Engine {
             &mut modules,
             Box::new(persistence),
         )
-        .map_err(wasmtime::Error::msg)?;
+        .map_err(crate::Error::msg)?;
 
         // Opt-in, unlike persistence: without a granted root there is no
         // endpoint, so an extension's read fails as an unknown endpoint.
         if let Some(root) = self.files_root.clone() {
             let files = Files::new(resolve_relative_to_exe(root), files::DEFAULT_MAX_BYTES);
-            register_module(&bus, &registry, &mut services, &mut modules, Box::new(files))
-                .map_err(wasmtime::Error::msg)?;
+            register_module(
+                &bus,
+                &registry,
+                &mut services,
+                &mut modules,
+                Box::new(files),
+            )
+            .map_err(crate::Error::msg)?;
         }
 
         let mut tracked = Vec::new();
@@ -557,41 +619,43 @@ impl Engine {
         let command_sink = commands.clone();
         let controller = self.extension_controller.clone();
         let control_logger = self.logger.clone();
-        let control = bus.register("extension-manager", move |envelope: &bones_kernel::bus::Envelope| {
-            if controller.as_deref() != Some(envelope.sender.as_str()) {
-                control_logger.error(
-                    "engine",
-                    &format!(
-                        "rejected runtime extension command from '{}' on '{}'",
-                        envelope.sender, envelope.topic
+        let control = bus.register(
+            "extension-manager",
+            move |envelope: &bones_kernel::bus::Envelope| {
+                if controller.as_deref() != Some(envelope.sender.as_str()) {
+                    control_logger.error(
+                        "engine",
+                        &format!(
+                            "rejected runtime extension command from '{}' on '{}'",
+                            envelope.sender, envelope.topic
+                        ),
+                    );
+                    return;
+                }
+                match bones_messages::extension_control::Command::decode(
+                    &envelope.topic,
+                    &envelope.payload,
+                ) {
+                    Ok(Some(command)) => command_sink.lock().unwrap().push(
+                        bones_kernel::wasm_extensions::supervisor::OwnedCommand::from(command),
                     ),
-                );
-                return;
-            }
-            match bones_messages::extension_control::Command::decode(
-                &envelope.topic,
-                &envelope.payload,
-            ) {
-                Ok(Some(command)) => command_sink
-                    .lock()
-                    .unwrap()
-                    .push(bones_kernel::wasm_extensions::supervisor::OwnedCommand::from(command)),
-                Ok(None) => control_logger.warn(
-                    "engine",
-                    &format!(
-                        "ignored unknown extension command topic '{}'",
-                        envelope.topic
+                    Ok(None) => control_logger.warn(
+                        "engine",
+                        &format!(
+                            "ignored unknown extension command topic '{}'",
+                            envelope.topic
+                        ),
                     ),
-                ),
-                Err(err) => control_logger.warn(
-                    "engine",
-                    &format!(
-                        "could not decode extension command from '{}' on '{}': {err}",
-                        envelope.sender, envelope.topic
+                    Err(err) => control_logger.warn(
+                        "engine",
+                        &format!(
+                            "could not decode extension command from '{}' on '{}': {err}",
+                            envelope.sender, envelope.topic
+                        ),
                     ),
-                ),
-            }
-        });
+                }
+            },
+        );
         control.subscribe("core/extensions/*");
 
         let supervisor = Supervisor::new(
@@ -631,8 +695,8 @@ impl Engine {
     /// first tick already runs against the new code; after, so a fault
     /// from that same tick is quarantined this iteration rather than the
     /// next one.
-    pub fn run(self) -> wasmtime::Result<()> {
-        let period = Duration::from_secs_f64(1.0 / self.tick_hz);
+    pub fn run(self) -> crate::Result<()> {
+        let period = tick_period(self.tick_hz)?;
         let BuiltEngine {
             runner,
             #[cfg(feature = "presentation")]

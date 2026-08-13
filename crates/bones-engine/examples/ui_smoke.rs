@@ -8,11 +8,11 @@
 //! `bones-module-*` type — the ui crate itself no longer knows the
 //! renderer exists (it reaches the surface through `draw-target`).
 
-use bones_messages::ui::{Spec, Widget};
-use bones_messages::{EncodeMessage, Message};
 use bones_kernel::bus::{Bus, Envelope, Handler, Module, ModuleContext, ServiceRegistry};
 use bones_kernel::logging::Logger;
 use bones_kernel::platform::Platform;
+use bones_messages::ui::{Spec, Widget};
+use bones_messages::{EncodeMessage, Message};
 use bones_module_renderer::Renderer;
 use bones_module_ui::Ui;
 

@@ -6,8 +6,8 @@
 use std::collections::HashMap;
 use std::io::Cursor;
 
-use bones_messages::audio::Command;
 use bones_kernel::bus::{Envelope, Handler, Module, ModuleContext};
+use bones_messages::audio::Command;
 use kira::sound::static_sound::{StaticSoundData, StaticSoundHandle};
 use kira::Tween;
 

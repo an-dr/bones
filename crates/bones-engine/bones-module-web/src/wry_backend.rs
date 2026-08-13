@@ -91,9 +91,10 @@ impl Backend for WryBackend {
             PanelSource::Html(html) => {
                 let page = html.as_bytes().to_vec();
                 builder
-                    .with_custom_protocol(page_source::PROTOCOL.to_string(), move |_id, _request| {
-                        page_source::response(&page)
-                    })
+                    .with_custom_protocol(
+                        page_source::PROTOCOL.to_string(),
+                        move |_id, _request| page_source::response(&page),
+                    )
                     .with_url(page_source::URL)
             }
             PanelSource::Url(url) => builder.with_url(url),

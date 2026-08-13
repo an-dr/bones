@@ -1,13 +1,13 @@
 use std::collections::HashSet;
 
+use bones_kernel::bus::{Bus, Envelope, Handler, Module, ModuleContext};
+use bones_kernel::logging::Logger;
 use bones_messages::lifecycle::{Event, LifecycleEvent};
 use bones_messages::web::{
     ClosePanel, Command, Navigate, PageMessage, PanelClosed, PanelFailed, PanelOpened, SendJson,
     ENDPOINT,
 };
 use bones_messages::{DecodeMessage, EncodeMessage, Message};
-use bones_kernel::bus::{Bus, Envelope, Handler, Module, ModuleContext};
-use bones_kernel::logging::Logger;
 
 use crate::{Backend, BackendEvent};
 

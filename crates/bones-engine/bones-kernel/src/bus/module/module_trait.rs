@@ -35,7 +35,7 @@ pub trait Module: Handler {
     ///   the `input/*` vocabulary does not carry). A headless build has no
     ///   event source and so does not have this method at all.
     #[cfg(feature = "platform")]
-    fn filter_event(&mut self, _event: &sdl3::event::Event) -> bool {
+    fn filter_event(&mut self, _event: &super::PlatformEvent) -> bool {
         false
     }
 

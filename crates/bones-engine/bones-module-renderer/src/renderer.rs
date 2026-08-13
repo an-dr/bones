@@ -1,11 +1,11 @@
 use ab_glyph::FontRef;
+use bones_kernel::bus::{Bus, Envelope, Handler, Module, ModuleContext};
+use bones_kernel::draw_target::DrawTargetService;
+use bones_kernel::logging::Logger;
 use bones_messages::gfx::Command;
 use bones_messages::lifecycle::{Event, LifecycleEvent};
 use bones_messages::renderer::{DisplayChanged, LogicalCanvas};
 use bones_messages::{DecodeMessage, EncodeMessage, Message};
-use bones_kernel::bus::{Bus, Envelope, Handler, Module, ModuleContext};
-use bones_kernel::draw_target::DrawTargetService;
-use bones_kernel::logging::Logger;
 use sdl3::video::Window;
 use send_wrapper::SendWrapper;
 
@@ -78,7 +78,6 @@ impl Renderer {
             payload: LogicalCanvas { width, height }.encode(),
         });
     }
-
 }
 
 impl Handler for Renderer {

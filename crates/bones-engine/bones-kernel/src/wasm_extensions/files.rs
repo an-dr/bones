@@ -24,8 +24,8 @@
 
 use std::path::{Path, PathBuf};
 
-use bones_messages::files::ENDPOINT;
 use crate::bus::{Envelope, Handler, Module, ModuleContext};
+use bones_messages::files::ENDPOINT;
 
 /// Largest file served in one reply, when the embedder states no other limit.
 pub const DEFAULT_MAX_BYTES: u64 = 4 * 1024 * 1024;

@@ -69,7 +69,6 @@ impl Rapier2dBackend {
     pub fn new() -> Self {
         let (collision_sender, collision_events) = unbounded();
         let (force_sender, _force_events) = unbounded();
-        let mut integration_parameters = IntegrationParameters::default();
         // Stiffer contacts than rapier2d's defaults (30.0 / 5.0): the
         // default spring-based contact resolution is compliant enough that
         // a body driven continuously into an obstacle (this module's usual
@@ -79,11 +78,14 @@ impl Rapier2dBackend {
         // makes the contact push back harder and settle faster; more
         // solver/stabilization iterations improve convergence at that
         // higher stiffness instead of overshooting/jittering.
-        integration_parameters.contact_natural_frequency = CONTACT_NATURAL_FREQUENCY;
-        integration_parameters.contact_damping_ratio = CONTACT_DAMPING_RATIO;
-        integration_parameters.num_solver_iterations =
-            NonZeroUsize::new(NUM_SOLVER_ITERATIONS).expect("NUM_SOLVER_ITERATIONS is nonzero");
-        integration_parameters.num_internal_pgs_iterations = NUM_INTERNAL_PGS_ITERATIONS;
+        let integration_parameters = IntegrationParameters {
+            contact_natural_frequency: CONTACT_NATURAL_FREQUENCY,
+            contact_damping_ratio: CONTACT_DAMPING_RATIO,
+            num_solver_iterations: NonZeroUsize::new(NUM_SOLVER_ITERATIONS)
+                .expect("NUM_SOLVER_ITERATIONS is nonzero"),
+            num_internal_pgs_iterations: NUM_INTERNAL_PGS_ITERATIONS,
+            ..IntegrationParameters::default()
+        };
         Self {
             bodies: RigidBodySet::new(),
             colliders: ColliderSet::new(),
@@ -114,8 +116,10 @@ impl Rapier2dBackend {
     /// gameplay use (see `has_real_contact` for a touch/no-touch check).
     #[cfg(test)]
     pub(crate) fn penetration_depth(&self, a: ColliderHandle, b: ColliderHandle) -> f32 {
-        let (Some(&a), Some(&b)) = (self.collider_handles.get(&a.0), self.collider_handles.get(&b.0))
-        else {
+        let (Some(&a), Some(&b)) = (
+            self.collider_handles.get(&a.0),
+            self.collider_handles.get(&b.0),
+        ) else {
             return 0.0;
         };
         self.narrow_phase
@@ -302,8 +306,10 @@ impl PhysicsBackend for Rapier2dBackend {
     /// populated regardless of body kind, so this is the actual geometric
     /// ground truth.
     fn has_real_contact(&self, a: ColliderHandle, b: ColliderHandle) -> bool {
-        let (Some(&a), Some(&b)) = (self.collider_handles.get(&a.0), self.collider_handles.get(&b.0))
-        else {
+        let (Some(&a), Some(&b)) = (
+            self.collider_handles.get(&a.0),
+            self.collider_handles.get(&b.0),
+        ) else {
             return false;
         };
         self.narrow_phase.contact_pair(a, b).is_some_and(|pair| {

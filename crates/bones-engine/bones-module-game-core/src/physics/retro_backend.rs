@@ -69,9 +69,23 @@ impl RetroBackend {
                 // shallow corner clip resolves sideways rather than
                 // launching a body vertically through a near-miss.
                 let push = if overlap.x < overlap.y {
-                    Vec2::new(if b.position.x < a.position.x { -overlap.x } else { overlap.x }, 0.0)
+                    Vec2::new(
+                        if b.position.x < a.position.x {
+                            -overlap.x
+                        } else {
+                            overlap.x
+                        },
+                        0.0,
+                    )
                 } else {
-                    Vec2::new(0.0, if b.position.y < a.position.y { -overlap.y } else { overlap.y })
+                    Vec2::new(
+                        0.0,
+                        if b.position.y < a.position.y {
+                            -overlap.y
+                        } else {
+                            overlap.y
+                        },
+                    )
                 };
                 let (a_pushable, b_pushable) = (a.is_pushable(), b.is_pushable());
                 let (push_a, push_b) = match (a_pushable, b_pushable) {

@@ -68,7 +68,9 @@ fn child_webview_opens_resizes_receives_script_and_closes() {
     );
     // Storage is what an opaque origin denies, so a page served with a real
     // origin has to be able to reach it.
-    backend.send_json("smoke", "panel", "report-storage").unwrap();
+    backend
+        .send_json("smoke", "panel", "report-storage")
+        .unwrap();
     assert_eq!(
         wait_for_message_matching(&mut backend, &mut events, |message| {
             message.starts_with("storage:")

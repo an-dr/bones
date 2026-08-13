@@ -4,10 +4,10 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+publish.workspace = true
 
 [dependencies]
 bones-kernel = { path = "../bones-kernel", default-features = false, features = ["platform"] }
 bones-messages = { path = "../../bones-messages" }
 egui = "0.32"
 sdl3 = { version = "0.18.4", features = ["build-from-source-static", "unsafe_textures"] }
-

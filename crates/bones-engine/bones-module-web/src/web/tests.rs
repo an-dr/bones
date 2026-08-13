@@ -1,13 +1,13 @@
 use std::sync::{Arc, Mutex};
 
+use bones_kernel::bus::{Envelope, Handler, Module, ModuleContext, ServiceRegistry};
+use bones_kernel::logging::{Logger, RecordingSink};
 use bones_messages::lifecycle::{Event, LifecycleEvent};
 use bones_messages::web::{
     ClosePanel, Command, Navigate, OpenPanel, PageMessage, PanelClosed, PanelFailed, PanelOpened,
     PanelSource, SendJson,
 };
 use bones_messages::{DecodeMessage, EncodeMessage, Message};
-use bones_kernel::bus::{Envelope, Handler, Module, ModuleContext, ServiceRegistry};
-use bones_kernel::logging::{Logger, RecordingSink};
 
 use super::*;
 

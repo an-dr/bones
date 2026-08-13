@@ -28,8 +28,10 @@ fn two_overlapping_dynamic_bodies_are_pushed_apart_along_the_shallow_axis() {
     // Overlap is 1.5 units on x (half-extents sum 2.0 - delta 0.5), 2.0 on
     // y (delta 0.0) — x is the shallower axis, so separation should be
     // purely horizontal.
-    let (body_a, _) = backend.spawn_body(Vec2::new(0.0, 0.0), Vec2::new(1.0, 1.0), BodyKind::Dynamic);
-    let (body_b, _) = backend.spawn_body(Vec2::new(0.5, 0.0), Vec2::new(1.0, 1.0), BodyKind::Dynamic);
+    let (body_a, _) =
+        backend.spawn_body(Vec2::new(0.0, 0.0), Vec2::new(1.0, 1.0), BodyKind::Dynamic);
+    let (body_b, _) =
+        backend.spawn_body(Vec2::new(0.5, 0.0), Vec2::new(1.0, 1.0), BodyKind::Dynamic);
 
     backend.step(1.0 / 60.0);
 
@@ -69,8 +71,11 @@ fn a_dynamic_body_pushed_against_a_fixed_one_moves_alone() {
 #[test]
 fn a_dynamic_body_pushed_against_a_kinematic_one_moves_alone() {
     let mut backend = RetroBackend::new();
-    let (kinematic_body, _) =
-        backend.spawn_body(Vec2::new(0.0, 0.0), Vec2::new(1.0, 1.0), BodyKind::Kinematic);
+    let (kinematic_body, _) = backend.spawn_body(
+        Vec2::new(0.0, 0.0),
+        Vec2::new(1.0, 1.0),
+        BodyKind::Kinematic,
+    );
     let (dynamic_body, _) =
         backend.spawn_body(Vec2::new(0.5, 0.0), Vec2::new(1.0, 1.0), BodyKind::Dynamic);
 
@@ -87,8 +92,11 @@ fn a_dynamic_body_pushed_against_a_kinematic_one_moves_alone() {
 #[test]
 fn a_moving_kinematic_body_pushes_a_dynamic_one_out_of_its_way() {
     let mut backend = RetroBackend::new();
-    let (kinematic_body, _) =
-        backend.spawn_body(Vec2::new(0.0, 0.0), Vec2::new(1.0, 1.0), BodyKind::Kinematic);
+    let (kinematic_body, _) = backend.spawn_body(
+        Vec2::new(0.0, 0.0),
+        Vec2::new(1.0, 1.0),
+        BodyKind::Kinematic,
+    );
     let (dynamic_body, _) =
         backend.spawn_body(Vec2::new(1.9, 0.0), Vec2::new(1.0, 1.0), BodyKind::Dynamic);
     backend.set_velocity(kinematic_body, Vec2::new(5.0, 0.0));
@@ -242,8 +250,7 @@ fn set_body_state_overwrites_position_and_velocity() {
 fn an_unknown_handle_returns_none() {
     let mut backend_a = RetroBackend::new();
     let backend_b = RetroBackend::new();
-    let (stray_handle, _) =
-        backend_a.spawn_body(Vec2::ZERO, Vec2::new(1.0, 1.0), BodyKind::Fixed);
+    let (stray_handle, _) = backend_a.spawn_body(Vec2::ZERO, Vec2::new(1.0, 1.0), BodyKind::Fixed);
 
     assert_eq!(backend_b.body_translation(stray_handle), None);
 }

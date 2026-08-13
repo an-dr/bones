@@ -22,7 +22,11 @@ fn fixture_tmx() -> &'static [u8] {
 fn a_ground_layer_becomes_tile_draws_at_their_grid_position() {
     let draws = load_tile_draws(fixture_tmx(), |name| (name == "grass").then_some(7)).unwrap();
 
-    assert_eq!(draws.len(), 3, "the empty (0,1) cell must not draw, got {draws:?}");
+    assert_eq!(
+        draws.len(),
+        3,
+        "the empty (0,1) cell must not draw, got {draws:?}"
+    );
     assert!(draws.contains(&TileDraw {
         sprite_id: 7,
         dst_x: 0,

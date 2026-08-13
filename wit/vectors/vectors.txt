@@ -1,0 +1,147 @@
+# bones core message wire format -- conformance vectors
+# version 1.0.0, matching bones:core@1.0.0 and wit/wire-format.md
+#
+# Generated from bones-messages. Do not edit by hand: crates/bones-messages/
+# tests/conformance.rs fails when this file and the encoder disagree.
+#
+# One vector per line, three fields separated by a single space:
+#   <topic-or-endpoint> <payload-as-lowercase-hex> <field>=<value>;...
+#
+# A payload of `-` is the empty payload, zero bytes. Byte-slice values are
+# themselves written as hex. An implementation is conformant when it encodes
+# each listed value to exactly the listed bytes, and decodes those bytes back
+# to the listed values.
+
+core/tick 0000003f dt=0.5
+
+core/lifecycle 0068656c6c6f event=0;extension=hello
+
+core/lifecycle 0468656c6c6f event=4;extension=hello
+
+core/extensions/load 6e6f746573 extension=notes
+
+core/extensions/unload 6e6f746573 extension=notes
+
+core/extensions/reload 6e6f746573 extension=notes
+
+window/close-requested - (no fields)
+
+input/key-down 41 key=A
+
+input/key-up 5370616365 key=Space
+
+input/mouse-down 0100004841000040c0 button=1;x=12.5;y=-3
+
+input/mouse-up 030000000000000000 button=3;x=0;y=0
+
+input/mouse-move 0000c842000048430000c0bf00001040 x=100;y=200;dx=-1.5;dy=2.25
+
+input/mouse-wheel 000000000000803f x=0;y=1
+
+input/gamepad-connected 07000000 id=7
+
+input/gamepad-disconnected 07000000 id=7
+
+input/gamepad-button-down 000000000500736f757468 id=0;button=south
+
+input/gamepad-button-up 000000000500736f757468 id=0;button=south
+
+input/gamepad-axis 0000000005006c65667478000080bf id=0;axis=leftx;value=-1
+
+gfx/clear 112233ff r=17;g=34;b=51;a=255
+
+gfx/clear-draw-batch - (no fields)
+
+gfx/load-sprite 0100000089504e47 id=1;png_bytes=89504e47
+
+gfx/draw-sprite 01000000fcffffff08000000100000002000000000000000000000001000000010000000030000b4420100ffffff80 id=1;dst_x=-4;dst_y=8;dst_w=16;dst_h=32;src_x=0;src_y=0;src_w=16;src_h=16;layer=3;angle=90;flip_h=1;flip_v=0;tint_r=255;tint_g=255;tint_b=255;tint_a=128
+
+gfx/draw-rect 0a00000014000000640000003200000001ff0000ff0200 x=10;y=20;w=100;h=50;filled=1;r=255;g=0;b=0;a=255;layer=2;screen_space=0
+
+gfx/draw-line 0000000000000000f6ffffff0a00000000ff00ff00 x1=0;y1=0;x2=-10;y2=10;r=0;g=255;b=0;a=255;layer=0
+
+gfx/draw-circle 050000000500000009000000000000ffff01 x=5;y=5;radius=9;filled=0;r=0;g=0;b=255;a=255;layer=1
+
+gfx/draw-triangle 000000000000000004000000000000000200000004000000010102030405 x1=0;y1=0;x2=4;y2=0;x3=2;y3=4;filled=1;r=1;g=2;b=3;a=4;layer=5
+
+gfx/draw-text 02006869ffffffff020000000e00ffffffff070101 text=hi;x=-1;y=2;size=14;r=255;g=255;b=255;a=255;layer=7;screen_space=1;align=1
+
+gfx/set-camera 0000c03f000020c000000040 x=1.5;y=-2.5;zoom=2
+
+gfx/set-display 00050000d002000000 width=1280;height=720;fullscreen=0
+
+renderer/display-changed 8007000038040000 width=1920;height=1080
+
+renderer/logical-canvas 40010000b4000000 width=320;height=180
+
+ui/spec 05006e6f74657303000004006e616d65010100000003006164610202000000040073617665 title=notes;widgets=label(name),text-edit(1,ada),button(2,save)
+
+ui/spec 00000000 title=;widgets=
+
+ui/clicked 02000000 id=2
+
+ui/changed 01000000616461206c id=1;text=ada l
+
+audio/load-sound 0400000052494646 id=4;bytes=52494646
+
+audio/play-sound 040000000000403f id=4;volume=0.75
+
+audio/play-music 050000000000803f id=5;volume=1
+
+audio/stop-music - (no fields)
+
+audio/set-music-volume 0000803e volume=0.25
+
+game-core/entity-op 000100000000000042000080420109000000100000001000000004000000cdcccc3dff00ffff0000000041000000410001 tag=0;entity_id=1;x=32;y=64;has_sprite=1;sprite_id=9;frame_w=16;frame_h=16;frame_count=4;frame_duration=0.1;r=255;g=0;b=255;a=255;shape=0;collider_half_w=8;collider_half_h=8;body_kind=0;worlds=1
+
+game-core/entity-op 000200000000000000000000000000000000000000000000000000000000000000000a141eff0100008040000080400303 tag=0;entity_id=2;x=0;y=0;has_sprite=0;sprite_id=0;frame_w=0;frame_h=0;frame_count=0;frame_duration=0;r=10;g=20;b=30;a=255;shape=1;collider_half_w=4;collider_half_h=4;body_kind=3;worlds=3
+
+game-core/entity-op 0101000000000048c200000000 tag=1;entity_id=1;vx=-50;vy=0
+
+game-core/entity-op 0201000000 tag=2;entity_id=1
+
+game-core/entity-op 030100000001020304 tag=3;entity_id=1;r=1;g=2;b=3;a=4
+
+game-core/entity-op 0401 tag=4;enabled=1
+
+game-core/entity-op 0500 tag=5;paused=0
+
+game-core/entity-op 06010000000000a0430000344300000040 tag=6;entity_id=1;viewport_w=320;viewport_h=180;zoom=2
+
+game-core/entity-op 070100000009000000100000001000000004000000cdcccc3d04000000200000002000000001000000 tag=7;entity_id=1;sprite_id=9;frame_w=16;frame_h=16;frame_count=4;frame_duration=0.1;frames_per_row=4;draw_w=32;draw_h=32;looping=1;advance_while_stopped=0;flip_h=0;flip_v=0
+
+game-core/entity-op 0800000041 tag=8;responsiveness=8
+
+game-core/entity-op 09 tag=9
+
+game-core/entity-op 0a01000000ff8000ff tag=10;entity_id=1;r=255;g=128;b=0;a=255
+
+game-core/entity-transform 030000000000a03f0000a0bf entity_id=3;x=1.25;y=-1.25
+
+game-core/collision 0100000002000000 entity_id_a=1;entity_id_b=2
+
+game-core/load-tilemap 040000003c3f786d0100050074696c657301000000020000008950 tmx_bytes=3c3f786d;count=1;images=tiles(1,8950)
+
+web/panel-opened 090064617368626f6172646d61696e owner=dashboard;panel=main
+
+web/panel-closed 090064617368626f6172646d61696e owner=dashboard;panel=main
+
+web/panel-failed 090064617368626f61726404006d61696e6e6f2077656276696577 owner=dashboard;panel=main;reason=no webview
+
+web/page-message 090064617368626f61726404006d61696e7b2261223a317d owner=dashboard;panel=main;json={"a":1}
+
+persistence/save 010203 bytes=010203
+
+web 0004006d61696e003c703e68693c2f703e tag=0;panel=main;source_kind=0;source=<p>hi</p>
+
+web 0004006d61696e0168747470733a2f2f6578616d706c652e74657374 tag=0;panel=main;source_kind=1;source=https://example.test
+
+web 016d61696e tag=1;panel=main
+
+web 0204006d61696e68747470733a2f2f6578616d706c652e746573742f6e657874 tag=2;panel=main;url=https://example.test/next
+
+web 0304006d61696e7b2262223a327d tag=3;panel=main;json={"b":2}
+
+persistence - (empty request: load)
+
+files 636f6e6669672f7468656d652e6a736f6e path=config/theme.json

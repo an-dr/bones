@@ -1,6 +1,6 @@
 use super::*;
-use bones_messages::{EncodeMessage, Message};
 use bones_kernel::bus::ServiceRegistry;
+use bones_messages::{EncodeMessage, Message};
 
 #[test]
 fn init_opens_a_real_audio_device_and_subscribes_audio_topics() {

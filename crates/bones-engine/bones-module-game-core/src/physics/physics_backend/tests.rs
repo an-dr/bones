@@ -84,7 +84,8 @@ impl PhysicsBackend for FakeBackend {
 fn a_fake_backend_is_usable_behind_a_trait_object() {
     let mut backend: Box<dyn PhysicsBackend> = Box::new(FakeBackend::default());
 
-    let (body, collider) = backend.spawn_body(Vec2::new(1.0, 2.0), Vec2::new(0.5, 0.5), BodyKind::Dynamic);
+    let (body, collider) =
+        backend.spawn_body(Vec2::new(1.0, 2.0), Vec2::new(0.5, 0.5), BodyKind::Dynamic);
     assert_eq!(backend.body_translation(body), Some(Vec2::new(1.0, 2.0)));
     assert!(!backend.is_kinematic(body));
 
@@ -114,7 +115,11 @@ fn spawn_body_defaults_to_shape_rect() {
 #[test]
 fn spawn_shaped_body_accepts_a_triangle_shape() {
     let mut backend: Box<dyn PhysicsBackend> = Box::new(FakeBackend::default());
-    let (body, _) =
-        backend.spawn_shaped_body(Vec2::ZERO, Vec2::new(1.0, 1.0), Shape::Triangle, BodyKind::Dynamic);
+    let (body, _) = backend.spawn_shaped_body(
+        Vec2::ZERO,
+        Vec2::new(1.0, 1.0),
+        Shape::Triangle,
+        BodyKind::Dynamic,
+    );
     assert_eq!(backend.body_translation(body), Some(Vec2::ZERO));
 }

@@ -9,6 +9,14 @@ version = "1.0.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/an-dr/bones"
+readme = "README.md"
+description = "Write a bones engine extension in Rust: the bones:core WIT package, its generated guest bindings, and the shared message vocabulary."
+
+# Not on crates.io: generate! reads ../../wit, outside this package root, so no archive
+# cargo builds here is self-contained.
+# The 1.0 line is consumed by git tag; the repository README carries the
+# exact dependency snippets and what support that promises.
+publish = false
 
 [features]
 default = []

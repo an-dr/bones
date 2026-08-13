@@ -12,7 +12,7 @@ The message bus (ADR-003, ADR-009, ADR-013): pub/sub over hierarchical topics wi
 
 Publish only enqueues; delivery happens on `dispatch()`, deferred so a handler can safely publish in response to what it just received (ADR-015).
 
-`EndpointBudget` supplies ADR-007's per-frame inbound and publish allowances for untrusted endpoints. A bounded adapter drops matching deliveries over its allowance; the extension host applies the same object before guest publishes. `Bus::begin_frame` resets every registered allowance while cumulative `DropCounters` and the violation flag remain observable; `bones-engine`'s `Runner::step` calls it at the authoritative frame boundary.
+`EndpointBudget` supplies ADR-007's per-frame inbound and publish allowances for untrusted endpoints. A bounded adapter drops matching deliveries over its allowance; the extension host applies the same object before guest publishes. `Bus::begin_frame` resets every registered allowance while cumulative `DropCounters` and the violation flag remain observable; this crate's own `Runner::step` calls it at the authoritative frame boundary.
 
 Direct send (ADR-010) addresses endpoints by name, separately from topic pub/sub: `Respond` is implemented by anything answerable via direct send, and `Registry::call(from, to, payload)` invokes `to` synchronously and returns its reply — a `to` already in the current call chain fails immediately with `SendError::Cycle` rather than deadlocking. `ModuleRegistration` attaches a native `Module` to both message paths at runtime and owns its shutdown/unregistration, supporting temporary compositions without rebuilding the engine.
 
@@ -50,4 +50,8 @@ Everything concerned with a WASM extension's existence over time, as opposed to 
 - **`files`** — lets an extension read files inside one embedder-granted directory, mediated through the bus. Opt-in, and canonicalised on both sides so no `..`, absolute path, or symlink escapes it.
 - **`persistence`** — lets an extension save and restore its own state across a reload, mediated through the bus. Unconditional, unlike the native modules — see the module's own doc comment for why.
 
-Time, inbound, and publish budget violations all follow the same supervisor quarantine path, in `bones-engine`'s own `runner` module.
+Time, inbound, and publish budget violations all follow the same `Supervisor` quarantine path, in this crate's own `wasm_extensions::supervisor` module.
+
+## runner
+
+The frame loop (ADR-014): `Runner::step(dt)` begins the frame, dispatches, ticks `core/tick` subscribers, and dispatches again. It lives here rather than in `bones-engine` because it names no native module — it drives whatever was registered — which is the same reason `Supervisor` and extension loading do (ADR-031). `bones-engine` re-exports both; its own remaining job is the builder that composes modules and the `BuiltEngine` it produces.
