@@ -4,13 +4,13 @@ Every crate in the repository. Folder name matches crate name throughout, so a p
 
 ## The public surface
 
-[bones-engine](bones-engine/README.md) is the one crate an embedder depends on. It holds the builder API and frame-loop orchestration directly, and re-exports a curated set of the crates nested beneath it. Everything under `bones-engine/` that it does not re-export is an implementation detail — an embedder reaches all of it through this one crate, which is the single public library surface (ADR-030).
+[bones-engine](bones-engine/README.md) is the one crate an embedder depends on. It holds the composition root — the builder API — directly, and re-exports a curated set of the crates nested beneath it. Everything under `bones-engine/` that it does not re-export is an implementation detail — an embedder reaches all of it through this one crate, which is the single public library surface (ADR-030).
 
-### Kernel — always present, never orchestrates a module
+### Kernel — always present, names no native module
 
 | Crate | Responsibility |
 | --- | --- |
-| [bones-kernel](bones-engine/bones-kernel/README.md) | Bus, logging, host-side WIT bindings, platform (SDL), and the WASM extension loader — everything native modules depend *on* (ADR-030) |
+| [bones-kernel](bones-engine/bones-kernel/README.md) | Bus, logging, host-side WIT bindings, platform (SDL), the frame loop, and WASM extension loading and supervision — everything native modules depend *on*, plus everything that runs without naming one (ADR-030, ADR-031) |
 
 The kernel must build and run with no native modules registered at all.
 
@@ -51,7 +51,7 @@ A crate prefixed `bones-extension-` is an actual extension a bones distribution 
 - Extensions depend on the ABI only — through `bones-wasm-sdk` in Rust — never on the host crates above.
 - `bones-kernel`'s bus and contract modules know nothing about presentation — messaging must stay usable headless.
 - `bones-kernel`'s logging module is a universal leaf: anyone may depend on the crate for it, and the crate itself depends on no other crate here.
-- A native module never depends on another module's crate; it goes through a service in the registry `bones-kernel`'s bus owns.
+- A native module never depends on another module's crate; it goes through a service in the registry `bones-kernel`'s bus owns (ADR-031). `bones-engine` is the sole exception, and only because composing them is its job.
 - Nothing depends on `bones`, and nothing outside `bones-engine/` depends on `bones-kernel` or a `bones-module-*` crate except `bones-engine` itself.
 
 The dependency graph, and what counts as a violation, is in [docs/structure.md](../docs/structure.md). File-layout conventions — one type per file, tests out of line, what a crate README should say — are in [docs/code-style.md](../docs/code-style.md).

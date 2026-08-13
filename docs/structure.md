@@ -14,8 +14,8 @@ Component names below are logical. The crates implementing them all carry a `bon
 | wasm-extensions | Everything about a WASM extension's existence over time (ADR-020): loading/dispatch/watchdog (`host`), state-transition events (`lifecycle`), and save/load of its own state (`persistence`, unconditional — see the ADR for why it isn't in the optional module set below) | bus, contract, logging |
 | contract | The WIT package — the extension-facing API definition | — |
 | platform | SDL window, tray, input sources, timing, event pump; headless mode | logging |
-| runner | Frame-phase loop skeleton, builder API (`.module(...)` injection); native presentation is feature-gated | bus, wasm-extensions, logging; optional platform/renderer/ui |
-| engine | The public surface: a curated re-export of the above plus the optional modules, and the one crate an embedder depends on | runner, bus, logging, messages; optional audio/game-core |
+| runner | Frame-phase loop skeleton, extension discovery and supervision — module-agnostic, so it sits in the kernel (ADR-031) | bus, wasm-extensions, logging |
+| engine | The public surface plus the composition root: the builder API (`.module(...)` injection, and the `.renderer()`/`.ui()` sugar over it), and the one crate an embedder depends on | runner, bus, logging, messages; optional renderer/ui/audio/game-core/web |
 | logging | Structured sink and per-extension tagging | — |
 
 ## Native modules (first-party)
@@ -25,7 +25,7 @@ All feature-flagged and individually optional; embedders may add their own.
 | Module | Responsibility | Uses (kernel + services) |
 | --- | --- | --- |
 | renderer | Executes gfx batches, presents; provides `draw-target` | bus; `window-surface` service |
-| ui | egui integration: widget specs → draw data, events back | bus; renderer (direct-wired, not yet the `draw-target` service — see design/modules.md) |
+| ui | egui integration: widget specs → draw data, events back | bus; `draw-target` service |
 | audio | Plays sound effects and music via `audio/*`, backed by `kira` | bus |
 | game-core | ECS/collision/tilemap/sprite-animation simulation via `game-core/*`, publishing `gfx/*`, backed by `hecs`/`glam`/`tiled` (ADR-019) and an internal backend-agnostic `PhysicsBackend` trait with `rapier2d` and retro/arcade implementations (ADR-021, ADR-022) | bus; `bus` service (to publish `gfx/*`, since it's injected via the generic `.module(...)` path, not renderer/ui's hardcoded sugar) |
 | web | wry panels, bus ↔ page JSON bridge | bus; `window-surface` service |
@@ -61,17 +61,17 @@ graph TD
     end
     Renderer --> Bus
     UI --> Bus
-    UI --> Renderer
     Audio --> Bus
     GameCore --> Bus
     Web --> Bus
     Renderer -. "window-surface" .-> Platform
+    UI -. "draw-target" .-> Renderer
     GameCore -. "bus service" .-> Bus
     Web -. "window-surface" .-> Platform
 ```
 
 - Solid arrows are crate dependencies; dashed arrows are **services** (typed values in the registry `bus::Module` defines, listed in design/ modules.md) — the consumer depends on `bus`, not on the provider's crate.
-- Anything not drawn is a design violation (e.g. bus depending on host, platform depending on renderer, module depending on another module's crate) — except `UI --> Renderer`, direct-wired the same way renderer itself is direct-wired into `Engine` rather than through a module trait; both are provisional until that trait exists (design/modules.md).
+- Anything not drawn is a design violation (e.g. bus depending on host, platform depending on renderer, module depending on another module's crate). There are no exceptions: since [ADR-031](adr/ADR-031-native-modules-reach-each-other-only-through-services.md) no native module names another's crate, and `renderer`/`ui` reach the composition through the same `.module(...)` path an embedder uses.
 - **bus and contract know nothing about presentation** — messaging must stay usable in a headless build.
 - **logging is a universal leaf**: anyone may depend on it (edges omitted above for readability); it depends on nothing.
 - **Every module in the optional, consumer-composed set is optional**; the kernel must build and run with zero of them registered (headless configuration). `wasm-extensions::persistence` is `Module`-shaped but kernel-tier, not a member of that set — see ADR-020.
@@ -83,8 +83,8 @@ graph TD
 ```text
 bones/
 ├── crates/
-│   ├── bones-engine/                  # the public surface embedders depend on; holds the builder/frame-loop orchestration itself (ADR-030)
-│   │   ├── bones-kernel/              #  bus, logging, contract, platform, wasm-extensions: always-present, never orchestrates a module
+│   ├── bones-engine/                  # the public surface embedders depend on; holds the composition root — the builder (ADR-030, ADR-031)
+│   │   ├── bones-kernel/              #  bus, logging, contract, platform, wasm-extensions, runner: always-present and module-agnostic
 │   │   ├── bones-module-renderer/     #  first-party native modules, each its own crate (ADR-030)
 │   │   ├── bones-module-ui/           #
 │   │   ├── bones-module-audio/        #

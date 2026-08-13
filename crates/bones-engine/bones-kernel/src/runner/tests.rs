@@ -1,12 +1,12 @@
 use super::*;
-use bones_kernel::logging::RecordingSink;
+use crate::logging::RecordingSink;
 use std::sync::{Arc, Mutex};
 
 struct CountingEndpoint {
     ticks: Arc<Mutex<Vec<f32>>>,
 }
 
-impl bones_kernel::bus::Handler for CountingEndpoint {
+impl crate::bus::Handler for CountingEndpoint {
     fn handle(&mut self, envelope: &Envelope) {
         if let Some(dt) = read_tick_dt(envelope) {
             self.ticks.lock().unwrap().push(dt);
@@ -36,7 +36,7 @@ fn step_delivers_tick_to_a_subscribed_endpoint() {
 fn run_for_delivers_ticks_in_order() {
     let bus = Bus::new();
     let ticks = Arc::new(Mutex::new(Vec::new()));
-    let budget = bones_kernel::bus::EndpointBudget::new(bones_kernel::bus::BudgetLimits {
+    let budget = crate::bus::EndpointBudget::new(crate::bus::BudgetLimits {
         max_inbound: 1,
         max_publishes: 0,
     });

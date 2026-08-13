@@ -10,14 +10,14 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
-use bones_kernel::bus::{BudgetLimits, Bus, Endpoint, EndpointBudget, Registry};
-use bones_kernel::logging::Logger;
-use bones_kernel::wasm_extensions::host::{DisplayInfo, ExtensionTimeouts, Host};
+use crate::bus::{BudgetLimits, Bus, Endpoint, EndpointBudget, Registry};
+use crate::logging::Logger;
+use crate::wasm_extensions::host::{DisplayInfo, ExtensionTimeouts, Host};
 
-pub(crate) use shared_host::SharedHost;
+pub use shared_host::SharedHost;
 
 /// Publishes lifecycle events as this component (design/extensions.md).
-pub(crate) const ENGINE_SENDER: &str = "engine";
+pub const ENGINE_SENDER: &str = "engine";
 
 /// Loads `path` as an extension named `name`, registers it on `bus`
 /// (pub/sub) and `registry` (direct send, ADR-010), and subscribes it to
@@ -28,7 +28,7 @@ pub(crate) const ENGINE_SENDER: &str = "engine";
 /// traps instead of attaching, so it travels with the budget rather than being
 /// fixed here.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn attach_extension(
+pub fn attach_extension(
     wasm_engine: &wasmtime::Engine,
     bus: &Bus,
     registry: &Registry,
@@ -65,7 +65,7 @@ pub(crate) fn attach_extension(
     Ok((ep, shared, budget, topics))
 }
 
-pub(crate) fn read_file_mtime(path: &Path) -> SystemTime {
+pub fn read_file_mtime(path: &Path) -> SystemTime {
     std::fs::metadata(path)
         .and_then(|metadata| metadata.modified())
         .unwrap_or(SystemTime::UNIX_EPOCH)
@@ -75,7 +75,7 @@ pub(crate) fn read_file_mtime(path: &Path) -> SystemTime {
 ///
 /// - A missing directory is "no extensions," not an error.
 /// - Symbolic links are skipped, so a linked directory cycle cannot recurse.
-pub(crate) fn find_wasm_files(dir: &Path) -> Vec<PathBuf> {
+pub fn find_wasm_files(dir: &Path) -> Vec<PathBuf> {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return Vec::new();
     };
@@ -98,7 +98,7 @@ pub(crate) fn find_wasm_files(dir: &Path) -> Vec<PathBuf> {
     files
 }
 
-pub(crate) fn derive_extension_name(path: &Path) -> String {
+pub fn derive_extension_name(path: &Path) -> String {
     path.file_stem()
         .map(|stem| stem.to_string_lossy().into_owned())
         .unwrap_or_else(|| path.to_string_lossy().into_owned())

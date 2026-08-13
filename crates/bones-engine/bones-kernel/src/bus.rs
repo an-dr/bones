@@ -15,6 +15,8 @@ pub use endpoint::Endpoint;
 pub use envelope::Envelope;
 pub use handler::Handler;
 pub use module::{Module, ModuleContext, ModuleRegistration, ServiceRegistry};
+#[cfg(feature = "platform")]
+pub use module::offer_event;
 pub use registry::Registry;
 pub use respond::Respond;
 pub use send_error::SendError;

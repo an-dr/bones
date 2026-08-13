@@ -2,10 +2,10 @@ use std::collections::HashMap;
 use std::time::Instant;
 
 use bones_messages::ui::{Changed, Clicked, Spec};
-use bones_messages::DecodeMessage;
-use bones_kernel::bus::{Bus, Envelope, Handler};
+use bones_messages::{DecodeMessage, Message};
+use bones_kernel::bus::{Bus, Envelope, Handler, Module, ModuleContext};
+use bones_kernel::draw_target::{DrawTargetService, UiMesh, UiVertex};
 use bones_kernel::logging::Logger;
-use bones_module_renderer::{Renderer, UiMesh, UiVertex};
 
 use crate::input_translation::{compute_modifiers, translate_key, translate_mouse_button};
 use crate::output_translation::{
@@ -15,8 +15,8 @@ use crate::owned_widget::OwnedWidget;
 use crate::pending_spec::PendingSpec;
 
 /// Owns the embedded egui context: decodes widget specs published on
-/// `ui/spec`, runs one egui frame per tick, and drives the renderer's
-/// ui-mesh submission.
+/// `ui/spec`, runs one egui frame per tick, and submits the resulting
+/// meshes to whatever surface provided `draw-target`.
 pub struct Ui {
     ctx: egui::Context,
     bus: Bus,
@@ -29,6 +29,11 @@ pub struct Ui {
     pointer_pos: egui::Pos2,
     start: Instant,
     logger: Logger,
+    // `None` until `Module::init` consumes `draw-target`. Nothing this
+    // module produces can be drawn without one, so `init` fails rather
+    // than leaving it unset — the surface is a hard requirement, not an
+    // optional enhancement.
+    target: Option<DrawTargetService>,
 }
 
 impl Ui {
@@ -45,6 +50,7 @@ impl Ui {
             pointer_pos: egui::Pos2::ZERO,
             start: Instant::now(),
             logger,
+            target: None,
         }
     }
 
@@ -126,10 +132,20 @@ impl Ui {
         }
     }
 
-    /// Runs one egui frame and draws it via `renderer`. Caller must call
-    /// this after `gfx/*` draws for the frame (ui draws above all gfx
-    /// layers, design/presentation.md) and before `renderer.present()`.
-    pub fn update(&mut self, renderer: &mut Renderer, screen_width: u32, screen_height: u32) {
+    /// Runs one egui frame and draws it through the `draw-target` service.
+    /// Caller must call this after `gfx/*` draws for the frame (ui draws
+    /// above all gfx layers, design/presentation.md) and before the target
+    /// presents.
+    ///
+    /// A no-op before `Module::init` has supplied a target.
+    pub fn update(&mut self) {
+        // Size read up front and the target re-borrowed further down, so
+        // the egui pass in between can still use `self` for the widget
+        // specs, the bus, and the logger.
+        let Some((screen_width, screen_height)) = self.target.as_ref().map(|target| target.size())
+        else {
+            return;
+        };
         let screen_rect = egui::Rect::from_min_size(
             egui::Pos2::ZERO,
             egui::vec2(screen_width as f32, screen_height as f32),
@@ -180,6 +196,19 @@ impl Ui {
             }
         });
 
+        let clipped = self
+            .ctx
+            .tessellate(full_output.shapes, full_output.pixels_per_point);
+
+        let logger = self.logger.clone();
+        // Not a second chance to bail: the early return above already
+        // established there is a target. Panicking beats returning here,
+        // which would silently discard a whole frame of tessellated output.
+        let target = self
+            .target
+            .as_mut()
+            .expect("target was checked at the top of update");
+
         for (id, delta) in &full_output.textures_delta.set {
             let egui::ImageData::Color(image) = &delta.image;
             let rgba = convert_color_image_to_straight_rgba(image);
@@ -187,20 +216,16 @@ impl Ui {
             let width = image.size[0] as u32;
             let height = image.size[1] as u32;
             let result = match delta.pos {
-                None => renderer.set_ui_texture(key, width, height, &rgba),
+                None => target.set_ui_texture(key, width, height, &rgba),
                 Some([x, y]) => {
-                    renderer.update_ui_texture_region(key, x as u32, y as u32, width, height, &rgba)
+                    target.update_ui_texture_region(key, x as u32, y as u32, width, height, &rgba)
                 }
             };
             if let Err(err) = result {
-                self.logger
-                    .error("ui", &format!("uploading texture {id:?}: {err}"));
+                logger.error("ui", &format!("uploading texture {id:?}: {err}"));
             }
         }
 
-        let clipped = self
-            .ctx
-            .tessellate(full_output.shapes, full_output.pixels_per_point);
         for primitive in &clipped {
             let egui::epaint::Primitive::Mesh(mesh) = &primitive.primitive else {
                 continue; // TODO: PaintCallback (custom GPU code) primitives aren't supported.
@@ -236,14 +261,46 @@ impl Ui {
                     clip.height().round().max(0.0) as u32,
                 ),
             };
-            if let Err(err) = renderer.draw_ui_mesh(&ui_mesh) {
-                self.logger.error("ui", &format!("drawing ui mesh: {err}"));
+            if let Err(err) = target.draw_ui_mesh(&ui_mesh) {
+                logger.error("ui", &format!("drawing ui mesh: {err}"));
             }
         }
 
         for id in &full_output.textures_delta.free {
-            renderer.free_ui_texture(compute_texture_key(*id));
+            target.free_ui_texture(compute_texture_key(*id));
         }
+    }
+}
+
+impl Module for Ui {
+    fn name(&self) -> &str {
+        "ui"
+    }
+
+    /// Consumes the `draw-target` service — whatever module provides a
+    /// surface, which is `renderer` in the default composition but need
+    /// not be. Errors if none was provided, since this module has nothing
+    /// to draw on without one.
+    fn init(&mut self, ctx: &mut ModuleContext) -> Result<(), String> {
+        self.target = Some(ctx.consume_service::<DrawTargetService>().ok_or_else(|| {
+            "ui needs a draw-target service (configure .renderer() too)".to_string()
+        })?);
+        ctx.subscribe(Spec::TOPIC);
+        Ok(())
+    }
+
+    /// Claims the events egui is currently interested in (ADR-008), and
+    /// buffers every event either way — the ones it does not claim still
+    /// inform egui's next frame, they simply also reach `input/*`.
+    fn filter_event(&mut self, event: &sdl3::event::Event) -> bool {
+        self.feed_event(event)
+    }
+
+    /// Draws this frame's egui output above every `gfx/*` batch the target
+    /// composited in its own `render` (design/presentation.md), which
+    /// registration order guarantees has already run.
+    fn render(&mut self) {
+        self.update();
     }
 }
 
@@ -263,3 +320,6 @@ impl Handler for Ui {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

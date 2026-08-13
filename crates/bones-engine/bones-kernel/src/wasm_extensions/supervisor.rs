@@ -11,16 +11,16 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use bones_kernel::bus::{BudgetLimits, Bus, Registry};
-use bones_kernel::logging::Logger;
-use bones_kernel::wasm_extensions::host::{DisplayInfo, ExtensionTimeouts};
-use bones_kernel::wasm_extensions::lifecycle;
-use bones_kernel::wasm_extensions::lifecycle::Event;
+use crate::bus::{BudgetLimits, Bus, Registry};
+use crate::logging::Logger;
+use crate::wasm_extensions::host::{DisplayInfo, ExtensionTimeouts};
+use crate::wasm_extensions::lifecycle;
+use crate::wasm_extensions::lifecycle::Event;
 
-use crate::runner::loading::{attach_extension, read_file_mtime, ENGINE_SENDER};
+use crate::wasm_extensions::loading::{attach_extension, read_file_mtime, ENGINE_SENDER};
 
-pub(crate) use owned_command::OwnedCommand;
-pub(crate) use tracked_extension::TrackedExtension;
+pub use owned_command::OwnedCommand;
+pub use tracked_extension::TrackedExtension;
 
 /// How often the mtime half of `check` actually stats tracked files. The
 /// fault half (an atomic load) stays every-call; at 60Hz with `check`
@@ -55,7 +55,7 @@ pub struct Supervisor {
 
 impl Supervisor {
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn new(
+    pub fn new(
         wasm_engine: wasmtime::Engine,
         bus: Bus,
         registry: Registry,

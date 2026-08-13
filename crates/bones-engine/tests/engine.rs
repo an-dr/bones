@@ -76,7 +76,7 @@ fn build_discovers_loads_and_registers_a_real_extension() {
     let BuiltEngine {
         runner,
         platform,
-        renderer,
+        modules,
         ..
     } = Engine::new()
         .extensions_dir(HELLO_DIR)
@@ -84,7 +84,14 @@ fn build_discovers_loads_and_registers_a_real_extension() {
         .build()
         .expect("build crates/bones-extension-hello first: pwsh crates/bones-extension-hello/build.ps1");
     assert!(platform.is_none(), "no .window() was set");
-    assert!(renderer.is_none(), "no .renderer() was set");
+    let names: Vec<String> = modules
+        .iter()
+        .map(|module| module.lock().unwrap().name().to_string())
+        .collect();
+    assert!(
+        !names.iter().any(|name| name == "renderer" || name == "ui"),
+        "no .renderer()/.ui() was set, got {names:?}"
+    );
 
     runner.step(1.0 / 60.0);
 
@@ -605,26 +612,28 @@ fn a_real_extension_draws_a_sprite_through_a_real_renderer() {
     let sink = RecordingSink::new();
     let logger = Logger::new(Arc::new(sink.clone()));
 
-    let BuiltEngine {
-        runner, renderer, ..
-    } = Engine::new()
+    let engine = Engine::new()
         .extensions_dir(SPRITE_DEMO_DIR)
         .logger(logger)
         .window("test", 400, 300)
         .renderer()
         .build()
         .expect("build examples/sprite_demo first: pwsh examples/sprite_demo/build.ps1");
-    let renderer = renderer.expect(".renderer() was set");
+    assert!(
+        engine
+            .modules
+            .iter()
+            .any(|module| module.lock().unwrap().name() == "renderer"),
+        ".renderer() should register a module named renderer"
+    );
 
     // First tick: gfx/load-sprite (queued during init) gets delivered.
     // Second: gfx/clear + gfx/draw-sprite (queued reactively from the
     // first tick's on-tick) get delivered — ADR-015's deferred dispatch.
-    runner.step(1.0 / 60.0);
-    renderer.lock().unwrap().render();
-    renderer.lock().unwrap().present();
-    runner.step(1.0 / 60.0);
-    renderer.lock().unwrap().render();
-    renderer.lock().unwrap().present();
+    engine.runner.step(1.0 / 60.0);
+    engine.present_frame();
+    engine.runner.step(1.0 / 60.0);
+    engine.present_frame();
 
     let records = sink.records();
     assert!(

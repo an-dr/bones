@@ -12,7 +12,7 @@ use crate::circle_geometry::{circle_fill_lines, circle_outline_points};
 use crate::retained_draw::RetainedDraw;
 use crate::text_alignment::aligned_text_x;
 use crate::text_rasterizer::rasterize_text;
-use crate::ui_mesh::UiMesh;
+use bones_kernel::draw_target::UiMesh;
 
 pub(crate) struct Inner {
     pub(crate) canvas: Canvas<Window>,

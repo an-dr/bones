@@ -3,7 +3,7 @@ use super::*;
 // Built by crates/bones-extension-hello/build.ps1 (see its README).
 const HELLO_DIR: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../crates/bones-extension-hello/target/wasm32-wasip2/release"
+    "/../../../crates/bones-extension-hello/target/wasm32-wasip2/release"
 );
 
 #[test]

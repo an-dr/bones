@@ -88,6 +88,7 @@ Immutable ADRs in [adr/](adr/):
 - [ADR-028](adr/ADR-028-detachable-native-modules-and-wry-presentation.md) — attach native modules and wry presentation to a live headless engine
 - [ADR-029](adr/ADR-029-the-two-version-lines-are-the-two-public-surfaces.md) — the two version lines are the two public surfaces, both starting at 1.0.0
 - [ADR-030](adr/ADR-030-package-structure-follows-consumer-use-cases.md) — package structure follows consumer use cases: flat under crates/, with the kernel and modules nested in bones-engine
+- [ADR-029](adr/ADR-029-native-modules-reach-each-other-only-through-services.md) — native modules reach each other only through services, and input is offered topmost-first
 
 ## History
 

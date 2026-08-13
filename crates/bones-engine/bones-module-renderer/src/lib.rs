@@ -8,9 +8,8 @@ mod circle_geometry;
 mod inner;
 mod renderer;
 mod retained_draw;
+mod shared_inner;
 mod text_alignment;
 mod text_rasterizer;
-mod ui_mesh;
 
 pub use renderer::Renderer;
-pub use ui_mesh::{UiMesh, UiVertex};

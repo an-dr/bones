@@ -9,11 +9,15 @@
 mod module_context;
 mod module_registration;
 mod module_trait;
+#[cfg(feature = "platform")]
+mod offer_event;
 mod service_registry;
 
 pub use module_context::ModuleContext;
 pub use module_registration::ModuleRegistration;
 pub use module_trait::Module;
+#[cfg(feature = "platform")]
+pub use offer_event::offer_event;
 pub use service_registry::ServiceRegistry;
 
 #[cfg(test)]

@@ -1,7 +1,7 @@
 use bones_messages::tick::Tick;
 use bones_messages::{DecodeMessage, EncodeMessage, Message};
-use bones_kernel::bus::{Bus, Envelope};
-use bones_kernel::logging::Logger;
+use crate::bus::{Bus, Envelope};
+use crate::logging::Logger;
 
 /// Reads `dt` back out of a `core/tick` envelope, `None` if the topic
 /// doesn't match or the payload isn't 4 LE bytes.

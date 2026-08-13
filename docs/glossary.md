@@ -20,11 +20,11 @@ Almost every other term is positioned by this one distinction.
 
 **Native module** — host-side, optional, and consumer-composed (ADR-011, ADR-017). It owns a native resource — a GPU surface, an egui context, a webview — or a simulation the engine runs, and it joins the frame loop by implementing the `Module` trait and being injected with `.module(...)`. `renderer`, `ui`, `audio`, `game-core`, and `web` are the shipped ones.
 
-**Kernel tier** — the host code that is always present and never orchestrates an optional native module, as opposed to the modules themselves: `bus`, `wasm-extensions`, `contract`, `platform`, `logging`, merged into the one `bones-kernel` crate (ADR-030). The frame-loop/builder orchestration is always present too but lives directly in `bones-engine`, since it is what composes the optional modules rather than being depended on by them. The kernel must build and run with no modules registered at all. See [crates/](../crates/README.md), which lists both tiers.
+**Kernel tier** — the host code that is always present and names no native module, as opposed to the modules themselves: `bus`, `wasm-extensions` (including extension loading and supervision), `contract`, `platform`, `logging`, and `runner`, merged into the one `bones-kernel` crate (ADR-030, ADR-031). What stays outside it is the composition root — the builder in `bones-engine`, the one place that names concrete module types. The kernel must build and run with no modules registered at all. See [crates/](../crates/README.md), which lists both tiers.
 
 **Guest library** — a Rust crate compiled *into* a `.wasm`, not linked by the engine. It owns no native resource and is pure computation over messages. `bones-wasm-sdk`'s `game_ui` module is the one bones ships (ADR-025).
 
-**Service** — a typed value one module publishes into the registry for others to resolve, so a consumer depends on `bus` rather than on the provider's crate. `window-surface` and `draw-target` are the shipped ones; see [design/modules.md](design/modules.md).
+**Service** — a typed value one module publishes into the registry for others to resolve, so a consumer depends on `bus` rather than on the provider's crate. `window-surface`, `bus`, and `draw-target` are the shipped ones, and they are the only way one native module reaches another (ADR-031); see [design/modules.md](design/modules.md).
 
 ## The two public surfaces
 
@@ -38,8 +38,8 @@ Each has its own version line, and the line is what tells you which surface you 
 
 | What you are writing | Where it goes | Compiles for |
 | --- | --- | --- |
-| A native module — owns a resource, injected with `.module(...)` | `crates/`, named `bones-<name>` | native |
-| A kernel crate — always present | `crates/`, named `bones-<name>` | native |
+| A native module — owns a resource, injected with `.module(...)` | `crates/bones-engine/`, named `bones-module-<name>` | native |
+| Always-present host code — bus, logging, platform, the frame loop | `crates/bones-engine/bones-kernel/`, as a module of that crate | native |
 | A WASM extension | anywhere; `crates/bones-extension-<name>` only if a fresh install must ship it, `examples/` if it demonstrates one capability | `wasm32-wasip2` |
 | A library both host and guest link | `crates/bones-messages` — the one crate that meets this bar | both |
 | A Rust guest library | `crates/bones-wasm-sdk`, as a feature-gated module | `wasm32-wasip2` |

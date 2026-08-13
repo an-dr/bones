@@ -4,12 +4,17 @@ use bones_messages::lifecycle::{Event, LifecycleEvent};
 use bones_messages::renderer::{DisplayChanged, LogicalCanvas};
 use bones_messages::{DecodeMessage, EncodeMessage, Message};
 use bones_kernel::bus::{Bus, Envelope, Handler, Module, ModuleContext};
+use bones_kernel::draw_target::DrawTargetService;
 use bones_kernel::logging::Logger;
 use sdl3::video::Window;
 use send_wrapper::SendWrapper;
 
 use crate::inner::Inner;
-use crate::ui_mesh::UiMesh;
+use crate::shared_inner::SharedInner;
+
+/// Every `gfx/*` command; requested in `init` rather than by the builder,
+/// so what this module listens to travels with the module.
+const GFX_TOPICS: &str = "gfx/*";
 
 /// SDL's `Window`/`Canvas` aren't `Send`/`Sync` (real thread-affinity
 /// constraints on some platforms), but the vendored `pubsub-bus` crate
@@ -35,14 +40,19 @@ struct State {
     // `None` until `Module::init` consumes `window-surface` and builds the
     // real SDL state — every other method panics if called first (a
     // caller/wiring bug, not a runtime condition to recover from).
-    inner: Option<Inner>,
+    //
+    // Shared rather than owned outright: `init` hands a second handle to
+    // the same state out as the `draw-target` service, so a module drawing
+    // above this one never needs to name `Renderer` (see `shared_inner`).
+    inner: Option<SharedInner>,
 }
 
 impl State {
-    fn inner_mut(&mut self) -> &mut Inner {
+    fn inner_mut(&self) -> std::sync::MutexGuard<'_, send_wrapper::SendWrapper<Inner>> {
         self.inner
-            .as_mut()
+            .as_ref()
             .expect("Renderer used before Module::init built its SDL state")
+            .lock()
     }
 }
 
@@ -69,62 +79,6 @@ impl Renderer {
         });
     }
 
-    /// Current window size in pixels, for callers (the ui module) that need
-    /// to size their own output to match without holding a window handle.
-    pub fn size(&self) -> (u32, u32) {
-        self.0
-            .inner
-            .as_ref()
-            .expect("Renderer used before Module::init built its SDL state")
-            .canvas
-            .window()
-            .size()
-    }
-
-    /// Registers or fully replaces the RGBA8 (straight alpha) texture the
-    /// ui module addresses as `id` in `UiMesh::texture` — egui's own
-    /// texture ids (font atlas plus any user textures). `rgba.len()` must
-    /// be `width * height * 4`.
-    pub fn set_ui_texture(
-        &mut self,
-        id: u64,
-        width: u32,
-        height: u32,
-        rgba: &[u8],
-    ) -> Result<(), String> {
-        self.0.inner_mut().set_ui_texture(id, width, height, rgba)
-    }
-
-    /// Patches a sub-rectangle of a texture already registered by
-    /// `set_ui_texture` (egui's `ImageDelta::pos`, e.g. the font atlas
-    /// growing as new glyphs are rasterized). Errors if `id` was never
-    /// `set_ui_texture`-created first.
-    pub fn update_ui_texture_region(
-        &mut self,
-        id: u64,
-        x: u32,
-        y: u32,
-        width: u32,
-        height: u32,
-        rgba: &[u8],
-    ) -> Result<(), String> {
-        self.0
-            .inner_mut()
-            .update_ui_texture_region(id, x, y, width, height, rgba)
-    }
-
-    /// Drops a texture registered by `set_ui_texture` (egui's `TexturesDelta::free`).
-    pub fn free_ui_texture(&mut self, id: u64) {
-        self.0.inner_mut().free_ui_texture(id);
-    }
-
-    /// Draws one textured triangle mesh from egui's tessellated output
-    /// (design/presentation.md: "egui output is drawn by the renderer
-    /// above all gfx layers") — the caller is responsible for calling this
-    /// after every `gfx/*` draw for the frame has already executed.
-    pub fn draw_ui_mesh(&mut self, mesh: &UiMesh) -> Result<(), String> {
-        self.0.inner_mut().draw_ui_mesh(mesh)
-    }
 }
 
 impl Handler for Renderer {
@@ -198,9 +152,15 @@ impl Module for Renderer {
         "renderer"
     }
 
-    /// Consumes the `window-surface` service (design/modules.md) and
-    /// builds the real SDL canvas/texture-creator state; errors if no
-    /// window was provided (e.g. `.renderer()` without `.window(...)`).
+    /// Consumes the `window-surface` service (design/modules.md), builds
+    /// the real SDL canvas/texture-creator state, and provides that state
+    /// back as the `draw-target` service; errors if no window was provided
+    /// (e.g. `.renderer()` without `.window(...)`).
+    ///
+    /// Providing `draw-target` here, rather than the builder wiring the two
+    /// modules together, is what keeps the pairing a runtime contract: any
+    /// module offering the same service can stand in, and any module
+    /// needing a surface consumes it without naming this crate.
     fn init(&mut self, ctx: &mut ModuleContext) -> Result<(), String> {
         let window = ctx.consume_service::<Window>().ok_or_else(|| {
             "renderer needs a window-surface service (configure .window(...))".to_string()
@@ -211,7 +171,12 @@ impl Module for Renderer {
         let font = FontRef::try_from_slice(epaint_default_fonts::HACK_REGULAR)
             .map_err(|e| e.to_string())?;
 
-        self.0.inner = Some(Inner::new(canvas, texture_creator, font));
+        let shared = SharedInner::new(Inner::new(canvas, texture_creator, font));
+        ctx.provide_service::<DrawTargetService>(Box::new(shared.clone()))?;
+        self.0.inner = Some(shared);
+
+        ctx.subscribe(GFX_TOPICS);
+        ctx.subscribe(LifecycleEvent::TOPIC);
         Ok(())
     }
 

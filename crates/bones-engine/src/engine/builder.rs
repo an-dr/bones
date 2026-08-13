@@ -1,18 +1,18 @@
 //! The public builder API (design/modules.md, ADR-017): discovers WASM
 //! extensions and runs them, plus `.module(...)` for injecting custom
-//! native modules. TODO: `bones::Engine` in the design sketch — lives here
-//! as `runner::Engine` until a top-level facade crate exists to re-export
-//! it.
+//! native modules.
+//!
+//! This is the composition root, and the only reason `bones-engine` holds
+//! code at all rather than being a pure re-export: everything module-
+//! agnostic — the frame loop, extension loading, extension supervision —
+//! lives in `bones-kernel`, and what remains here is precisely the part
+//! that names concrete `bones-module-*` types.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-#[cfg(feature = "presentation")]
-use bones_messages::Message;
-#[cfg(feature = "presentation")]
-use bones_kernel::bus::ModuleContext;
 use bones_kernel::bus::{BudgetLimits, Module, Registry, ServiceRegistry};
 use bones_kernel::logging::Logger;
 #[cfg(feature = "presentation")]
@@ -25,21 +25,17 @@ use bones_kernel::wasm_extensions::lifecycle::Event;
 use bones_kernel::wasm_extensions::files::{self, Files};
 use bones_kernel::wasm_extensions::persistence::Persistence;
 
-use crate::runner::loading::{
+use bones_kernel::wasm_extensions::loading::{
     attach_extension, derive_extension_name, find_wasm_files, read_file_mtime, ENGINE_SENDER,
 };
-use crate::runner::supervisor::TrackedExtension;
-use crate::runner::Runner;
-use crate::runner::Supervisor;
+use bones_kernel::wasm_extensions::supervisor::TrackedExtension;
+use bones_kernel::runner::Runner;
+use bones_kernel::wasm_extensions::supervisor::Supervisor;
 
-use super::built_engine::{run_shutdown, BuiltEngine};
+use super::built_engine::{run_frame_phases, run_shutdown, BuiltEngine};
 use super::register_module::register_module;
-#[cfg(feature = "presentation")]
-use super::shared::Shared;
 
 const DEFAULT_TICK_HZ: f64 = 60.0;
-#[cfg(feature = "presentation")]
-const GFX_TOPICS: &str = "gfx/*";
 
 /// A relative `extensions_dir`/`saves_dir` resolves against the running
 /// executable's own directory, not the process's current working
@@ -183,6 +179,10 @@ impl Engine {
     /// executes `gfx/*` draw commands published by extensions and presents
     /// once per `run` iteration. Requires `.window(...)` — `build`/`run`
     /// error if this is set without one.
+    ///
+    /// Sugar for `.module(Renderer::new(...))`, registered ahead of the
+    /// injected modules so its `draw-target` service exists before
+    /// anything can consume it.
     #[cfg(feature = "presentation")]
     pub fn renderer(mut self) -> Self {
         self.renderer_enabled = true;
@@ -191,9 +191,10 @@ impl Engine {
 
     /// Attaches the egui ui module (ADR-005, design/presentation.md):
     /// decodes `ui/spec` messages and draws them each `run` iteration.
-    /// Requires `.renderer()` too (ui draws through it, direct-wired for
-    /// now — see docs/structure.md) — `build`/`run` error if this is set
-    /// without one.
+    ///
+    /// Sugar for `.module(Ui::new(...))`. It needs *some* module to have
+    /// provided the `draw-target` service, which `.renderer()` does —
+    /// `build` errors if nothing did.
     #[cfg(feature = "presentation")]
     pub fn ui(mut self) -> Self {
         self.ui_enabled = true;
@@ -210,15 +211,17 @@ impl Engine {
 
     /// Registers a custom native module (design/modules.md, ADR-017):
     /// runs `init` in registration order at `build()` time, then hooks its
-    /// `render`/`present` each `run` iteration. The app is built solely on
-    /// this same method (via `.renderer()`/`.ui()`'s sugar) — no access an
-    /// embedder lacks.
+    /// `filter_event`/`render`/`present` each `run` iteration. Every module
+    /// the engine ships arrives through this same method — including
+    /// `.renderer()`'s and `.ui()`'s, which are sugar over it — so an
+    /// injected module has no less access than a built-in one, and either
+    /// can be replaced by the other.
     // TODO: a module registered this way has no way to receive `Engine`'s
-    // configured `Logger` at construction time (only `.renderer()`/`.ui()`'s
-    // hardcoded sugar does) — `core/audio` accepts this as "no logger for
-    // now" rather than inventing a mismatched one of their own; a real fix
-    // needs this method's own signature to change (e.g. a factory closure
-    // receiving the logger).
+    // configured `Logger` at construction time — only the `.renderer()`/
+    // `.ui()` sugar can, because it constructs the module itself. `audio`
+    // accepts this as "no logger for now" rather than inventing a
+    // mismatched one of its own; a real fix needs this method's own
+    // signature to change (e.g. a factory closure receiving the logger).
     pub fn module(mut self, module: impl Module + 'static) -> Self {
         self.modules.push(Box::new(module));
         self
@@ -394,38 +397,6 @@ impl Engine {
             None
         };
 
-        #[cfg(feature = "presentation")]
-        let renderer = if renderer_enabled {
-            if platform.is_none() {
-                return Err(wasmtime::Error::msg(".renderer() needs .window(...) too"));
-            }
-            let shared = Arc::new(Mutex::new(Renderer::new(bus.clone(), self.logger.clone())));
-            {
-                let mut renderer = shared.lock().unwrap();
-                let mut ctx = ModuleContext::new(&mut services);
-                Module::init(&mut *renderer, &mut ctx).map_err(wasmtime::Error::msg)?;
-            }
-            let ep = bus.register("renderer", Shared(shared.clone()));
-            ep.subscribe(GFX_TOPICS);
-            ep.subscribe(bones_messages::lifecycle::LifecycleEvent::TOPIC);
-            Some(shared)
-        } else {
-            None
-        };
-
-        #[cfg(feature = "presentation")]
-        let ui = if ui_enabled {
-            renderer
-                .as_ref()
-                .ok_or_else(|| wasmtime::Error::msg(".ui() needs .renderer() too"))?;
-            let shared = Arc::new(Mutex::new(Ui::new(bus.clone(), self.logger.clone())));
-            let ep = bus.register("ui", Shared(shared.clone()));
-            ep.subscribe(bones_messages::ui::Spec::TOPIC);
-            Some(shared)
-        } else {
-            None
-        };
-
         // Native modules register (bus + call registry) before any
         // extension loads below, deliberately — an extension's own `init`
         // can `send` a module synchronously (ADR-010, e.g. persistence's
@@ -436,6 +407,41 @@ impl Engine {
         // `persistence` registered after every extension's `init` had
         // already run and failed its `send` with `SendError::UnknownEndpoint`.
         let mut modules = Vec::new();
+
+        // `.renderer()` and `.ui()` are sugar over `.module(...)`, not a
+        // second way in: both go through `register_module` like anything
+        // an embedder injects, and neither is named again after this
+        // point. Registration order is the only thing that makes them the
+        // first two — the renderer provides `draw-target`, which ui's own
+        // `init` then consumes, and the render/present phases run modules
+        // in this same order so ui draws above the gfx layers.
+        #[cfg(feature = "presentation")]
+        if renderer_enabled {
+            // Checked here as well as in the module's own `init`, which
+            // reports the missing `window-surface` service. That message is
+            // right for a `.module(...)` caller and wrong for this one: an
+            // embedder who typed `.renderer()` has never heard of the
+            // service, and needs to be told about `.window(...)`.
+            if platform.is_none() {
+                return Err(wasmtime::Error::msg(".renderer() needs .window(...) too"));
+            }
+            let renderer = Renderer::new(bus.clone(), self.logger.clone());
+            register_module(
+                &bus,
+                &registry,
+                &mut services,
+                &mut modules,
+                Box::new(renderer),
+            )
+            .map_err(wasmtime::Error::msg)?;
+        }
+        #[cfg(feature = "presentation")]
+        if ui_enabled {
+            let ui = Ui::new(bus.clone(), self.logger.clone());
+            register_module(&bus, &registry, &mut services, &mut modules, Box::new(ui))
+                .map_err(wasmtime::Error::msg)?;
+        }
+
         #[cfg(feature = "web")]
         if let Some(module) = web_module {
             register_module(&bus, &registry, &mut services, &mut modules, module)
@@ -569,7 +575,7 @@ impl Engine {
                 Ok(Some(command)) => command_sink
                     .lock()
                     .unwrap()
-                    .push(crate::runner::supervisor::OwnedCommand::from(command)),
+                    .push(bones_kernel::wasm_extensions::supervisor::OwnedCommand::from(command)),
                 Ok(None) => control_logger.warn(
                     "engine",
                     &format!(
@@ -611,10 +617,6 @@ impl Engine {
             runner: Runner::new(bus, self.logger),
             #[cfg(feature = "presentation")]
             platform,
-            #[cfg(feature = "presentation")]
-            renderer,
-            #[cfg(feature = "presentation")]
-            ui,
             modules,
             supervisor,
             exit_requested,
@@ -635,10 +637,6 @@ impl Engine {
             runner,
             #[cfg(feature = "presentation")]
             mut platform,
-            #[cfg(feature = "presentation")]
-            renderer,
-            #[cfg(feature = "presentation")]
-            ui,
             modules,
             mut supervisor,
             exit_requested,
@@ -649,13 +647,14 @@ impl Engine {
         let shutdown_sender = loop {
             #[cfg(feature = "presentation")]
             if let Some(platform) = &mut platform {
-                // ADR-008: offer every raw event to the ui layer first; what
-                // it claims (wants_pointer_input/wants_keyboard_input, as of
-                // the end of the last `update`) never reaches `input/*`.
-                // Locked once for the whole poll, not per event.
-                let mut ui_guard = ui.as_ref().map(|ui| ui.lock().unwrap());
+                // ADR-008: offer every raw event to the modules first, in
+                // registration order, and stop at the first one that claims
+                // it — what a module claims never reaches `input/*`. No
+                // module is named here: a `.module(...)`-injected overlay
+                // filters input on exactly the same terms the built-in ui
+                // does.
                 platform.poll_events_with(runner.bus(), "platform", |event| {
-                    ui_guard.as_mut().is_some_and(|ui| ui.feed_event(event))
+                    bones_kernel::bus::offer_event(&modules, event)
                 });
                 if platform.quit_requested() {
                     break "platform";
@@ -674,34 +673,12 @@ impl Engine {
             runner.step(dt);
             supervisor.check();
 
-            // render phase (design/modules.md): gfx/ui draws already
-            // happened synchronously via `Handler::handle` during `step`'s
-            // dispatch above, so `render` is a no-op for renderer today —
-            // still called for any module that does need it.
-            #[cfg(feature = "presentation")]
-            if let Some(renderer) = &renderer {
-                renderer.lock().unwrap().render();
-            }
-            for module in &modules {
-                module.lock().unwrap().render();
-            }
-
-            // ui draws above every gfx layer (design/presentation.md), so
-            // its `update` runs between `render` and `present`.
-            #[cfg(feature = "presentation")]
-            if let (Some(ui), Some(renderer)) = (&ui, &renderer) {
-                let mut renderer = renderer.lock().unwrap();
-                let (width, height) = renderer.size();
-                ui.lock().unwrap().update(&mut renderer, width, height);
-            }
-
-            #[cfg(feature = "presentation")]
-            if let Some(renderer) = &renderer {
-                renderer.lock().unwrap().present();
-            }
-            for module in &modules {
-                module.lock().unwrap().present();
-            }
+            // render then present, both over every module in registration
+            // order (design/modules.md). The renderer composites its
+            // retained `gfx/*` batches, ui draws above that, and only then
+            // does the frame flip — layering that comes from the order
+            // modules were composed in, not from naming any of them here.
+            run_frame_phases(&modules);
 
             let elapsed = now.elapsed();
             if elapsed < period {

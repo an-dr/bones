@@ -314,7 +314,6 @@ version = "1.0.0"
 dependencies = [
  "bones-kernel",
  "bones-messages",
- "bones-module-renderer",
  "egui",
  "sdl3",
 ]

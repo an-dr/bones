@@ -2,11 +2,14 @@ use std::sync::{Arc, Mutex};
 
 use bones_kernel::bus::{Envelope, Handler, Module, Respond};
 
-/// Same shape as `Shared<T>`, but for a boxed `Module`: `Box<dyn Module>`
-/// can't satisfy `Shared<T>`'s `T: Handler` bound generically (it would
-/// need `impl Handler for Box<T>`, which conflicts with `bus`'s existing
-/// blanket impl for `FnMut` closures — a coherence conflict, not a design
-/// choice) — method-call syntax finds `handle` through auto-deref instead.
+/// Forwards bus deliveries to a module shared with `BuiltEngine`, which
+/// also drives its frame-phase hooks.
+///
+/// Written against `Box<dyn Module>` concretely rather than a generic
+/// `T: Handler`: a generic version would need `impl Handler for Box<T>`,
+/// which conflicts with `bus`'s existing blanket impl for `FnMut`
+/// closures — a coherence conflict, not a design choice. Method-call
+/// syntax finds `handle` through auto-deref instead.
 pub(super) struct SharedModule(pub(super) Arc<Mutex<Box<dyn Module>>>);
 
 impl Handler for SharedModule {

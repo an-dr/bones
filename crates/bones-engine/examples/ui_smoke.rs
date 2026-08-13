@@ -1,6 +1,12 @@
 //! Opens a real window, feeds it one fixed `ui/spec` (mimicking the "notes"
 //! example), and renders it for a few seconds with mouse/keyboard routed
-//! through egui. Run with: cargo run -p ui --example ui_smoke
+//! through egui.
+//! Run with: cargo run -p bones-engine --example ui_smoke
+//!
+//! Lives here rather than in the ui crate because it composes two modules,
+//! and `bones-engine` is the one crate allowed to name more than one
+//! `bones-module-*` type — the ui crate itself no longer knows the
+//! renderer exists (it reaches the surface through `draw-target`).
 
 use bones_messages::ui::{Spec, Widget};
 use bones_messages::{EncodeMessage, Message};
@@ -22,6 +28,9 @@ fn main() -> Result<(), String> {
     renderer.init(&mut ctx)?;
 
     let mut ui = Ui::new(bus.clone(), Logger::default());
+    // Takes the `draw-target` service the renderer's own `init` provided
+    // one line above — the same hand-off `Engine::build` performs.
+    ui.init(&mut ctx)?;
 
     let spec = Spec {
         title: "notes",
@@ -59,7 +68,7 @@ fn main() -> Result<(), String> {
             correlation: None,
             payload: vec![30, 30, 60, 255],
         });
-        ui.update(&mut renderer, 480, 320);
+        ui.update();
         renderer.present();
 
         if frame % 60 == 0 {

@@ -1,6 +1,6 @@
 # Native modules and the composition root
 
-Detailed design of the module system. Decisions: [ADR-011](../adr/ADR-011-native-core-modules.md) (kernel + consumer-composed modules), [ADR-017](../adr/ADR-017-native-module-trait-and-typed-service-registry.md) (the concrete `Module` trait and service registry). `renderer`, `audio`, and `web` implement this contract for real; `ui` remains direct-wired (see structure.md). `wasm-extensions::persistence` also implements it (reusing `init`/`handle`/`respond` rather than duplicating that machinery) but, unlike the others, isn't part of the optional consumer-composed set — `Engine::build` always registers it (ADR-020).
+Detailed design of the module system. Decisions: [ADR-011](../adr/ADR-011-native-core-modules.md) (kernel + consumer-composed modules), [ADR-017](../adr/ADR-017-native-module-trait-and-typed-service-registry.md) (the concrete `Module` trait and service registry), [ADR-031](../adr/ADR-031-native-modules-reach-each-other-only-through-services.md) (modules reach each other only through services). All five shipped modules implement this contract for real, and all five arrive through `.module(...)` — `.renderer()` and `.ui()` are sugar over it, not a second route in. `wasm-extensions::persistence` also implements it (reusing `init`/`handle`/`respond` rather than duplicating that machinery) but, unlike the others, isn't part of the optional consumer-composed set — `Engine::build` always registers it (ADR-020).
 
 ## What a module is
 
@@ -24,6 +24,7 @@ A `Module` (crate: `bus`) requires `Handler` as a supertrait — a module is a b
 - `name()` — the bus endpoint id, checked unique at registration.
 - `init(ctx) -> Result<(), String>` — request subscriptions (applied by the caller after registration, mirroring how a WASM extension's own `init` requests them) and provide/consume services.
 - `handle(&mut self, envelope)` (`Handler`) — bus deliveries, same semantics as extensions (per-module serialization included).
+- `filter_event(event) -> bool` — first look at one raw platform event before it becomes an `input/*` message (ADR-008); returning `true` claims it so nothing below sees it. Default: claims nothing. Feature-gated with `platform`, since a headless build has no event source.
 - `render()`, `present()` — frame-phase hooks, both default no-op; a module overrides only the phases it needs.
 - `respond(sender, payload)` — answers a direct `send` (ADR-010) addressed to this module by name, the same capability WASM extensions already have. Default: no reply. `persistence` is the first module to use this (an extension's own `init` loading its prior save synchronously), and `files` the second (reading a granted directory); most modules have nothing to answer.
 - `shutdown()` — called once after extensions stop during orderly application shutdown.
@@ -34,13 +35,13 @@ The kernel's **runner** owns the loop skeleton. Modules hook named phases; withi
 
 | Phase | Kernel work | Typical module hooks |
 | --- | --- | --- |
-| `input` | Platform pumps events → bus messages | — |
+| `input` | Platform pumps events → bus messages | every module's `filter_event`, first claim wins |
 | `dispatch` | Bus delivers to subscribers | ui consumes `ui/*` specs (`Handler::handle`) |
 | `tick` | `on-tick(dt)` to tick subscribers | game-core simulation (`Handler::handle` on `core/tick`) |
-| `render` | — | renderer executes gfx batches, draws ui output |
+| `render` | — | renderer composites gfx batches, then ui draws above them |
 | `present` | — | renderer presents the frame |
 
-A headless build (no presentation modules) simply has empty `render` and `present` phases.
+Registration order is what layers the frame: `render` runs over every module before `present` runs over any, so the renderer has composited before ui draws, and nothing flips a buffer until both are done. A headless build (no presentation modules) simply has empty phases.
 
 ## Services
 
@@ -50,9 +51,9 @@ The bus carries *behavior*; **services** carry in-process plumbing that must not
 | --- | --- | --- | --- |
 | window-surface | platform (kernel), via `Engine::build` | renderer, web | `sdl3::video::Window` |
 | bus | kernel, via `Engine::build` | game-core | `bus::Bus` |
-| draw-target | *renderer module* | *ui* | *draw-data submission (egui triangles)* |
+| draw-target | renderer, via its own `init` | ui | `Box<dyn DrawTarget>`: textures plus `UiMesh` submission |
 
-`window-surface` is real — web borrows it and `renderer`'s `init` consumes it. `bus` is also real — unlike `renderer`/`ui`/`web`, which get a `Bus` handle from their own builder sugar, a module injected via the generic `.module(...)` path (game-core is the first that needs to publish) has no other way to reach one, so `Engine::build` provides it as a service unconditionally, the same as `window-surface`. `draw-target` is still aspirational: `ui` direct-wires to `renderer`'s crate instead (docs/structure.md) rather than consuming a service, pending its own migration onto `Module`.
+`window-surface` is provided by the builder — web borrows it and `renderer`'s `init` consumes it. `bus` is provided by the builder unconditionally: unlike `renderer`/`ui`/`web`, which get a `Bus` handle from their own builder sugar, a module injected via the generic `.module(...)` path (game-core is the first that needs to publish) has no other way to reach one. `draw-target` is the first service one *module* provides to another: `renderer` registers it during its own `init`, and `ui` consumes it during its, so neither builder nor consumer names the other's crate (ADR-031).
 
 Modules never depend on each other's crates — only on kernel crates and on services (which the kernel or a providing module defines by registering a value of a given type). This is what lets an embedder swap the SDL renderer for its own: any module providing the same service types slots in under an unchanged consumer.
 

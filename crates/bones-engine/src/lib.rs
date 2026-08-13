@@ -15,10 +15,16 @@
 //! embedder selects them with `.renderer()`, `.ui()`, or `.web()` and never
 //! names their types.
 
-mod runner;
+mod engine;
 
-/// Composition and lifecycle: build an engine, then run or step it.
-pub use runner::{read_tick_dt, BuiltEngine, Engine, Runner, Supervisor};
+/// Composition: build an engine, then run or step it.
+pub use engine::{BuiltEngine, Engine};
+
+/// Lifecycle, from the kernel: the frame loop and the extension supervisor
+/// are module-agnostic, so they live in `bones-kernel` and are surfaced
+/// here rather than defined here.
+pub use bones_kernel::runner::{read_tick_dt, Runner};
+pub use bones_kernel::wasm_extensions::supervisor::Supervisor;
 
 /// The message bus, and the traits a native module implements to join it.
 pub mod bus {

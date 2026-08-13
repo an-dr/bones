@@ -17,6 +17,27 @@ pub trait Module: Handler {
     /// how a WASM extension's own `init` requests subscriptions.
     fn init(&mut self, ctx: &mut ModuleContext) -> Result<(), String>;
 
+    /// First look at one raw platform event, before it is translated onto
+    /// `input/*` (ADR-008: the top layer consumes). Returning `true`
+    /// claims the event, so no lower layer and no extension ever sees it —
+    /// how a UI module stops a click on one of its widgets from also
+    /// reaching the game underneath.
+    ///
+    /// - Default is a no-op claiming nothing, which is right for every
+    ///   module that does not draw interactive surfaces.
+    /// - Every module is offered the event in registration order until one
+    ///   claims it, so a module that needs to *observe* input it does not
+    ///   claim must still return `false`.
+    /// - Feature-gated with `platform` because the parameter is the SDL
+    ///   event itself: no translation layer sits in between, so nothing is
+    ///   lost on the way (text input and modifier state especially, which
+    ///   the `input/*` vocabulary does not carry). A headless build has no
+    ///   event source and so does not have this method at all.
+    #[cfg(feature = "platform")]
+    fn filter_event(&mut self, _event: &sdl3::event::Event) -> bool {
+        false
+    }
+
     /// `render` phase: draw work that doesn't need to happen exactly at
     /// present time. Most modules don't need this; default is a no-op.
     fn render(&mut self) {}
