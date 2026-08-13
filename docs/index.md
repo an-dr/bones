@@ -24,8 +24,8 @@ Not documentation of the design, but the path through it:
 
 - [README](../README.md) — what bones is, prerequisites, quickstart.
 - [crates/bones-extension-hello](../crates/bones-extension-hello/README.md) — write your first extension; walks the whole WIT contract.
-- [examples/](../examples/README.md) — eleven runnable examples, one capability each.
-- [examples/embedding-demo](../examples/embedding-demo/README.md) — embed the engine and inject your own native module.
+- [examples/](../examples/README.md) — runnable examples, one capability each, split into `extensions/` and `embedding/`.
+- [examples/embedding/custom-engine](../examples/embedding/custom-engine/README.md) — build your own engine binary: inject a native module and define your own messages.
 - [glossary.md](glossary.md) — host, guest, embedder, native module, and where new code goes.
 - [CONTRIBUTING](../CONTRIBUTING.md) — build, test, and commit conventions.
 
@@ -88,7 +88,7 @@ Immutable ADRs in [adr/](adr/):
 - [ADR-028](adr/ADR-028-detachable-native-modules-and-wry-presentation.md) — attach native modules and wry presentation to a live headless engine
 - [ADR-029](adr/ADR-029-the-two-version-lines-are-the-two-public-surfaces.md) — the two version lines are the two public surfaces, both starting at 1.0.0
 - [ADR-030](adr/ADR-030-package-structure-follows-consumer-use-cases.md) — package structure follows consumer use cases: flat under crates/, with the kernel and modules nested in bones-engine
-- [ADR-029](adr/ADR-029-native-modules-reach-each-other-only-through-services.md) — native modules reach each other only through services, and input is offered topmost-first
+- [ADR-031](adr/ADR-031-native-modules-reach-each-other-only-through-services.md) — native modules reach each other only through services, and input is offered topmost-first
 
 ## History
 

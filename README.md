@@ -76,7 +76,7 @@ Start at [crates/bones-extension-hello](crates/bones-extension-hello/README.md) 
 
 Drop any built `.wasm` into `extensions/` next to wherever you run the engine and it loads on start.
 
-For something richer, [examples/](examples/README.md) has eleven runnable examples — sprites, egui widgets, web panels, gamepad input, tilemaps, hot reload, persistence, and the watchdog — each proving one capability end to end, each with its own `build.ps1`.
+For something richer, [examples/extensions/](examples/README.md) has ten runnable extensions — sprites, egui widgets, web panels, gamepad input, tilemaps, hot reload, persistence, and the watchdog — each proving one capability end to end, each with its own `build.ps1`. [examples/embedding/](examples/embedding/custom-engine/README.md) covers the other way in.
 
 ## Projects using bones
 

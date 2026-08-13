@@ -17,6 +17,11 @@ Initialize-NativeBuildEnvironment
 $standaloneCrates = @(
     "crates/bones-messages"
     "crates/bones-wasm-sdk"
+    # An example, but a wire contract too: it is the only place a custom
+    # message vocabulary is defined, and it compiles without SDL, so checking
+    # it costs seconds. The rest of examples/ is left to its own build.ps1,
+    # since each would rebuild SDL from source.
+    "examples/embedding/custom-engine/messages"
 )
 
 # Integration tests load these as prebuilt .wasm files by path, so they must
@@ -25,17 +30,17 @@ $standaloneCrates = @(
 # target/wasm32-wasip2/release/<name>.wasm.
 $fixtures = @(
     "crates/bones-extension-hello"
-    "examples/keyecho"
-    "examples/sprite_demo"
-    "examples/runaway_demo"
-    "examples/flood_demo"
-    "examples/audio_demo"
-    "examples/persistence_demo"
+    "examples/extensions/keyecho-demo"
+    "examples/extensions/sprite-demo"
+    "examples/extensions/runaway-demo"
+    "examples/extensions/flood-demo"
+    "examples/extensions/audio-demo"
+    "examples/extensions/persistence-demo"
     # dashboard and metrics back the web-panel tests, which are gated behind
     # --features web on Windows. Built unconditionally: cheap, and it keeps
     # this script's output identical whether or not those tests run.
-    "examples/dashboard"
-    "examples/metrics"
+    "examples/extensions/dashboard-demo"
+    "examples/extensions/metrics-demo"
 )
 
 function Invoke-Step {

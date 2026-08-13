@@ -1,0 +1,14 @@
+[workspace]
+
+[package]
+name = "host-facts-messages"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# The only dependency, and it is the point of this crate: bones-messages has no
+# dependencies of its own, so it compiles for the native host and for
+# wasm32-wasip2 alike. That is what lets one vocabulary crate sit under both
+# sides of the sandbox instead of two hand-synchronised copies.
+[dependencies]
+bones-messages = { path = "../../../../crates/bones-messages" }

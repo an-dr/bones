@@ -8,10 +8,10 @@ const HELLO_WASM: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../../crates/bones-extension-hello/target/wasm32-wasip2/release/bones_extension_hello.wasm"
 );
-// Built by examples/runaway_demo/build.ps1 (see its README).
+// Built by examples/extensions/runaway-demo/build.ps1 (see its README).
 const RUNAWAY_WASM: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../../examples/runaway_demo/target/wasm32-wasip2/release/runaway_demo.wasm"
+    "/../../../examples/extensions/runaway-demo/target/wasm32-wasip2/release/runaway_demo.wasm"
 );
 
 fn load_hello(bus: Bus, logger: Logger) -> Host {
@@ -258,7 +258,7 @@ fn a_call_that_never_returns_traps_and_faults_instead_of_hanging_forever() {
         EndpointBudget::new(crate::bus::BudgetLimits::default()),
         ExtensionTimeouts::default(),
     )
-    .expect("build examples/runaway_demo first: pwsh examples/runaway_demo/build.ps1");
+    .expect("build examples/extensions/runaway-demo first: pwsh examples/extensions/runaway-demo/build.ps1");
     assert!(!host.is_faulted(), "must not start out faulted");
 
     host.handle(&tick_envelope()); // blocks for ~the time budget, then traps
@@ -291,7 +291,7 @@ fn a_faulted_host_ignores_further_deliveries_instead_of_hanging_again() {
         EndpointBudget::new(crate::bus::BudgetLimits::default()),
         ExtensionTimeouts::default(),
     )
-    .expect("build examples/runaway_demo first: pwsh examples/runaway_demo/build.ps1");
+    .expect("build examples/extensions/runaway-demo first: pwsh examples/extensions/runaway-demo/build.ps1");
     host.handle(&tick_envelope());
     assert!(host.is_faulted());
 

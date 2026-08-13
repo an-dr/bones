@@ -82,7 +82,7 @@ Any language with WASM Component Model support works the same way (ADR-001); Rus
 
 Watch out for two engine rules while developing:
 
-- **A hung callback faults you, not the engine.** The watchdog traps a call that overruns its time budget and quarantines the extension (ADR-007); the engine and every other extension keep running. See [`examples/runaway_demo`](../../examples/runaway_demo/README.md).
-- **Publishing has a budget.** Flooding the queue drops the excess, counts it, and faults you. See [`examples/flood_demo`](../../examples/flood_demo/README.md).
+- **A hung callback faults you, not the engine.** The watchdog traps a call that overruns its time budget and quarantines the extension (ADR-007); the engine and every other extension keep running. See [`examples/extensions/runaway-demo`](../../examples/extensions/runaway-demo/README.md).
+- **Publishing has a budget.** Flooding the queue drops the excess, counts it, and faults you. See [`examples/extensions/flood-demo`](../../examples/extensions/flood-demo/README.md).
 
 More runnable examples — sprites, widgets, web panels, input, tilemaps, hot reload, persistence — are in [`examples/`](../../examples/README.md).

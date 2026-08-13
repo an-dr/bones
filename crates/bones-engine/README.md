@@ -24,7 +24,7 @@ Presentation *backends* are absent on purpose. `renderer`, `ui`, and `web` are s
 
 What an embedder must be able to *name*, it can. `bus::PlatformEvent` is the argument of the hook a custom module overrides, `platform::Platform` is a value `BuiltEngine` hands back, and `Error` is what `build` and `run` fail with — so none of them require adding `sdl3`, `wasmtime`, or `bones-kernel` to a consumer's manifest.
 
-When adding a public signature that mentions a type from a crate beneath this one, re-export that type here too. The crate-level and `platform` documentation carry compiled examples that name every such type through `bones_engine`, so deleting a re-export stops the doc tests building rather than surfacing later as an embedder's problem. [examples/embedding-demo](../../examples/embedding-demo/README.md) is the fuller check — it depends on `bones-engine` alone, so a type it cannot name is a type no embedder can name.
+When adding a public signature that mentions a type from a crate beneath this one, re-export that type here too. The crate-level and `platform` documentation carry compiled examples that name every such type through `bones_engine`, so deleting a re-export stops the doc tests building rather than surfacing later as an embedder's problem. [examples/embedding/custom-engine](../../examples/embedding/custom-engine/README.md) is the fuller check — it depends on `bones-engine` alone, so a type it cannot name is a type no embedder can name.
 
 `messages` re-exports a crate on the **ABI version line**, not this crate's engine version. `bones-messages` moves only when the guest contract changes, which is why a native module and a WASM guest can share one vocabulary.
 

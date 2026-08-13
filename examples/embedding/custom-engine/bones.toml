@@ -1,0 +1,3 @@
+extensions_dir = "extensions"
+window_title = "bones with a custom module"
+ui = true

@@ -1,14 +1,14 @@
 # Worked example: "dashboard" — a web panel extension
 
-A status dashboard rendered as a web page: an HTML/JS frontend in a wry panel, fed with data the extension gathers over the bus. Shows the `web/*` backend end to end, including a direct request to another extension. The implementation lives in `examples/dashboard` with its `examples/metrics` peer.
+A status dashboard rendered as a web page: an HTML/JS frontend in a wry panel, fed with data the extension gathers over the bus. Shows the `web/*` backend end to end, including a direct request to another extension. The implementation lives in `examples/extensions/dashboard-demo` with its `examples/extensions/metrics-demo` peer.
 
 ## Run it
 
 ```sh
-pwsh examples/dashboard/build.ps1
+pwsh examples/extensions/dashboard-demo/build.ps1
 ```
 
-Launch `examples/dashboard/dist/bones(.exe)`. The package contains the app built with its `web` feature, `web = true` configuration, and both components.
+Launch `examples/extensions/dashboard-demo/dist/bones(.exe)`. The package contains the app built with its `web` feature, `web = true` configuration, and both components.
 
 ## Setup
 

@@ -1,0 +1,13 @@
+[workspace]
+
+[package]
+name = "persistence-demo"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+bones-wasm-sdk = { path = "../../../crates/bones-wasm-sdk" }

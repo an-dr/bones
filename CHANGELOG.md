@@ -34,6 +34,12 @@ First tagged release. Both lines start at 1.0.0 (ADR-029) because the interfaces
 - 1.0 is distributed by git tag. Every package carries `publish = false` and states why it cannot produce a self-contained registry archive; crates.io stays open as a later decision rather than an implied promise.
 - `dist.ps1` produces a versioned, per-platform archive with a SHA256 beside it, containing the engine, the reference extension, the ABI, a sample `bones.toml`, `LICENSE`, and generated third-party notices.
 
+### Examples
+
+- `examples/` splits into `extensions/` and `embedding/`, so which of the two ways to use bones an example demonstrates is visible before opening it.
+- Every example is kebab-case ending in `-demo`. The suffix is load-bearing rather than decorative: an extension's bus endpoint name is the stem of its `.wasm`, and `audio`, `game-core`, and `persistence` are already native module endpoints.
+- The thin `embedding-demo` is replaced by `embedding/custom-engine`, which produces an actual executable: the shipped composition plus a native module, a message vocabulary bones does not own, and a WASM extension speaking it from the other side of the sandbox. It is the first example of defining custom messages at all.
+
 ### Development
 
 - `test.ps1` is the whole suite: fixtures, formatting, clippy with warnings denied, the default and all-feature test runs, and the documentation build.

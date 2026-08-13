@@ -86,45 +86,45 @@ const HELLO_DIR: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../crates/bones-extension-hello/target/wasm32-wasip2/release"
 );
-// Built by examples/keyecho/build.ps1 (see its README).
-const KEYECHO_DIR: &str = concat!(
+// Built by examples/extensions/keyecho-demo/build.ps1 (see its README).
+const KEYECHO_DEMO_DIR: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../examples/keyecho/target/wasm32-wasip2/release"
+    "/../../examples/extensions/keyecho-demo/target/wasm32-wasip2/release"
 );
-// Built by examples/sprite_demo/build.ps1 (see its README).
+// Built by examples/extensions/sprite-demo/build.ps1 (see its README).
 const SPRITE_DEMO_DIR: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../examples/sprite_demo/target/wasm32-wasip2/release"
+    "/../../examples/extensions/sprite-demo/target/wasm32-wasip2/release"
 );
-// Built by examples/runaway_demo/build.ps1 (see its README).
+// Built by examples/extensions/runaway-demo/build.ps1 (see its README).
 const RUNAWAY_DEMO_DIR: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../examples/runaway_demo/target/wasm32-wasip2/release"
+    "/../../examples/extensions/runaway-demo/target/wasm32-wasip2/release"
 );
-// Built by examples/flood_demo/build.ps1 (see its README).
+// Built by examples/extensions/flood-demo/build.ps1 (see its README).
 const FLOOD_DEMO_DIR: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../examples/flood_demo/target/wasm32-wasip2/release"
+    "/../../examples/extensions/flood-demo/target/wasm32-wasip2/release"
 );
-// Built by examples/audio_demo/build.ps1 (see its README).
+// Built by examples/extensions/audio-demo/build.ps1 (see its README).
 const AUDIO_DEMO_DIR: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../examples/audio_demo/target/wasm32-wasip2/release"
+    "/../../examples/extensions/audio-demo/target/wasm32-wasip2/release"
 );
-// Built by examples/persistence_demo/build.ps1 (see its README).
+// Built by examples/extensions/persistence-demo/build.ps1 (see its README).
 const PERSISTENCE_DEMO_DIR: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../examples/persistence_demo/target/wasm32-wasip2/release"
+    "/../../examples/extensions/persistence-demo/target/wasm32-wasip2/release"
 );
 #[cfg(all(feature = "web", target_os = "windows"))]
-const DASHBOARD_WASM: &str = concat!(
+const DASHBOARD_DEMO_WASM: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../examples/dashboard/target/wasm32-wasip2/release/dashboard.wasm"
+    "/../../examples/extensions/dashboard-demo/target/wasm32-wasip2/release/dashboard_demo.wasm"
 );
 #[cfg(all(feature = "web", target_os = "windows"))]
-const METRICS_WASM: &str = concat!(
+const METRICS_DEMO_WASM: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../examples/metrics/target/wasm32-wasip2/release/metrics.wasm"
+    "/../../examples/extensions/metrics-demo/target/wasm32-wasip2/release/metrics_demo.wasm"
 );
 
 #[test]
@@ -435,11 +435,11 @@ sdl_test! { fn a_key_down_envelope_reaches_an_extension_through_a_real_window() 
     let BuiltEngine {
         runner, platform, ..
     } = Engine::new()
-        .extensions_dir(KEYECHO_DIR)
+        .extensions_dir(KEYECHO_DEMO_DIR)
         .logger(logger)
         .window("test", 64, 64)
         .build()
-        .expect("build examples/keyecho first: pwsh examples/keyecho/build.ps1");
+        .expect("build examples/extensions/keyecho-demo first: pwsh examples/extensions/keyecho-demo/build.ps1");
     assert!(platform.is_some(), ".window() was set");
 
     runner.bus().publish(Envelope {
@@ -469,11 +469,11 @@ sdl_test! { fn a_mouse_down_envelope_reaches_an_extension_through_a_real_window(
     let BuiltEngine {
         runner, platform, ..
     } = Engine::new()
-        .extensions_dir(KEYECHO_DIR)
+        .extensions_dir(KEYECHO_DEMO_DIR)
         .logger(logger)
         .window("test", 64, 64)
         .build()
-        .expect("build examples/keyecho first: pwsh examples/keyecho/build.ps1");
+        .expect("build examples/extensions/keyecho-demo first: pwsh examples/extensions/keyecho-demo/build.ps1");
     assert!(platform.is_some(), ".window() was set");
 
     runner.bus().publish(Envelope {
@@ -509,7 +509,7 @@ fn audio_demo_loads_plays_music_and_reacts_to_a_key_press_through_a_real_audio_m
         .logger(logger)
         .module(bones_module_audio::Audio::new())
         .build()
-        .expect("build examples/audio_demo first: pwsh examples/audio_demo/build.ps1");
+        .expect("build examples/extensions/audio-demo first: pwsh examples/extensions/audio-demo/build.ps1");
 
     runner.step(1.0 / 60.0);
 
@@ -556,7 +556,7 @@ fn persistence_demo_state_survives_a_full_engine_rebuild() {
         .logger(Logger::new(Arc::new(sink_a.clone())))
         .saves_dir(&dir)
         .build()
-        .expect("build examples/persistence_demo first: pwsh examples/persistence_demo/build.ps1");
+        .expect("build examples/extensions/persistence-demo first: pwsh examples/extensions/persistence-demo/build.ps1");
 
     // dt=1.5 clears the demo's 1-second save throttle in a single tick;
     // the `persistence/save` it reactively publishes from inside that
@@ -674,7 +674,7 @@ sdl_test! { fn a_real_extension_draws_a_sprite_through_a_real_renderer() {
         .window("test", 400, 300)
         .renderer()
         .build()
-        .expect("build examples/sprite_demo first: pwsh examples/sprite_demo/build.ps1");
+        .expect("build examples/extensions/sprite-demo first: pwsh examples/extensions/sprite-demo/build.ps1");
     assert!(
         engine
             .modules
@@ -721,7 +721,7 @@ fn a_runaway_extension_is_quarantined_while_the_engine_keeps_running() {
         format!("{RUNAWAY_DEMO_DIR}/runaway_demo.wasm"),
         dir.join("runaway_demo.wasm"),
     )
-    .expect("build examples/runaway_demo first: pwsh examples/runaway_demo/build.ps1");
+    .expect("build examples/extensions/runaway-demo first: pwsh examples/extensions/runaway-demo/build.ps1");
 
     let sink = RecordingSink::new();
     let logger = Logger::new(Arc::new(sink.clone()));
@@ -897,10 +897,10 @@ fn web_without_a_window_is_a_build_error() {
 sdl_test! { fn dashboard_and_metrics_exchange_push_pull_and_page_ipc() {
     let dir = std::env::temp_dir().join("bones-dashboard-integration");
     std::fs::create_dir_all(&dir).unwrap();
-    std::fs::copy(DASHBOARD_WASM, dir.join("dashboard.wasm"))
-        .expect("build examples/dashboard for wasm32-wasip2 first");
-    std::fs::copy(METRICS_WASM, dir.join("metrics.wasm"))
-        .expect("build examples/metrics for wasm32-wasip2 first");
+    std::fs::copy(DASHBOARD_DEMO_WASM, dir.join("dashboard_demo.wasm"))
+        .expect("build examples/extensions/dashboard-demo for wasm32-wasip2 first");
+    std::fs::copy(METRICS_DEMO_WASM, dir.join("metrics_demo.wasm"))
+        .expect("build examples/extensions/metrics-demo for wasm32-wasip2 first");
 
     let sink = RecordingSink::new();
     let mut engine = Engine::new()
@@ -975,7 +975,9 @@ fn a_flooding_extension_is_faulted_without_starving_its_peer() {
         format!("{FLOOD_DEMO_DIR}/flood_demo.wasm"),
         dir.join("flood_demo.wasm"),
     )
-    .expect("build examples/flood_demo first: pwsh examples/flood_demo/build.ps1");
+    .expect(
+        "build examples/extensions/flood-demo first: pwsh examples/extensions/flood-demo/build.ps1",
+    );
 
     let sink = RecordingSink::new();
     let BuiltEngine {

@@ -1,0 +1,18 @@
+[workspace]
+
+[package]
+name = "host-probe"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+# The same two-crate shape any Rust extension has, plus the embedder's own
+# vocabulary. `host-facts-messages` depends on `bones-messages`, which
+# `bones-wasm-sdk` also re-exports -- cargo unifies them because both point at
+# the same path, so there is one copy of the codec, not two.
+[dependencies]
+bones-wasm-sdk = { path = "../../../../crates/bones-wasm-sdk" }
+host-facts-messages = { path = "../messages" }

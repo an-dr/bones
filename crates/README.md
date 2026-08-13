@@ -28,7 +28,7 @@ Nested beside `bones-kernel`, not inside it: each is its own crate, so a disable
 
 ## The one binary
 
-[bones](bones/README.md) is the shipped engine executable and the default composition. It has **no access an embedder lacks** — enforced by the dependency graph, not by convention, since it depends on `bones-engine` and nothing else here. [examples/embedding-demo](../examples/embedding-demo/README.md) writes the same one dependency.
+[bones](bones/README.md) is the shipped engine executable and the default composition. It has **no access an embedder lacks** — enforced by the dependency graph, not by convention, since it depends on `bones-engine` and nothing else here. [examples/embedding/custom-engine](../examples/embedding/custom-engine/README.md) writes the same one dependency.
 
 ## The shared contract
 
@@ -44,7 +44,7 @@ A crate prefixed `bones-extension-` is an actual extension a bones distribution 
 
 - [bones-extension-hello](bones-extension-hello/README.md) — the reference extension, and the write-your-first-extension tutorial.
 
-[dist.ps1](../dist.ps1) builds every `bones-extension-*` crate into `dist/extensions/`, which is why the bar for adding one is high: a distribution is the engine plus its reference extension, not a demo bundle. Anything that exists to demonstrate a capability belongs in [examples/](../examples/README.md) instead — that is where the other eleven live. You do not need to add a crate here to write your own extension: build it anywhere and drop the `.wasm` into the directory `bones.toml`'s `extensions_dir` names; it loads on start.
+[dist.ps1](../dist.ps1) builds every `bones-extension-*` crate into `dist/extensions/`, which is why the bar for adding one is high: a distribution is the engine plus its reference extension, not a demo bundle. Anything that exists to demonstrate a capability belongs in [examples/extensions/](../examples/README.md) instead, where its name ends in `-demo`. You do not need to add a crate here to write your own extension: build it anywhere and drop the `.wasm` into the directory `bones.toml`'s `extensions_dir` names; it loads on start.
 
 ## Rules
 
