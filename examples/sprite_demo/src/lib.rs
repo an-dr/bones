@@ -1,13 +1,9 @@
-wit_bindgen::generate!({
-    path: "../../wit",
-    world: "extension",
-});
-
-use bones::core::host_api::{log, publish, subscribe, Level};
-use bones_messages::gfx::{
+use bones_wasm_sdk::Guest;
+use bones_wasm_sdk::bindings::bones::core::host_api::{log, publish, subscribe, Level};
+use bones_wasm_sdk::messages::gfx::{
     Clear, DrawCircle, DrawRect, DrawSprite, DrawText, LoadSprite, SetCamera, TextAlign,
 };
-use bones_messages::{EncodeMessage, Message};
+use bones_wasm_sdk::messages::{EncodeMessage, Message};
 
 const SPRITE_PNG: &[u8] = include_bytes!("assets/robot_william.png");
 const SPRITE_ID: u32 = 1;
@@ -137,4 +133,4 @@ impl Guest for Component {
     }
 }
 
-export!(Component);
+bones_wasm_sdk::export!(Component);

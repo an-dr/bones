@@ -4,55 +4,36 @@ Map of all documentation in this repo.
 
 ## Documentation policy
 
-Docs capture **behavior and boundaries, not code**. Each layer has an
-altitude, and staying above code details is deliberate:
+Docs capture **behavior and boundaries, not code**. Each layer has an altitude, and staying above code details is deliberate:
 
-- [architecture.md](architecture.md) — system altitude: components, message
-  flows, lifecycles.
-- `design/` — one level more detailed than architecture: behavior contracts
-  (semantics, guarantees, state machines) and logical structure. Never exact
-  signatures, function names, or file-level layout.
-- `adr/` — immutable decisions with rationale; superseded by new ADRs, never
-  edited.
-- [roadmap.md](roadmap.md) — remaining work only; completed increments are
-  deleted, not checked off.
+- [architecture.md](architecture.md) — system altitude: components, message flows, lifecycles.
+- `design/` — one level more detailed than architecture: behavior contracts (semantics, guarantees, state machines) and logical structure. Never exact signatures, function names, or file-level layout.
+- `adr/` — immutable decisions with rationale; superseded by new ADRs, never edited.
+- [roadmap.md](roadmap.md) — remaining work only; completed increments are deleted, not checked off.
+- `ideas/` — proposals the repository has not committed to. Unlike `roadmap.md`, an idea needs no completion artifact and may never be built; it is written down so a discussion has evidence instead of recollection.
 
-The altitude test: **an average refactoring must not require a documentation
-update.** Docs change when observable behavior, a contract, or a component
-boundary changes — not when code moves, splits, or gets renamed. If a doc
-keeps needing updates during refactorings, it is written too low; raise its
-altitude instead of maintaining it.
+The altitude test: **an average refactoring must not require a documentation update.** Docs change when observable behavior, a contract, or a component boundary changes — not when code moves, splits, or gets renamed. If a doc keeps needing updates during refactorings, it is written too low; raise its altitude instead of maintaining it.
 
-**Stated exception**: [code-style.md](code-style.md) documents file-layout
-conventions themselves — code-level by definition, not a violation of the
-rule above since it changes only when the conventions change, never as a
-side effect of applying them.
+**Stated exception**: [code-style.md](code-style.md) documents file-layout conventions themselves — code-level by definition, not a violation of the rule above since it changes only when the conventions change, never as a side effect of applying them.
 
-**Tutorials are not here.** Getting started, writing an extension, and
-embedding are code-level by nature — exact commands, exact paths — so they
-live in READMEs beside the code they describe, which keeps the altitude rule
-above intact rather than carving another exception into it.
+**Tutorials are not here.** Getting started, writing an extension, and embedding are code-level by nature — exact commands, exact paths — so they live in READMEs beside the code they describe, which keeps the altitude rule above intact rather than carving another exception into it.
 
 ## Getting started
 
 Not documentation of the design, but the path through it:
 
 - [README](../README.md) — what bones is, prerequisites, quickstart.
-- [extensions/hello](../extensions/hello/README.md) — write your first
-  extension; walks the whole WIT contract.
-- [examples/](../examples/README.md) — eleven runnable examples, one
-  capability each.
-- [examples/embedding-demo](../examples/embedding-demo/README.md) — embed the
-  engine and inject your own native module.
+- [crates/bones-extension-hello](../crates/bones-extension-hello/README.md) — write your first extension; walks the whole WIT contract.
+- [examples/](../examples/README.md) — eleven runnable examples, one capability each.
+- [examples/embedding-demo](../examples/embedding-demo/README.md) — embed the engine and inject your own native module.
+- [glossary.md](glossary.md) — host, guest, embedder, native module, and where new code goes.
 - [CONTRIBUTING](../CONTRIBUTING.md) — build, test, and commit conventions.
 
-Directory-level READMEs explain what belongs where:
-[core/](../core/README.md), [extensions/](../extensions/README.md),
-[examples/](../examples/README.md), [shared/](../shared/README.md),
-[wit/](../wit/README.md).
+Directory-level READMEs explain what belongs where: [crates/](../crates/README.md), [examples/](../examples/README.md), [wit/](../wit/README.md).
 
 ## Architecture
 
+- [glossary.md](glossary.md) — the vocabulary the other documents assume: host, guest, embedder, extension, native module, kernel tier, service, and the two public surfaces.
 - [architecture.md](architecture.md) — engine design overview: core components, messaging, extension model, diagrams.
 - [structure.md](structure.md) — static structure: components, dependency rules, source layout.
 - [code-style.md](code-style.md) — file-layout conventions for Rust source: one-type-per-file, the submodule/tests.rs pattern, README expectations.
@@ -68,8 +49,7 @@ Directory-level READMEs explain what belongs where:
 
 ## Examples
 
-Behavior walkthroughs of two extensions; their runnable code is under
-[examples/](../examples/README.md).
+Behavior walkthroughs of two extensions; their runnable code is under [examples/](../examples/README.md).
 
 - [examples/egui-app.md](examples/egui-app.md) — worked example: "notes", a widget-UI extension.
 - [examples/web-app.md](examples/web-app.md) — worked example: "dashboard", a web-panel extension.
@@ -106,9 +86,9 @@ Immutable ADRs in [adr/](adr/):
 - [ADR-026](adr/ADR-026-game-core-publishes-authoritative-entity-transform-snapshots.md) — game-core publishes authoritative entity transform snapshots
 - [ADR-027](adr/ADR-027-feature-gate-native-presentation.md) — feature-gate the native presentation stack
 - [ADR-028](adr/ADR-028-detachable-native-modules-and-wry-presentation.md) — attach native modules and wry presentation to a live headless engine
+- [ADR-029](adr/ADR-029-the-two-version-lines-are-the-two-public-surfaces.md) — the two version lines are the two public surfaces, both starting at 1.0.0
+- [ADR-030](adr/ADR-030-package-structure-follows-consumer-use-cases.md) — package structure follows consumer use cases: flat under crates/, with the kernel and modules nested in bones-engine
 
 ## History
 
-The granular pre-release history — 176 commits from 2026-07-10 to
-2026-08-09 — is archived at the tag `compat-main-2026-08-09`. The phase
-commits on `main` are squashed from it.
+The granular pre-release history — 176 commits from 2026-07-10 to 2026-08-09 — is archived at the tag `compat-main-2026-08-09`. The phase commits on `main` are squashed from it.

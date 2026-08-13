@@ -1,9 +1,5 @@
-wit_bindgen::generate!({
-    path: "../../wit",
-    world: "extension",
-});
-
-use bones::core::host_api::{log, subscribe, Level};
+use bones_wasm_sdk::Guest;
+use bones_wasm_sdk::bindings::bones::core::host_api::{log, subscribe, Level};
 
 // Edit this, rebuild (pwsh build.ps1), and watch the next log line change
 // without restarting the app — that's the hot-reload demo (README.md).
@@ -26,4 +22,4 @@ impl Guest for Component {
     }
 }
 
-export!(Component);
+bones_wasm_sdk::export!(Component);

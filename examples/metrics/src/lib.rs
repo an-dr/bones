@@ -1,11 +1,7 @@
-wit_bindgen::generate!({
-    path: "../../wit",
-    world: "extension",
-});
-
 use std::cell::{Cell, RefCell};
 
-use bones::core::host_api::{log, publish, subscribe, Level};
+use bones_wasm_sdk::Guest;
+use bones_wasm_sdk::bindings::bones::core::host_api::{log, publish, subscribe, Level};
 
 const UPDATE_TOPIC: &str = "metrics/updated";
 const UPDATE_INTERVAL: f32 = 0.5;
@@ -79,4 +75,4 @@ fn publish_update(value: u32) {
     publish(UPDATE_TOPIC, payload.to_string().as_bytes());
 }
 
-export!(Component);
+bones_wasm_sdk::export!(Component);

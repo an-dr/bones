@@ -1,14 +1,14 @@
 //! Proves the builder API needs no privileged access (design/modules.md,
 //! ADR-017): a separate crate depending on bones's crates the same way any
 //! embedder would, injecting its own native module and building its own
-//! binary — none of this touches `runner`'s internals, only `Engine`,
+//! binary — none of this reaches past `bones-engine`, only `Engine`,
 //! `Module`, `Handler`, and `ModuleContext`. Run with: `cargo run` from
 //! this directory.
 
 use std::time::{Duration, Instant};
 
-use bus::{Envelope, Handler, Module, ModuleContext};
-use logging::Logger;
+use bones_engine::bus::{Envelope, Handler, Module, ModuleContext};
+use bones_engine::logging::Logger;
 
 /// Logs the wall-clock time once a second, driven by `core/tick` — proves
 /// a custom native module gets `init`, its requested subscription, and bus
@@ -49,7 +49,7 @@ impl Module for Clock {
 
 fn main() -> Result<(), String> {
     let logger = Logger::default();
-    runner::Engine::new()
+    bones_engine::Engine::new()
         .logger(logger.clone())
         .module(Clock::new(logger))
         .run()

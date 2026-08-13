@@ -2,13 +2,11 @@
 
 ## Problem
 
-Extensions (game modules, GUI modules) must produce visuals, but WASM
-extensions cannot touch SDL or the GPU directly. Where does rendering live?
+Extensions (game modules, GUI modules) must produce visuals, but WASM extensions cannot touch SDL or the GPU directly. Where does rendering live?
 
 ## Decision
 
-The core owns the SDL renderer. Extensions emit **draw commands** as messages;
-the renderer executes them each frame. The command set is a versioned core API.
+The core owns the SDL renderer. Extensions emit **draw commands** as messages; the renderer executes them each frame. The command set is a versioned core API.
 
 ## Rationale
 
@@ -18,8 +16,5 @@ the renderer executes them each frame. The command set is a versioned core API.
 
 ## Rejected alternatives
 
-- **Extensions render into pixel buffers** — maximum freedom, but slow for
-  games, and every extension reinvents drawing. May return later as an
-  escape-hatch surface type via a new ADR.
-- **Extensions call the GPU/SDL directly** — breaks sandboxing and the
-  any-language promise.
+- **Extensions render into pixel buffers** — maximum freedom, but slow for games, and every extension reinvents drawing. May return later as an escape-hatch surface type via a new ADR.
+- **Extensions call the GPU/SDL directly** — breaks sandboxing and the any-language promise.

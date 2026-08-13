@@ -1,9 +1,5 @@
-wit_bindgen::generate!({
-    path: "../../wit",
-    world: "extension",
-});
-
-use bones::core::host_api::{log, publish, subscribe, Level};
+use bones_wasm_sdk::Guest;
+use bones_wasm_sdk::bindings::bones::core::host_api::{log, publish, subscribe, Level};
 
 const PUBLISHES_PER_TICK: u32 = 64;
 
@@ -28,4 +24,4 @@ impl Guest for Component {
     }
 }
 
-export!(Component);
+bones_wasm_sdk::export!(Component);

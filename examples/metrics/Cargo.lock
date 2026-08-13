@@ -15,6 +15,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b588b76d00fde79687d7646a9b5bdf3cc0f655e0bbd080335a95d7e96f3587da"
 
 [[package]]
+name = "bones-messages"
+version = "1.0.0"
+
+[[package]]
+name = "bones-wasm-sdk"
+version = "1.0.0"
+dependencies = [
+ "bones-messages",
+ "wit-bindgen",
+]
+
+[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -96,10 +108,10 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
 name = "metrics"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
+ "bones-wasm-sdk",
  "serde_json",
- "wit-bindgen",
 ]
 
 [[package]]

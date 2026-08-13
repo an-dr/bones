@@ -1,4 +1,4 @@
-package bones:core@0.1.0;
+package bones:core@1.0.0;
 
 interface host-api {
     enum level {

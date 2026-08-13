@@ -1,4 +1,14 @@
 [workspace]
 resolver = "2"
-members = ["core/logging", "core/bus", "core/runner", "core/contract", "core/app", "core/platform", "core/renderer", "core/ui", "core/audio", "core/wasm-extensions", "core/game-core", "core/web"]
-exclude = ["shared/bones-messages", "shared/game-ui"]
+members = ["crates/bones-engine", "crates/bones-engine/bones-kernel", "crates/bones-engine/bones-module-renderer", "crates/bones-engine/bones-module-ui", "crates/bones-engine/bones-module-audio", "crates/bones-engine/bones-module-game-core", "crates/bones-engine/bones-module-web", "crates/bones"]
+exclude = ["crates/bones-messages", "crates/bones-wasm-sdk"]
+
+# The engine version line: every member below moves together, and one number
+# is what an embedder pins. The ABI line -- wit/core.wit's `bones:core` and
+# crates/bones-messages -- is deliberately not inherited from here, because it
+# moves only when the guest contract changes.
+[workspace.package]
+version = "1.0.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/an-dr/bones"

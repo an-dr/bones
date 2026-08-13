@@ -19,6 +19,14 @@ name = "bones-messages"
 version = "0.1.0"
 
 [[package]]
+name = "bones-wasm-rs"
+version = "0.1.0"
+dependencies = [
+ "bones-messages",
+ "wit-bindgen",
+]
+
+[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -31,19 +39,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 
 [[package]]
-name = "game-ui"
-version = "0.1.0"
-dependencies = [
- "bones-messages",
-]
-
-[[package]]
 name = "game_core_demo"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
- "bones-messages",
- "game-ui",
- "wit-bindgen",
+ "bones-wasm-rs",
 ]
 
 [[package]]

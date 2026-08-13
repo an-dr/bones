@@ -1,7 +1,0 @@
-[package]
-name = "contract"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-wasmtime = { version = "47.0.0", features = ["component-model"] }

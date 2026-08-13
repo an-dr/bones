@@ -45,7 +45,7 @@ $exeName = if ($IsWindows) { "bones.exe" } else { "bones" }
 Push-Location $repoRoot
 try {
     Initialize-NativeBuildEnvironment
-    cargo build -p app --release --features web
+    cargo build -p bones --release --features web
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 } finally {
     Pop-Location

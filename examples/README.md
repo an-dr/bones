@@ -1,11 +1,8 @@
 # Examples
 
-Working code you can build and run, one directory per example. Each proves
-one engine capability end to end — none is part of a bones distribution.
+Working code you can build and run, one directory per example. Each proves one engine capability end to end — none is part of a bones distribution.
 
-The one extension that *is* shipped lives in
-[extensions/hello](../extensions/hello/README.md): the reference extension,
-and the place to start if you are writing your own.
+The one extension that *is* shipped lives in [crates/bones-extension-hello](../crates/bones-extension-hello/README.md): the reference extension, and the place to start if you are writing your own.
 
 ## What each example proves
 
@@ -25,32 +22,22 @@ and the place to start if you are writing your own.
 
 ## Building one
 
-Every example carries its own `build.ps1`, which builds the extension for
-`wasm32-wasip2`, builds the engine, and assembles a self-contained `dist/`
-beside it:
+Every example carries its own `build.ps1`, which builds the extension for `wasm32-wasip2`, builds the engine, and assembles a self-contained `dist/` beside it:
 
 ```sh
 pwsh examples/sprite_demo/build.ps1
 ```
 
-Run the `dist/bones(.exe)` it produces. Requires PowerShell 7+ (`pwsh`),
-which is cross-platform, so this is the only build script needed on any OS.
+Run the `dist/bones(.exe)` it produces. Requires PowerShell 7+ (`pwsh`), which is cross-platform, so this is the only build script needed on any OS.
 
 Two things to know before you copy this pattern:
 
-- **`dashboard` and `metrics` are a bound pair.** `dashboard`'s build script
-  reaches sideways for `metrics` and packages both; building `metrics` alone
-  produces an extension with nothing to talk to.
-- **Examples are not in the distribution.** [dist.ps1](../dist.ps1) builds
-  `extensions/` only, so `pwsh dist.ps1` ships the engine and `hello` — a
-  distribution is the engine plus its reference extension, not a demo
-  bundle. Use an example's own `build.ps1` to run it.
+- **`dashboard` and `metrics` are a bound pair.** `dashboard`'s build script reaches sideways for `metrics` and packages both; building `metrics` alone produces an extension with nothing to talk to.
+- **Examples are not in the distribution.** [dist.ps1](../dist.ps1) builds `extensions/` only, so `pwsh dist.ps1` ships the engine and `hello` — a distribution is the engine plus its reference extension, not a demo bundle. Use an example's own `build.ps1` to run it.
 
 ## Running the whole test suite
 
-Several of these double as fixtures for the integration tests, which load
-their built `.wasm` by path. [test.ps1](../test.ps1) builds every fixture it
-needs and then runs everything:
+Several of these double as fixtures for the integration tests, which load their built `.wasm` by path. [test.ps1](../test.ps1) builds every fixture it needs and then runs everything:
 
 ```sh
 pwsh test.ps1

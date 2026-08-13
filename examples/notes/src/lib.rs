@@ -1,13 +1,9 @@
-wit_bindgen::generate!({
-    path: "../../wit",
-    world: "extension",
-});
-
 use std::cell::RefCell;
 
-use bones::core::host_api::{log, publish, subscribe, Level};
-use bones_messages::ui::{Changed, Clicked, Spec, Widget};
-use bones_messages::{DecodeMessage, EncodeMessage, Message};
+use bones_wasm_sdk::Guest;
+use bones_wasm_sdk::bindings::bones::core::host_api::{log, publish, subscribe, Level};
+use bones_wasm_sdk::messages::ui::{Changed, Clicked, Spec, Widget};
+use bones_wasm_sdk::messages::{DecodeMessage, EncodeMessage, Message};
 
 const INPUT_ID: u32 = 1;
 const ADD_ID: u32 = 2;
@@ -87,4 +83,4 @@ impl Guest for Component {
     }
 }
 
-export!(Component);
+bones_wasm_sdk::export!(Component);

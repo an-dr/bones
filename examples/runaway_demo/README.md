@@ -1,9 +1,6 @@
 # runaway_demo
 
-Proves the watchdog (ADR-007): its first `on-tick` never returns. The
-host's per-call time budget traps it, the extension is faulted and
-quarantined (dropped, unregistered), and the engine — and every other
-loaded extension — keeps running.
+Proves the watchdog (ADR-007): its first `on-tick` never returns. The host's per-call time budget traps it, the extension is faulted and quarantined (dropped, unregistered), and the engine — and every other loaded extension — keeps running.
 
 ## Build
 
@@ -11,9 +8,6 @@ loaded extension — keeps running.
 pwsh build.ps1
 ```
 
-Requires PowerShell 7+ (`pwsh`). Output:
-`target/wasm32-wasip2/release/runaway_demo.wasm`.
+Requires PowerShell 7+ (`pwsh`). Output: `target/wasm32-wasip2/release/runaway_demo.wasm`.
 
-The same script also builds the `bones` engine and assembles a runnable
-`dist/` next to this README — `dist/bones(.exe)`, `dist/bones.toml`, and
-`dist/extensions/runaway_demo.wasm`, ready to run directly.
+The same script also builds the `bones` engine and assembles a runnable `dist/` next to this README — `dist/bones(.exe)`, `dist/bones.toml`, and `dist/extensions/runaway_demo.wasm`, ready to run directly.

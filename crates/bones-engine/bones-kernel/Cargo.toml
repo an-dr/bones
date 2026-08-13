@@ -1,0 +1,22 @@
+[package]
+name = "bones-kernel"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = ["platform"]
+platform = ["dep:sdl3"]
+
+[dependencies]
+bones-messages = { path = "../../bones-messages" }
+pubsub-bus = { path = "../../../vendor/pubsub-bus" }
+wasmtime = { version = "47.0.0", features = ["component-model"] }
+wasmtime-wasi = "47.0.0"
+sdl3 = { version = "0.18.4", features = ["build-from-source-static"], optional = true }
+
+[dev-dependencies]
+# test-mode: cargo test runs tests on worker threads, not the process's
+# main thread; SDL refuses to init anywhere else unless this is set.
+sdl3 = { version = "0.18.4", features = ["build-from-source-static", "test-mode"] }

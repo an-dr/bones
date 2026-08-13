@@ -1,14 +1,10 @@
-wit_bindgen::generate!({
-    path: "../../wit",
-    world: "extension",
-});
-
-use bones::core::host_api::{log, subscribe, Level};
-use bones_messages::input::{
+use bones_wasm_sdk::Guest;
+use bones_wasm_sdk::bindings::bones::core::host_api::{log, subscribe, Level};
+use bones_wasm_sdk::messages::input::{
     GamepadButtonDown, GamepadButtonUp, GamepadConnected, GamepadDisconnected, KeyDown, MouseDown,
     MouseUp, MouseWheel,
 };
-use bones_messages::{DecodeMessage, Message};
+use bones_wasm_sdk::messages::{DecodeMessage, Message};
 
 struct Component;
 
@@ -83,4 +79,4 @@ impl Guest for Component {
     }
 }
 
-export!(Component);
+bones_wasm_sdk::export!(Component);

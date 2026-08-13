@@ -1,0 +1,11 @@
+[package]
+name = "bones-module-audio"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+bones-kernel = { path = "../bones-kernel", default-features = false }
+bones-messages = { path = "../../bones-messages" }
+kira = "0.10"

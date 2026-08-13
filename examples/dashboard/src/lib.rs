@@ -1,16 +1,12 @@
-wit_bindgen::generate!({
-    path: "../../wit",
-    world: "extension",
-});
-
 use std::cell::{Cell, RefCell};
 
-use bones::core::host_api::{log, request_exit, send, subscribe, Level};
-use bones_messages::web::{
+use bones_wasm_sdk::Guest;
+use bones_wasm_sdk::bindings::bones::core::host_api::{log, request_exit, send, subscribe, Level};
+use bones_wasm_sdk::messages::web::{
     ClosePanel, Command, OpenPanel, PageMessage, PanelClosed, PanelFailed, PanelOpened,
     PanelSource, SendJson, ENDPOINT,
 };
-use bones_messages::{DecodeMessage, Message};
+use bones_wasm_sdk::messages::{DecodeMessage, Message};
 
 const OWNER: &str = "dashboard";
 const PANEL: &str = "main";
@@ -169,4 +165,4 @@ fn send_web(command: Command<'_>) -> bool {
     }
 }
 
-export!(Component);
+bones_wasm_sdk::export!(Component);

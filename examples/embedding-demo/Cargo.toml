@@ -2,10 +2,9 @@
 
 [package]
 name = "embedding-demo"
-version = "0.1.0"
+version = "0.0.0"
 edition = "2021"
+publish = false
 
 [dependencies]
-runner = { path = "../../core/runner" }
-bus = { path = "../../core/bus" }
-logging = { path = "../../core/logging" }
+bones-engine = { path = "../../crates/bones-engine" }

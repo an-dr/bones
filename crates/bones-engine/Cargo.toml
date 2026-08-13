@@ -1,0 +1,30 @@
+[package]
+name = "bones-engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = ["presentation", "audio", "game-core"]
+presentation = ["bones-kernel/platform", "dep:bones-module-renderer", "dep:bones-module-ui"]
+web = ["presentation", "dep:bones-module-web"]
+audio = ["dep:bones-module-audio"]
+game-core = ["dep:bones-module-game-core"]
+
+[dependencies]
+bones-kernel = { path = "./bones-kernel", default-features = false }
+bones-messages = { path = "../bones-messages" }
+wasmtime = { version = "47.0.0", features = ["component-model"] }
+bones-module-renderer = { path = "./bones-module-renderer", optional = true }
+bones-module-ui = { path = "./bones-module-ui", optional = true }
+bones-module-web = { path = "./bones-module-web", features = ["wry-backend"], optional = true }
+bones-module-audio = { path = "./bones-module-audio", optional = true }
+bones-module-game-core = { path = "./bones-module-game-core", optional = true }
+
+[dev-dependencies]
+# test-mode: cargo test runs tests on worker threads, not the process's
+# main thread; SDL refuses to init anywhere else unless this is set. Reaches
+# bones-kernel's platform module through this crate's own default features.
+sdl3 = { version = "0.18.4", features = ["build-from-source-static", "test-mode"] }
+bones-module-audio = { path = "./bones-module-audio" }

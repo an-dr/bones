@@ -11,7 +11,7 @@ Initialize-NativeBuildEnvironment
 # skipping it. Paths are the crate directories; each builds to its own
 # target/wasm32-wasip2/release/<name>.wasm.
 $fixtures = @(
-    "extensions/hello"
+    "crates/bones-extension-hello"
     "examples/keyecho"
     "examples/sprite_demo"
     "examples/runaway_demo"
@@ -50,11 +50,12 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 # Excluded from the root workspace (see its Cargo.toml) because they must
 # also compile for wasm32-wasip2 guests, so their tests need their own run.
-foreach ($crate in "shared/bones-messages", "shared/game-ui") {
+foreach ($crate in "crates/bones-messages", "crates/bones-wasm-sdk") {
     Write-Host "==> Running $crate tests (excluded from the main workspace)..."
     Push-Location (Join-Path $PSScriptRoot $crate)
     try {
-        cargo test
+        # --all-features so the SDK optional game-ui module is covered too.
+        cargo test --all-features
         if ($LASTEXITCODE -ne 0) { throw "$crate tests failed" }
     } finally {
         Pop-Location

@@ -62,7 +62,7 @@ Write-Host "==> Building bones..."
 Push-Location $repoRoot
 try {
     Initialize-NativeBuildEnvironment
-    cargo build -p app --release
+    cargo build -p bones --release
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 } finally {
     Pop-Location

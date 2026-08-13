@@ -1,0 +1,21 @@
+[workspace]
+
+[package]
+name = "bones-wasm-sdk"
+# The ABI version line, shared with wit/core.wit's `bones:core` package and
+# with bones-messages: this moves only when the guest contract changes, never
+# with the engine's [workspace.package] version.
+version = "1.0.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/an-dr/bones"
+
+[features]
+default = []
+# The in-world UI toolkit (ADR-025). Optional: an extension that renders no
+# game menu never compiles the geometry, selection, or hit-testing code.
+game-ui = []
+
+[dependencies]
+wit-bindgen = "0.59.0"
+bones-messages = { path = "../bones-messages" }

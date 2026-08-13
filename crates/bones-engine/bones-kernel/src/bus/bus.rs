@@ -1,0 +1,99 @@
+use pubsub_bus::Subscriber;
+use std::sync::{Arc, Mutex, Weak};
+
+use crate::bus::adapter::Adapter;
+use crate::bus::{Endpoint, EndpointBudget, Envelope, Handler};
+
+type BudgetRegistrations = Arc<Mutex<Vec<(Weak<Mutex<Adapter>>, EndpointBudget)>>>;
+
+/// Cheap to clone: an extension's `publish` import needs to hold a handle
+/// to the same bus it's registered on. `pubsub_bus::EventBus` is `Clone`
+/// (3.2.0) and already `Arc`-backed internally, so no wrapping `Arc` of
+/// bones' own is needed here.
+#[derive(Clone)]
+pub struct Bus {
+    inner: pubsub_bus::EventBus<Envelope, ()>,
+    budgets: BudgetRegistrations,
+}
+
+impl Bus {
+    pub fn new() -> Self {
+        Self {
+            inner: pubsub_bus::EventBus::new(),
+            budgets: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    pub fn register(&self, name: impl Into<String>, handler: impl Handler + 'static) -> Endpoint {
+        self.register_adapter(name, handler, None)
+    }
+
+    /// Registers an endpoint whose matching deliveries consume `budget`.
+    pub fn register_with_budget(
+        &self,
+        name: impl Into<String>,
+        handler: impl Handler + 'static,
+        budget: EndpointBudget,
+    ) -> Endpoint {
+        self.register_adapter(name, handler, Some(budget))
+    }
+
+    fn register_adapter(
+        &self,
+        name: impl Into<String>,
+        handler: impl Handler + 'static,
+        budget: Option<EndpointBudget>,
+    ) -> Endpoint {
+        let name = name.into();
+        let adapter = Arc::new(Mutex::new(Adapter {
+            patterns: Vec::new(),
+            handler: Box::new(handler),
+            budget,
+        }));
+        if let Some(budget) = adapter.lock().unwrap().budget.clone() {
+            self.budgets
+                .lock()
+                .unwrap()
+                .push((Arc::downgrade(&adapter), budget));
+        }
+        self.inner.add_subscriber_shared(adapter.clone());
+        Endpoint { name, adapter }
+    }
+
+    /// Fully removes an endpoint (unlike `Endpoint::release_all`, which
+    /// only stops it matching — this drops the pubsub-bus registration
+    /// itself). Idempotent; safe to call more than once.
+    pub fn unregister(&self, endpoint: &Endpoint) {
+        endpoint.release_all();
+        let erased: Arc<Mutex<dyn Subscriber<Envelope, ()>>> = endpoint.adapter.clone();
+        self.inner.remove_subscriber_shared(&erased);
+    }
+
+    /// Enqueues only — safe to call from inside a Handler; delivery waits
+    /// for `dispatch()` (ADR-015).
+    pub fn publish(&self, envelope: Envelope) {
+        self.inner.enqueue(envelope, None, 0);
+    }
+
+    /// Delivers everything enqueued since the last call, in order (ADR-009).
+    pub fn dispatch(&self) {
+        self.inner.dispatch();
+    }
+
+    /// Restores every currently registered endpoint's per-frame allowances.
+    pub fn begin_frame(&self) {
+        self.budgets.lock().unwrap().retain(|(adapter, budget)| {
+            if adapter.upgrade().is_none() {
+                return false;
+            }
+            budget.begin_frame();
+            true
+        });
+    }
+}
+
+impl Default for Bus {
+    fn default() -> Self {
+        Self::new()
+    }
+}

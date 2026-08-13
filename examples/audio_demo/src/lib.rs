@@ -1,12 +1,8 @@
-wit_bindgen::generate!({
-    path: "../../wit",
-    world: "extension",
-});
-
-use bones::core::host_api::{log, publish, subscribe, Level};
-use bones_messages::audio::{LoadSound, PlayMusic, PlaySound};
-use bones_messages::input::KeyDown;
-use bones_messages::{EncodeMessage, Message};
+use bones_wasm_sdk::Guest;
+use bones_wasm_sdk::bindings::bones::core::host_api::{log, publish, subscribe, Level};
+use bones_wasm_sdk::messages::audio::{LoadSound, PlayMusic, PlaySound};
+use bones_wasm_sdk::messages::input::KeyDown;
+use bones_wasm_sdk::messages::{EncodeMessage, Message};
 
 const SFX_ID: u32 = 1;
 const MUSIC_ID: u32 = 2;
@@ -77,4 +73,4 @@ impl Guest for Component {
     }
 }
 
-export!(Component);
+bones_wasm_sdk::export!(Component);

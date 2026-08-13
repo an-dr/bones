@@ -1,0 +1,434 @@
+use crate::{DecodeError, Reader, Writer};
+
+use super::{PhysicsWorlds, SpritePresentation};
+
+/// The rapier2d rigid-body type a spawned entity's collider gets, when it
+/// has one at all (`collider_half_w`/`collider_half_h` both `> 0.0`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum BodyKind {
+    /// Pushed by other bodies and gravity, participates fully in rapier2d's
+    /// collision response — the default, and every existing caller's
+    /// behavior before `BodyKind` existed.
+    #[default]
+    Dynamic,
+    /// Moves exactly as `SetVelocity` commands it and pushes `Dynamic`
+    /// bodies out of its way on contact, but is never itself pushed —
+    /// rapier2d's standard "platform/mover" body type (`kinematic` in
+    /// Unity, Godot, and Box2D alike).
+    Kinematic,
+    /// Never moves, even if velocity is set, and displaces pushable bodies
+    /// without being displaced itself. Suitable for level-owned obstacles.
+    Fixed,
+    /// A `Dynamic` body (pushed by contact, participates in collision
+    /// response) with very high linear damping and rotation locked: it
+    /// moves when pushed, but carries no momentum — velocity decays to
+    /// rest almost immediately once nothing is pushing it, instead of
+    /// coasting or drifting, and it never spins from an off-center hit.
+    Frictionless,
+}
+
+/// The collider/visual shape a spawned entity's `square_color` draws and
+/// collides as (meaningless for a `sprite` entity, which is always drawn
+/// as its sprite frame regardless). `Rect` is every caller's behavior from
+/// before this field existed — an axis-aligned box at the collider's
+/// `half_w`/`half_h` extent. `Triangle` is an isoceles triangle inscribed
+/// in that same extent (apex centered on top, base along the bottom),
+/// collided against as a real triangle in the rapier2d world; the retro
+/// world has no non-rectangular collision concept, so it approximates a
+/// `Triangle` collider as its own `half_w`/`half_h` AABB bounding box.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Shape {
+    #[default]
+    Rect,
+    Triangle,
+}
+
+/// The drawable appearance of a spawned entity: either an animated sprite
+/// or a plain filled square at the collider's extent (obstacles, walls —
+/// anything that doesn't need art). Exactly one of these two shapes per
+/// entity; `EntityOp::Spawn` carries `Option<Sprite>` plus a separate
+/// `square_color`, one of which is expected to be meaningful depending on
+/// whether `sprite` is `Some`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Sprite {
+    /// Application-assigned sprite identifier (matches `gfx::LoadSprite`).
+    pub sprite_id: u32,
+    /// Sprite frame width, in source pixels — every frame is laid out at
+    /// `(frame_index * frame_w, 0)` in the source sprite.
+    pub frame_w: u32,
+    /// Sprite frame height, in source pixels.
+    pub frame_h: u32,
+    /// Total frames in the animation loop. `1` draws a static sprite with
+    /// no timer.
+    pub frame_count: u32,
+    /// Seconds each frame is shown before advancing.
+    pub frame_duration: f32,
+}
+
+/// One operation on a `game-core` entity, addressed by a caller-assigned
+/// `entity_id` (its own namespace, distinct from `gfx::LoadSprite`'s
+/// sprite ids and this crate's other ids). Open/closed: a new op extends
+/// this enum — the wire format inside `game-core/entity-op` — rather than
+/// adding a new bus topic, the same pattern `bones_ui::Widget` already uses for
+/// `ui/spec`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum EntityOp {
+    /// Spawns an entity with a world-space transform and either an
+    /// animated `sprite` or a plain filled `square_color` square at the
+    /// collider's extent (`sprite: None`) — obstacles and walls don't need
+    /// art. A nonzero `collider_half_w`/`collider_half_h` also gives it a
+    /// dynamic `rapier2d` box collider (`0.0` spawns a purely visual
+    /// entity, no physics body — meaningless combined with `sprite: None`,
+    /// since a colorless square has nothing to draw at). Spawning with an
+    /// `entity_id` already in use replaces that entity, the same
+    /// replace-on-republish semantics `gfx::DrawSprite` batches already use.
+    Spawn {
+        entity_id: u32,
+        x: f32,
+        y: f32,
+        sprite: Option<Sprite>,
+        square_color: (u8, u8, u8, u8),
+        /// Only meaningful for a `square_color` entity (`sprite: None`) —
+        /// see `Shape`.
+        shape: Shape,
+        collider_half_w: f32,
+        collider_half_h: f32,
+        body_kind: BodyKind,
+        /// Which physics world(s) (ADR-021) this entity's body registers
+        /// in, when it has a body at all. `PhysicsWorlds::default()`
+        /// (rapier2d only) matches every caller's behavior before this
+        /// field existed.
+        worlds: PhysicsWorlds,
+    },
+    /// Sets a spawned entity's rapier2d linear velocity directly — the
+    /// mechanism a caller (an extension reading `input/*`) drives movement
+    /// with. A no-op if `entity_id` names an entity with no collider, or
+    /// no entity at all.
+    SetVelocity { entity_id: u32, vx: f32, vy: f32 },
+    /// Removes an entity (and its collider, if any) entirely.
+    Despawn { entity_id: u32 },
+    /// Overwrites a spawned entity's `SquareColor` in place — the
+    /// mechanism a caller uses for a temporary flash (set, wait, set
+    /// back), without `game-core` itself needing to know about flash
+    /// timing. A no-op if `entity_id` names no entity, or one with no
+    /// `SquareColor` (a sprite entity, which has none).
+    SetColor {
+        entity_id: u32,
+        color: (u8, u8, u8, u8),
+    },
+    /// Globally toggles a yellow unfilled outline over every collider-
+    /// bearing entity's actual rapier2d extent (sprite entities, plain
+    /// squares, and tilemap colliders alike), drawn on top of each
+    /// entity's normal draw each tick — a debug aid for checking a
+    /// visible sprite/square lines up with what it actually collides as.
+    /// Not addressed by `entity_id`: applies to the whole simulation.
+    SetDebugHitboxes { enabled: bool },
+    /// Globally freezes the simulation while `paused` is `true`: neither
+    /// physics world steps, no contact-clamping or multi-world position
+    /// resolution runs, and no `game-core/collision` event can fire — every
+    /// entity holds exactly the position/velocity it had on the last
+    /// unpaused tick, including one still settling from a recent push, not
+    /// just entities a caller happens to be driving with `SetVelocity`.
+    /// `gfx/*` is still published every tick regardless, so the frame stays
+    /// visible (frozen) rather than going stale or blank. Not addressed by
+    /// `entity_id`: applies to the whole simulation, the same as
+    /// `SetDebugHitboxes`.
+    SetPaused { paused: bool },
+    /// Has `game-core` auto-follow `entity_id`'s `Transform` every tick,
+    /// replacing the fixed `(0, 0)` camera it publishes by default: the
+    /// camera centers on that entity, clamped per axis to
+    /// `[0, level_size - viewport_size / zoom]` so it stops panning once
+    /// the level edge would come into view (a no-op/unclamped center if
+    /// the level is smaller than the effective viewport). `viewport_w`/
+    /// `viewport_h` are the caller's own known *logical* resolution (the
+    /// renderer's fixed reference size, `gfx::SetDisplay`'s doc comment) —
+    /// `game-core` has no rendering authority and doesn't otherwise know
+    /// it, but this stays valid across a `gfx::SetDisplay` resize since
+    /// the renderer scales actual window changes to fit that same fixed
+    /// logical space. `zoom` (`1.0` is unscaled) is republished as
+    /// `gfx::SetCamera`'s own `zoom`, and also shrinks the clamp's
+    /// effective viewport, since zooming in shows less world per pixel.
+    /// A no-op each tick the followed `entity_id` doesn't exist (falls
+    /// back to the fixed camera), not a caller-visible error.
+    SetCameraFollow {
+        entity_id: u32,
+        viewport_w: f32,
+        viewport_h: f32,
+        zoom: f32,
+    },
+    /// Replaces only an existing entity's sprite presentation. Its transform,
+    /// colliders, velocities, body kinds, and physics-world registrations stay
+    /// untouched. A no-op if `entity_id` does not exist.
+    SetSprite {
+        entity_id: u32,
+        presentation: SpritePresentation,
+    },
+    /// Sets RGBA modulation on an existing sprite entity without replacing its
+    /// animation or simulation state. A no-op for unknown or square entities.
+    SetSpriteTint {
+        entity_id: u32,
+        tint: (u8, u8, u8, u8),
+    },
+    /// Sets camera-follow responsiveness in inverse seconds. `0.0` keeps the
+    /// established immediate-follow behavior; positive values ease toward the
+    /// target on each tick before applying the level-edge clamp.
+    SetCameraSmoothing { responsiveness: f32 },
+    /// Clears every entity, physics body, loaded tilemap, camera setting,
+    /// debug toggle, and paused state. The module remains initialized and
+    /// subscribed, ready for a new level session.
+    Reset,
+}
+
+const TAG_SPAWN: u8 = 0;
+const TAG_SET_VELOCITY: u8 = 1;
+const TAG_DESPAWN: u8 = 2;
+const TAG_SET_COLOR: u8 = 3;
+const TAG_SET_DEBUG_HITBOXES: u8 = 4;
+const TAG_SET_PAUSED: u8 = 5;
+const TAG_SET_CAMERA_FOLLOW: u8 = 6;
+const TAG_SET_SPRITE: u8 = 7;
+const TAG_SET_CAMERA_SMOOTHING: u8 = 8;
+const TAG_RESET: u8 = 9;
+const TAG_SET_SPRITE_TINT: u8 = 10;
+
+impl EntityOp {
+    pub(super) fn encode_into(&self, writer: Writer) -> Writer {
+        match self {
+            EntityOp::Spawn {
+                entity_id,
+                x,
+                y,
+                sprite,
+                square_color,
+                shape,
+                collider_half_w,
+                collider_half_h,
+                body_kind,
+                worlds,
+            } => {
+                let (r, g, b, a) = *square_color;
+                let writer = writer.u8(TAG_SPAWN).u32(*entity_id).f32(*x).f32(*y);
+                let writer = match sprite {
+                    Some(sprite) => writer
+                        .u8(1)
+                        .u32(sprite.sprite_id)
+                        .u32(sprite.frame_w)
+                        .u32(sprite.frame_h)
+                        .u32(sprite.frame_count)
+                        .f32(sprite.frame_duration),
+                    None => writer.u8(0).u32(0).u32(0).u32(0).u32(0).f32(0.0),
+                };
+                writer
+                    .u8(r)
+                    .u8(g)
+                    .u8(b)
+                    .u8(a)
+                    .u8(match shape {
+                        Shape::Rect => 0,
+                        Shape::Triangle => 1,
+                    })
+                    .f32(*collider_half_w)
+                    .f32(*collider_half_h)
+                    .u8(match body_kind {
+                        BodyKind::Dynamic => 0,
+                        BodyKind::Kinematic => 1,
+                        BodyKind::Frictionless => 2,
+                        BodyKind::Fixed => 3,
+                    })
+                    .u8(worlds.to_bits())
+            }
+            EntityOp::SetVelocity { entity_id, vx, vy } => writer
+                .u8(TAG_SET_VELOCITY)
+                .u32(*entity_id)
+                .f32(*vx)
+                .f32(*vy),
+            EntityOp::Despawn { entity_id } => writer.u8(TAG_DESPAWN).u32(*entity_id),
+            EntityOp::SetColor { entity_id, color } => {
+                let (r, g, b, a) = *color;
+                writer
+                    .u8(TAG_SET_COLOR)
+                    .u32(*entity_id)
+                    .u8(r)
+                    .u8(g)
+                    .u8(b)
+                    .u8(a)
+            }
+            EntityOp::SetDebugHitboxes { enabled } => writer
+                .u8(TAG_SET_DEBUG_HITBOXES)
+                .u8(if *enabled { 1 } else { 0 }),
+            EntityOp::SetPaused { paused } => {
+                writer.u8(TAG_SET_PAUSED).u8(if *paused { 1 } else { 0 })
+            }
+            EntityOp::SetCameraFollow {
+                entity_id,
+                viewport_w,
+                viewport_h,
+                zoom,
+            } => writer
+                .u8(TAG_SET_CAMERA_FOLLOW)
+                .u32(*entity_id)
+                .f32(*viewport_w)
+                .f32(*viewport_h)
+                .f32(*zoom),
+            EntityOp::SetSprite {
+                entity_id,
+                presentation,
+            } => writer
+                .u8(TAG_SET_SPRITE)
+                .u32(*entity_id)
+                .u32(presentation.sprite.sprite_id)
+                .u32(presentation.sprite.frame_w)
+                .u32(presentation.sprite.frame_h)
+                .u32(presentation.sprite.frame_count)
+                .f32(presentation.sprite.frame_duration)
+                .u32(presentation.frames_per_row)
+                .u32(presentation.draw_w)
+                .u32(presentation.draw_h)
+                .u8(presentation.looping as u8)
+                .u8(presentation.advance_while_stopped as u8)
+                .u8(presentation.flip_h as u8)
+                .u8(presentation.flip_v as u8),
+            EntityOp::SetCameraSmoothing { responsiveness } => {
+                writer.u8(TAG_SET_CAMERA_SMOOTHING).f32(*responsiveness)
+            }
+            EntityOp::Reset => writer.u8(TAG_RESET),
+            EntityOp::SetSpriteTint { entity_id, tint } => {
+                let (r, g, b, a) = *tint;
+                writer
+                    .u8(TAG_SET_SPRITE_TINT)
+                    .u32(*entity_id)
+                    .u8(r)
+                    .u8(g)
+                    .u8(b)
+                    .u8(a)
+            }
+        }
+    }
+
+    pub(super) fn decode(reader: &mut Reader) -> Result<Self, DecodeError> {
+        let tag = reader.read_u8()?;
+        match tag {
+            TAG_SPAWN => {
+                let entity_id = reader.read_u32()?;
+                let x = reader.read_f32()?;
+                let y = reader.read_f32()?;
+                let has_sprite = reader.read_u8()? != 0;
+                let sprite_id = reader.read_u32()?;
+                let frame_w = reader.read_u32()?;
+                let frame_h = reader.read_u32()?;
+                let frame_count = reader.read_u32()?;
+                let frame_duration = reader.read_f32()?;
+                let sprite = has_sprite.then_some(Sprite {
+                    sprite_id,
+                    frame_w,
+                    frame_h,
+                    frame_count,
+                    frame_duration,
+                });
+                let square_color = (
+                    reader.read_u8()?,
+                    reader.read_u8()?,
+                    reader.read_u8()?,
+                    reader.read_u8()?,
+                );
+                let shape = match reader.read_u8()? {
+                    1 => Shape::Triangle,
+                    _ => Shape::Rect,
+                };
+                let collider_half_w = reader.read_f32()?;
+                let collider_half_h = reader.read_f32()?;
+                let body_kind = match reader.read_u8()? {
+                    1 => BodyKind::Kinematic,
+                    2 => BodyKind::Frictionless,
+                    3 => BodyKind::Fixed,
+                    _ => BodyKind::Dynamic,
+                };
+                let worlds = PhysicsWorlds::from_bits(reader.read_u8()?);
+                Ok(EntityOp::Spawn {
+                    entity_id,
+                    x,
+                    y,
+                    sprite,
+                    square_color,
+                    shape,
+                    collider_half_w,
+                    collider_half_h,
+                    body_kind,
+                    worlds,
+                })
+            }
+            TAG_SET_VELOCITY => Ok(EntityOp::SetVelocity {
+                entity_id: reader.read_u32()?,
+                vx: reader.read_f32()?,
+                vy: reader.read_f32()?,
+            }),
+            TAG_DESPAWN => Ok(EntityOp::Despawn {
+                entity_id: reader.read_u32()?,
+            }),
+            TAG_SET_COLOR => {
+                let entity_id = reader.read_u32()?;
+                let color = (
+                    reader.read_u8()?,
+                    reader.read_u8()?,
+                    reader.read_u8()?,
+                    reader.read_u8()?,
+                );
+                Ok(EntityOp::SetColor { entity_id, color })
+            }
+            TAG_SET_DEBUG_HITBOXES => Ok(EntityOp::SetDebugHitboxes {
+                enabled: reader.read_u8()? != 0,
+            }),
+            TAG_SET_PAUSED => Ok(EntityOp::SetPaused {
+                paused: reader.read_u8()? != 0,
+            }),
+            TAG_SET_CAMERA_FOLLOW => Ok(EntityOp::SetCameraFollow {
+                entity_id: reader.read_u32()?,
+                viewport_w: reader.read_f32()?,
+                viewport_h: reader.read_f32()?,
+                zoom: reader.read_f32()?,
+            }),
+            TAG_SET_SPRITE => {
+                let entity_id = reader.read_u32()?;
+                let sprite = Sprite {
+                    sprite_id: reader.read_u32()?,
+                    frame_w: reader.read_u32()?,
+                    frame_h: reader.read_u32()?,
+                    frame_count: reader.read_u32()?,
+                    frame_duration: reader.read_f32()?,
+                };
+                let presentation = SpritePresentation {
+                    sprite,
+                    frames_per_row: reader.read_u32()?,
+                    draw_w: reader.read_u32()?,
+                    draw_h: reader.read_u32()?,
+                    looping: reader.read_u8()? != 0,
+                    advance_while_stopped: reader.read_u8()? != 0,
+                    flip_h: reader.read_u8()? != 0,
+                    flip_v: reader.read_u8()? != 0,
+                };
+                Ok(EntityOp::SetSprite {
+                    entity_id,
+                    presentation,
+                })
+            }
+            TAG_SET_CAMERA_SMOOTHING => Ok(EntityOp::SetCameraSmoothing {
+                responsiveness: reader.read_f32()?,
+            }),
+            TAG_RESET => Ok(EntityOp::Reset),
+            TAG_SET_SPRITE_TINT => {
+                let entity_id = reader.read_u32()?;
+                let tint = (
+                    reader.read_u8()?,
+                    reader.read_u8()?,
+                    reader.read_u8()?,
+                    reader.read_u8()?,
+                );
+                Ok(EntityOp::SetSpriteTint { entity_id, tint })
+            }
+            _ => Err(DecodeError::InvalidTag {
+                message: "game-core entity op",
+                tag,
+            }),
+        }
+    }
+}

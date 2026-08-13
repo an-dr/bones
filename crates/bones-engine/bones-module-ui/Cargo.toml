@@ -1,0 +1,16 @@
+[package]
+name = "bones-module-ui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+bones-kernel = { path = "../bones-kernel", default-features = false }
+bones-module-renderer = { path = "../bones-module-renderer" }
+bones-messages = { path = "../../bones-messages" }
+egui = "0.32"
+sdl3 = { version = "0.18.4", features = ["build-from-source-static", "unsafe_textures"] }
+
+[dev-dependencies]
+bones-kernel = { path = "../bones-kernel", default-features = false, features = ["platform"] }

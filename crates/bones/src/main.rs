@@ -1,0 +1,72 @@
+//! The engine executable (structure.md): default composition, built solely
+//! on runner's public builder API (ADR-011) — no access an embedder lacks.
+//! Reads `bones.toml` next to wherever the executable itself lives by
+//! default, or from `BONES_CONFIG` when set (paths.rs) — never the
+//! process's current working directory; every field defaults to what was
+//! previously hardcoded.
+
+// A release build is a windowed application:
+// - without this, Windows opens a console behind the SDL window;
+// - debug builds keep the console subsystem, which is where their log output
+//   goes while developing.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+mod config;
+#[cfg(windows)]
+mod parent_console;
+mod paths;
+
+use config::Config;
+
+fn main() {
+    #[cfg(windows)]
+    parent_console::attach();
+    if let Err(err) = run() {
+        eprintln!("fatal: {err}");
+        std::process::exit(1);
+    }
+}
+
+fn run() -> Result<(), String> {
+    let config = Config::load(paths::config_path())?;
+
+    let mut engine = bones_engine::Engine::new()
+        .extensions_dir(paths::config_relative(&config.extensions_dir))
+        .extension_budget(bones_engine::bus::BudgetLimits {
+            max_inbound: config.extension_max_inbound,
+            max_publishes: config.extension_max_publishes,
+        })
+        .window(
+            config.window_title,
+            config.window_width,
+            config.window_height,
+        )
+        .saves_dir(paths::config_relative(&config.saves_dir));
+    if config.renderer {
+        engine = engine.renderer();
+    }
+    if config.ui {
+        engine = engine.ui();
+    }
+    if config.web {
+        #[cfg(feature = "web")]
+        {
+            engine = engine.web();
+        }
+        #[cfg(not(feature = "web"))]
+        {
+            return Err("web = true requires building app with --features web".to_string());
+        }
+    }
+    if config.audio {
+        engine = engine.module(bones_engine::audio::Audio::new());
+    }
+    if config.game_core {
+        engine = engine.module(bones_engine::game_core::GameCore::new());
+    }
+    if config.persistence_read_only {
+        engine = engine.read_only_persistence();
+    }
+
+    engine.run().map_err(|err| err.to_string())
+}

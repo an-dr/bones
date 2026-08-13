@@ -19,6 +19,14 @@ name = "bones-messages"
 version = "0.1.0"
 
 [[package]]
+name = "bones-wasm-rs"
+version = "0.1.0"
+dependencies = [
+ "bones-messages",
+ "wit-bindgen",
+]
+
+[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -100,10 +108,9 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
 name = "notes"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
- "bones-messages",
- "wit-bindgen",
+ "bones-wasm-rs",
 ]
 
 [[package]]

@@ -1,25 +1,21 @@
-wit_bindgen::generate!({
-    path: "../../wit",
-    world: "extension",
-});
-
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use bones::core::host_api::{
+use bones_wasm_sdk::Guest;
+use bones_wasm_sdk::bindings::bones::core::host_api::{
     list_display_modes, log, native_display_mode, publish, request_exit, subscribe, DisplayMode,
     Level,
 };
-use bones_messages::audio::{LoadSound, PlaySound};
-use bones_messages::game_core::{
+use bones_wasm_sdk::messages::audio::{LoadSound, PlaySound};
+use bones_wasm_sdk::messages::game_core::{
     BodyKind, Collision, EntityOp, EntityOpMessage, LoadTilemap, PhysicsWorlds, Shape, Sprite,
     TilesetImage,
 };
-use bones_messages::gfx::{DrawRect, DrawText, LoadSprite, SetDisplay, TextAlign};
-use bones_messages::input::{GamepadAxis, KeyDown, KeyUp, MouseDown};
-use bones_messages::renderer::DisplayChanged;
-use bones_messages::{DecodeMessage, EncodeMessage, Message};
-use game_ui::{ButtonLayout, Canvas, DrawCommand, MenuLayout, Rect};
+use bones_wasm_sdk::messages::gfx::{DrawRect, DrawText, LoadSprite, SetDisplay, TextAlign};
+use bones_wasm_sdk::messages::input::{GamepadAxis, KeyDown, KeyUp, MouseDown};
+use bones_wasm_sdk::messages::renderer::DisplayChanged;
+use bones_wasm_sdk::messages::{DecodeMessage, EncodeMessage, Message};
+use bones_wasm_sdk::game_ui::{ButtonLayout, Canvas, DrawCommand, MenuLayout, Rect};
 
 const LEVEL_TMX: &[u8] = include_bytes!("assets/level.tmx");
 const SPRITE_PNG: &[u8] = include_bytes!("assets/robot_william.png");
@@ -1552,4 +1548,4 @@ fn set_key_held(key: &str, is_down: bool) {
     });
 }
 
-export!(Component);
+bones_wasm_sdk::export!(Component);

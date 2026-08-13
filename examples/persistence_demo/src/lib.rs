@@ -1,13 +1,9 @@
-wit_bindgen::generate!({
-    path: "../../wit",
-    world: "extension",
-});
-
 use std::cell::Cell;
 
-use bones::core::host_api::{log, publish, send, subscribe, Level};
-use bones_messages::persistence::{Save, ENDPOINT};
-use bones_messages::{EncodeMessage, Message};
+use bones_wasm_sdk::Guest;
+use bones_wasm_sdk::bindings::bones::core::host_api::{log, publish, send, subscribe, Level};
+use bones_wasm_sdk::messages::persistence::{Save, ENDPOINT};
+use bones_wasm_sdk::messages::{EncodeMessage, Message};
 
 thread_local! {
     static COUNTER: Cell<u32> = const { Cell::new(0) };
@@ -58,4 +54,4 @@ impl Guest for Component {
     }
 }
 
-export!(Component);
+bones_wasm_sdk::export!(Component);
