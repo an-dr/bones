@@ -32,6 +32,15 @@ pub mod bus {
         BudgetLimits, Bus, DropCounters, Endpoint, EndpointBudget, Envelope, Handler, Module,
         ModuleContext, ModuleRegistration, Registry, Respond, SendError, ServiceRegistry,
     };
+
+    /// Offers one raw platform event to the modules, topmost first, and
+    /// reports whether one claimed it (ADR-008).
+    ///
+    /// `run` calls this itself; it is public so a caller driving
+    /// [`Runner::step`](crate::Runner::step) can route input on exactly the
+    /// same terms instead of reimplementing the layering rule.
+    #[cfg(feature = "presentation")]
+    pub use bones_kernel::bus::offer_event;
 }
 
 /// Structured logging, including the sink trait the kernel resolves against

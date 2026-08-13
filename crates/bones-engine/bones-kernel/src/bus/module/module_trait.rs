@@ -25,9 +25,10 @@ pub trait Module: Handler {
     ///
     /// - Default is a no-op claiming nothing, which is right for every
     ///   module that does not draw interactive surfaces.
-    /// - Every module is offered the event in registration order until one
-    ///   claims it, so a module that needs to *observe* input it does not
-    ///   claim must still return `false`.
+    /// - Every module is offered the event in *reverse* registration order
+    ///   until one claims it — the module registered last draws above the
+    ///   rest, so it is asked first. A module that needs to *observe*
+    ///   input it does not claim must still return `false`.
     /// - Feature-gated with `platform` because the parameter is the SDL
     ///   event itself: no translation layer sits in between, so nothing is
     ///   lost on the way (text input and modifier state especially, which

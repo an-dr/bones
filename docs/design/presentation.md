@@ -50,6 +50,8 @@ flowchart TD
     U -- pass --> G["published on input/* topics"]
 ```
 
+The layers in that diagram are not named anywhere in the frame loop. Each is a module overriding `filter_event`, and the top-down traversal comes from offering the event in reverse registration order (ADR-031): web is composed after ui, which is composed after the renderer, so the offer reaches them in exactly the opposite order. An embedder's own interactive overlay joins the top of the stack by being composed last, with no layer registry to enrol in.
+
 Consequences:
 
 - `input/*` subscribers see only what the upper layers let through — a game never receives the keystrokes typed into a settings dialog above it.

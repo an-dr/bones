@@ -79,17 +79,20 @@ fn a_module_that_does_not_override_the_hook_claims_nothing() {
     assert!(!offer_event(&modules, &an_event()));
 }
 
+/// ADR-008's whole point: the module registered *last* draws on top, so it
+/// is the one that gets the first look at the event — not the one composed
+/// first, which sits underneath everything.
 #[test]
-fn the_first_claiming_module_stops_the_offer() {
+fn the_last_registered_module_is_offered_the_event_first() {
     let offered = Arc::new(Mutex::new(Vec::new()));
     let modules = vec![
         boxed(Filter {
-            name: "first",
+            name: "underneath",
             claims: true,
             offered: offered.clone(),
         }),
         boxed(Filter {
-            name: "second",
+            name: "on-top",
             claims: true,
             offered: offered.clone(),
         }),
@@ -98,8 +101,8 @@ fn the_first_claiming_module_stops_the_offer() {
     assert!(offer_event(&modules, &an_event()));
     assert_eq!(
         *offered.lock().unwrap(),
-        vec!["first"],
-        "the second module should never have been offered the event"
+        vec!["on-top"],
+        "the module underneath should never have been offered the event"
     );
 }
 
@@ -108,13 +111,13 @@ fn an_unclaimed_event_reaches_every_module_and_then_input() {
     let offered = Arc::new(Mutex::new(Vec::new()));
     let modules = vec![
         boxed(Filter {
-            name: "first",
+            name: "bottom",
             claims: false,
             offered: offered.clone(),
         }),
         boxed(Indifferent),
         boxed(Filter {
-            name: "third",
+            name: "top",
             claims: false,
             offered: offered.clone(),
         }),
@@ -124,21 +127,27 @@ fn an_unclaimed_event_reaches_every_module_and_then_input() {
         !offer_event(&modules, &an_event()),
         "nothing claimed it, so platform should still publish input/*"
     );
-    assert_eq!(*offered.lock().unwrap(), vec!["first", "third"]);
+    assert_eq!(
+        *offered.lock().unwrap(),
+        vec!["top", "bottom"],
+        "top to bottom, which is the reverse of registration order"
+    );
 }
 
+/// The fall-through half of the layering rule: an overlay that declines an
+/// event does not swallow it, and the layer below still gets its turn.
 #[test]
-fn a_later_module_can_claim_what_an_earlier_one_declined() {
+fn a_lower_module_can_claim_what_the_one_above_it_declined() {
     let offered = Arc::new(Mutex::new(Vec::new()));
     let modules = vec![
         boxed(Filter {
-            name: "declines",
-            claims: false,
+            name: "claims",
+            claims: true,
             offered: offered.clone(),
         }),
         boxed(Filter {
-            name: "claims",
-            claims: true,
+            name: "declines",
+            claims: false,
             offered: offered.clone(),
         }),
     ];

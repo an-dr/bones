@@ -24,7 +24,7 @@ A `Module` (crate: `bus`) requires `Handler` as a supertrait — a module is a b
 - `name()` — the bus endpoint id, checked unique at registration.
 - `init(ctx) -> Result<(), String>` — request subscriptions (applied by the caller after registration, mirroring how a WASM extension's own `init` requests them) and provide/consume services.
 - `handle(&mut self, envelope)` (`Handler`) — bus deliveries, same semantics as extensions (per-module serialization included).
-- `filter_event(event) -> bool` — first look at one raw platform event before it becomes an `input/*` message (ADR-008); returning `true` claims it so nothing below sees it. Default: claims nothing. Feature-gated with `platform`, since a headless build has no event source.
+- `filter_event(event) -> bool` — first look at one raw platform event before it becomes an `input/*` message (ADR-008); returning `true` claims it so nothing below sees it. Offered in reverse registration order, so the module composed last — the one drawn on top — is asked first (ADR-031). Default: claims nothing. Feature-gated with `platform`, since a headless build has no event source.
 - `render()`, `present()` — frame-phase hooks, both default no-op; a module overrides only the phases it needs.
 - `respond(sender, payload)` — answers a direct `send` (ADR-010) addressed to this module by name, the same capability WASM extensions already have. Default: no reply. `persistence` is the first module to use this (an extension's own `init` loading its prior save synchronously), and `files` the second (reading a granted directory); most modules have nothing to answer.
 - `shutdown()` — called once after extensions stop during orderly application shutdown.
@@ -35,13 +35,15 @@ The kernel's **runner** owns the loop skeleton. Modules hook named phases; withi
 
 | Phase | Kernel work | Typical module hooks |
 | --- | --- | --- |
-| `input` | Platform pumps events → bus messages | every module's `filter_event`, first claim wins |
+| `input` | Platform pumps events → bus messages | every module's `filter_event`, topmost first, first claim wins |
 | `dispatch` | Bus delivers to subscribers | ui consumes `ui/*` specs (`Handler::handle`) |
 | `tick` | `on-tick(dt)` to tick subscribers | game-core simulation (`Handler::handle` on `core/tick`) |
 | `render` | — | renderer composites gfx batches, then ui draws above them |
 | `present` | — | renderer presents the frame |
 
 Registration order is what layers the frame: `render` runs over every module before `present` runs over any, so the renderer has composited before ui draws, and nothing flips a buffer until both are done. A headless build (no presentation modules) simply has empty phases.
+
+The `input` phase walks that same order backward (ADR-031). Later registration means drawn above, so it has to mean offered input first — the two directions are one statement about layering read from opposite ends, and an embedder sets both by choosing where in the composition a module goes.
 
 ## Services
 
