@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 
 use bones_wasm_sdk::Guest;
-use bones_wasm_sdk::bindings::bones::core::host_api::{
+use bones_wasm_sdk::bindings::bones::extension::host_api::{
     list_display_modes, log, native_display_mode, publish, request_exit, subscribe, DisplayMode,
     Level,
 };

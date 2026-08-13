@@ -1,7 +1,7 @@
 use std::cell::{Cell, RefCell};
 
 use bones_wasm_sdk::Guest;
-use bones_wasm_sdk::bindings::bones::core::host_api::{log, publish, subscribe, Level};
+use bones_wasm_sdk::bindings::bones::extension::host_api::{log, publish, subscribe, Level};
 
 const UPDATE_TOPIC: &str = "metrics/updated";
 const UPDATE_INTERVAL: f32 = 0.5;

@@ -1,4 +1,4 @@
-package bones:core@1.0.0;
+package bones:extension@1.0.0;
 
 interface host-api {
     enum level {
@@ -38,15 +38,24 @@ interface host-api {
     native-display-mode: func() -> option<display-mode>;
 }
 
-world extension {
-    import host-api;
-
-    export init: func();
+// What an extension must provide, mirroring `host-api`, which is what it may
+// call. These live in an interface rather than directly in the world so their
+// core WebAssembly symbols are qualified as `bones:extension/extension-api#<name>`.
+// A world-level export takes the bare name instead, which put `shutdown` in the
+// same flat namespace as POSIX `shutdown(sockfd, how)` from libc and made every
+// guest link with a signature-mismatch warning.
+interface extension-api {
+    init: func();
     // Called once before a running extension is unloaded.
-    export shutdown: func();
-    export on-tick: func(dt: f32);
+    shutdown: func();
+    on-tick: func(dt: f32);
     // Topic is empty for a direct send (ADR-010) - it has no topic, only a
     // sender and payload. The returned payload is the reply; only read for
     // direct sends, ignored for pub/sub deliveries.
-    export on-message: func(topic: string, sender: string, payload: list<u8>) -> option<list<u8>>;
+    on-message: func(topic: string, sender: string, payload: list<u8>) -> option<list<u8>>;
+}
+
+world extension {
+    import host-api;
+    export extension-api;
 }

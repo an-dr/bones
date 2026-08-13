@@ -1,6 +1,6 @@
 # bones core message wire format
 
-**Version 1.0.0**, matching `bones:core@1.0.0` in [core.wit](core.wit). This document and that file are the two halves of the extension ABI: `core.wit` defines the calls, this defines the bytes those calls carry on core-owned topics.
+**Version 1.0.0**, matching `bones:extension@1.0.0` in [extension.wit](extension.wit). This document and that file are the two halves of the extension ABI: `extension.wit` defines the calls, this defines the bytes those calls carry on core-owned topics.
 
 Written so an extension author in any language can produce and consume core messages without reading Rust. The Rust implementation lives in `bones-messages`; where the two ever disagree, the [conformance vectors](vectors/README.md) decide, because both this document and that crate are checked against them.
 
@@ -20,7 +20,7 @@ This document carries the **ABI version line**, not the engine's (ADR-029). It m
 
 Adding a new core topic does not break a decoder that does not subscribe to it, and adding a new variant to a tagged union does not break a decoder that never receives one. Both are additive and do not force a major bump on their own. Removing or renumbering a tag does.
 
-There is no version field in a payload. The version is established out of band, by the `bones:core@<version>` import in the component itself, which the host refuses to instantiate on a mismatch — see [README.md](README.md) for how that check behaves.
+There is no version field in a payload. The version is established out of band, by the `bones:extension@<version>` import in the component itself, which the host refuses to instantiate on a mismatch — see [README.md](README.md) for how that check behaves.
 
 ## Primitives
 

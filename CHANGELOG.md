@@ -3,7 +3,7 @@
 Two independent version lines (ADR-029), so each entry says which one it belongs to:
 
 - **engine** — `bones` and `bones-engine`, tagged `v<version>`. What an embedder links.
-- **ABI** — `bones:core`, `bones-messages`, and `bones-wasm-sdk`, tagged `abi-v<version>`. What a `.wasm` extension is built against.
+- **ABI** — `bones:extension`, `bones-messages`, and `bones-wasm-sdk`, tagged `abi-v<version>`. What a `.wasm` extension is built against.
 
 An ABI entry concerns every extension in existence, in any language. An engine entry concerns only projects that link the library.
 
@@ -20,7 +20,7 @@ First tagged release. Both lines start at 1.0.0 (ADR-029) because the interfaces
 
 ### The extension ABI
 
-- [wit/core.wit](wit/core.wit) defines the calls; [wit/wire-format.md](wit/wire-format.md) defines the bytes those calls carry on core-owned topics, with machine-readable [conformance vectors](wit/vectors/README.md) generated from the engine's own encoder. An extension author outside Rust no longer has to read Rust source to build a payload.
+- [wit/extension.wit](wit/extension.wit) defines the calls; [wit/wire-format.md](wit/wire-format.md) defines the bytes those calls carry on core-owned topics, with machine-readable [conformance vectors](wit/vectors/README.md) generated from the engine's own encoder. An extension author outside Rust no longer has to read Rust source to build a payload.
 - A distribution ships the whole `wit/` directory beside the binary that implements it.
 - Version enforcement is not advisory: wasmtime refuses to instantiate a component whose imported interface version differs from the host's.
 

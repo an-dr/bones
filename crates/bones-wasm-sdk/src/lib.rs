@@ -2,12 +2,12 @@
 //!
 //! An extension is a WASM guest: it never touches the OS, never renders, and
 //! reaches the engine only through the calls in [`bindings`]. This crate
-//! carries the `bones:core` WIT package, generates the guest bindings from it,
+//! carries the `bones:extension` WIT package, generates the guest bindings from it,
 //! and re-exports the shared message vocabulary, so a guest crate declares one
-//! dependency instead of hand-copying `core.wit` into its own tree.
+//! dependency instead of hand-copying `extension.wit` into its own tree.
 //!
 //! ```ignore
-//! use bones_wasm_sdk::bindings::bones::core::host_api::{log, subscribe, Level};
+//! use bones_wasm_sdk::bindings::bones::extension::host_api::{log, subscribe, Level};
 //! use bones_wasm_sdk::Guest;
 //!
 //! struct Component;
@@ -22,10 +22,10 @@
 //! bones_wasm_sdk::export!(Component);
 //! ```
 //!
-//! Guests in other languages do not use this crate. They take `wit/core.wit`
+//! Guests in other languages do not use this crate. They take `wit/extension.wit`
 //! and the message wire format directly — see `wit/README.md`.
 
-/// Guest bindings generated from the `bones:core` WIT package.
+/// Guest bindings generated from the `bones:extension` WIT package.
 ///
 /// Generated inside a module rather than at the crate root on purpose:
 /// `pub_export_macro` marks the export macros `#[macro_export]`, which hoists
@@ -42,7 +42,11 @@ pub mod bindings {
 
 /// The trait an extension implements: `init`, `shutdown`, `on_tick`,
 /// `on_message`.
-pub use bindings::Guest;
+///
+/// Re-exported from the generated `extension-api` interface, so a guest writes
+/// `use bones_wasm_sdk::Guest` and never spells the interface path. That
+/// indirection is why qualifying the exports cost the guests nothing.
+pub use bindings::exports::bones::extension::extension_api::Guest;
 
 /// Wires a type implementing [`Guest`] up as the component's exports.
 ///

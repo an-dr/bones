@@ -1,5 +1,5 @@
 use bones_wasm_sdk::Guest;
-use bones_wasm_sdk::bindings::bones::core::host_api::{log, subscribe, Level};
+use bones_wasm_sdk::bindings::bones::extension::host_api::{log, subscribe, Level};
 
 // Edit this, rebuild (pwsh build.ps1), and watch the next log line change
 // without restarting the app — that's the hot-reload demo (README.md).

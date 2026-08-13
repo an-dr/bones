@@ -1,5 +1,5 @@
 //! Extension host (architecture.md): loads one WASM component against the
-//! contract (`wit/core.wit`) and calls its exports. Registers as an ordinary
+//! contract (`wit/extension.wit`) and calls its exports. Registers as an ordinary
 //! bus endpoint — structure.md: modules and extensions are indistinguishable
 //! on the bus. Topic subscriptions (including `core/tick`) are opt-in,
 //! requested by the extension itself via the `subscribe` import during
@@ -14,7 +14,7 @@ use std::time::Duration;
 pub use extension_timeouts::ExtensionTimeouts;
 
 use crate::bus::{Bus, EndpointBudget, Envelope, Handler, Registry};
-use crate::contract::bones::core::host_api::{
+use crate::contract::bones::extension::host_api::{
     DisplayMode, Host as HostApiImports, Level, SendError,
 };
 use crate::contract::Extension;
@@ -259,7 +259,9 @@ impl Host {
         // set before instantiate, which can itself run guest code.
         store.set_epoch_deadline(timeout_ticks(timeouts.load));
         let bindings = Extension::instantiate(&mut store, &component, &linker)?;
-        bindings.call_init(&mut store)?;
+        bindings
+            .bones_extension_extension_api()
+            .call_init(&mut store)?;
 
         Ok(Self {
             store: Mutex::new(store),
@@ -289,7 +291,11 @@ impl Host {
         }
         let store = self.store.get_mut().unwrap();
         store.set_epoch_deadline(timeout_ticks(self.call_timeout));
-        match self.bindings.call_shutdown(&mut *store) {
+        match self
+            .bindings
+            .bones_extension_extension_api()
+            .call_shutdown(&mut *store)
+        {
             Ok(()) => Ok(()),
             Err(err) => {
                 store
@@ -323,6 +329,7 @@ impl Host {
         store.set_epoch_deadline(timeout_ticks(self.call_timeout));
         match self
             .bindings
+            .bones_extension_extension_api()
             .call_on_message(&mut *store, "", sender, payload)
         {
             Ok(reply) => reply,
@@ -354,13 +361,20 @@ impl Handler for Host {
         let store = self.store.get_mut().unwrap();
         store.set_epoch_deadline(timeout_ticks(self.call_timeout));
         let result = match read_tick_dt(envelope) {
-            Some(dt) => self.bindings.call_on_tick(&mut *store, dt).map(|()| None),
-            None => self.bindings.call_on_message(
-                &mut *store,
-                &envelope.topic,
-                &envelope.sender,
-                &envelope.payload,
-            ),
+            Some(dt) => self
+                .bindings
+                .bones_extension_extension_api()
+                .call_on_tick(&mut *store, dt)
+                .map(|()| None),
+            None => self
+                .bindings
+                .bones_extension_extension_api()
+                .call_on_message(
+                    &mut *store,
+                    &envelope.topic,
+                    &envelope.sender,
+                    &envelope.payload,
+                ),
         };
         if let Err(err) = result {
             store

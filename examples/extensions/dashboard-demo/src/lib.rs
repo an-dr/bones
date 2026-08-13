@@ -1,7 +1,7 @@
 use std::cell::{Cell, RefCell};
 
 use bones_wasm_sdk::Guest;
-use bones_wasm_sdk::bindings::bones::core::host_api::{log, request_exit, send, subscribe, Level};
+use bones_wasm_sdk::bindings::bones::extension::host_api::{log, request_exit, send, subscribe, Level};
 use bones_wasm_sdk::messages::web::{
     ClosePanel, Command, OpenPanel, PageMessage, PanelClosed, PanelFailed, PanelOpened,
     PanelSource, SendJson, ENDPOINT,

@@ -1,5 +1,5 @@
 use bones_wasm_sdk::Guest;
-use bones_wasm_sdk::bindings::bones::core::host_api::{log, publish, subscribe, Level};
+use bones_wasm_sdk::bindings::bones::extension::host_api::{log, publish, subscribe, Level};
 use bones_wasm_sdk::messages::gfx::{
     Clear, DrawCircle, DrawRect, DrawSprite, DrawText, LoadSprite, SetCamera, TextAlign,
 };

@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 
 use bones_wasm_sdk::Guest;
-use bones_wasm_sdk::bindings::bones::core::host_api::{log, publish, subscribe, Level};
+use bones_wasm_sdk::bindings::bones::extension::host_api::{log, publish, subscribe, Level};
 use bones_wasm_sdk::messages::ui::{Changed, Clicked, Spec, Widget};
 use bones_wasm_sdk::messages::{DecodeMessage, EncodeMessage, Message};
 

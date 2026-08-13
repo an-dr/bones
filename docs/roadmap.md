@@ -16,14 +16,6 @@ Completion artifact: a CI configuration running the `test.ps1` gates plus an adv
 
 Completion artifact: two runs of the release job over the same commit producing byte-identical archives, and the checksum published from source rather than from the upload.
 
-## Qualify the world exports, at the next ABI major
-
-`world extension` exports bare functions, so their core WebAssembly symbols are plain names in one flat namespace — and `shutdown` collides there with POSIX `shutdown(sockfd, how)`, which `libstd` carries. Every guest release build links with a `function signature mismatch` warning for it. The export is wired correctly and extensions shut down properly; what is not guaranteed is a guest that calls socket shutdown through `std::net` reaching the right symbol.
-
-The fix is to move the world's four functions into an interface, so their symbols become `bones:core/<interface>#<name>` and can collide with nothing. That is an ABI break for every extension in existence, which is why it did not happen for 1.0 — a warning does not justify invalidating every build in the field. It belongs in the next break, whatever else motivates that break, along with an audit of the other three names (`init`, `on-tick`, `on-message`) against libc for the same reason.
-
-Completion artifact: a guest release build with no linker warnings, and `wit/README.md`'s known-issue section deleted rather than reworded.
-
 ## API documentation on the ABI-line crates
 
 `bones-engine` enables `missing_docs`, so the embedder-facing surface cannot grow an undocumented public item. `bones-messages` and `bones-wasm-sdk` do not, and between them have roughly two hundred undocumented public items — mostly message fields and generated bindings.

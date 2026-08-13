@@ -2,7 +2,7 @@
 
 [package]
 name = "bones-wasm-sdk"
-# The ABI version line, shared with wit/core.wit's `bones:core` package and
+# The ABI version line, shared with wit/extension.wit's `bones:extension` package and
 # with bones-messages: this moves only when the guest contract changes, never
 # with the engine's [workspace.package] version.
 version = "1.0.0"
@@ -10,7 +10,7 @@ edition = "2021"
 license = "MIT"
 repository = "https://github.com/an-dr/bones"
 readme = "README.md"
-description = "Write a bones engine extension in Rust: the bones:core WIT package, its generated guest bindings, and the shared message vocabulary."
+description = "Write a bones engine extension in Rust: the bones:extension WIT package, its generated guest bindings, and the shared message vocabulary."
 
 # Not on crates.io: generate! reads ../../wit, outside this package root, so no archive
 # cargo builds here is self-contained.

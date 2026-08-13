@@ -58,7 +58,7 @@ pub struct FactsRequest<'a> {
 }
 
 impl Message for FactsRequest<'_> {
-    // A direct send carries no topic (see `wit/core.wit`'s `on-message`), but
+    // A direct send carries no topic (see `wit/extension.wit`'s `on-message`), but
     // `Message` is what gives `encode`/`decode` their pairing, so the constant
     // names the endpoint instead. A custom vocabulary is free to do this; the
     // core messages, which are all published, are not.

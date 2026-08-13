@@ -39,7 +39,7 @@ Both are first-class products; the app is the common case.
 | app | `bones`: the engine executable, default modules via the public builder, shipped with the ABI it implements | Most projects — write WASM extensions only |
 | library | `bones-engine`: the curated builder and module API | Embedders needing native modules (subrepo / git dep) |
 | Rust SDK | `bones-wasm-sdk`: the WIT, its generated bindings, and the message vocabulary | Extension authors writing Rust |
-| ABI | `bones:core` and the message wire format | Extension authors in any other language |
+| ABI | `bones:extension` and the message wire format | Extension authors in any other language |
 
 ### How each one is obtained
 

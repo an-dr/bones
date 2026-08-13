@@ -1,5 +1,5 @@
 use bones_wasm_sdk::Guest;
-use bones_wasm_sdk::bindings::bones::core::host_api::{log, publish, subscribe, Level};
+use bones_wasm_sdk::bindings::bones::extension::host_api::{log, publish, subscribe, Level};
 use bones_wasm_sdk::messages::audio::{LoadSound, PlayMusic, PlaySound};
 use bones_wasm_sdk::messages::input::KeyDown;
 use bones_wasm_sdk::messages::{EncodeMessage, Message};

@@ -563,7 +563,7 @@ fn vectors() -> Vec<Vector> {
 fn render(vectors: &[Vector]) -> String {
     let mut out = String::new();
     out.push_str("# bones core message wire format -- conformance vectors\n");
-    out.push_str("# version 1.0.0, matching bones:core@1.0.0 and wit/wire-format.md\n");
+    out.push_str("# version 1.0.0, matching bones:extension@1.0.0 and wit/wire-format.md\n");
     out.push_str("#\n");
     out.push_str("# Generated from bones-messages. Do not edit by hand: crates/bones-messages/\n");
     out.push_str("# tests/conformance.rs fails when this file and the encoder disagree.\n");

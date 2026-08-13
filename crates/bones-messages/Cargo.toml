@@ -2,7 +2,7 @@
 
 [package]
 name = "bones-messages"
-# The ABI version line, shared with wit/core.wit's `bones:core` package and
+# The ABI version line, shared with wit/extension.wit's `bones:extension` package and
 # deliberately independent of the engine's [workspace.package] version: this
 # moves only when the guest contract changes.
 version = "1.0.0"

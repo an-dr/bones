@@ -9,7 +9,7 @@ members = ["crates/bones-engine", "crates/bones-engine/bones-kernel", "crates/bo
 exclude = ["crates/bones-messages", "crates/bones-wasm-sdk", "vendor/pubsub-bus"]
 
 # The engine version line: every member below moves together, and one number
-# is what an embedder pins. The ABI line -- wit/core.wit's `bones:core` and
+# is what an embedder pins. The ABI line -- wit/extension.wit's `bones:extension` and
 # crates/bones-messages -- is deliberately not inherited from here, because it
 # moves only when the guest contract changes.
 # SDL3 is compiled from source by sdl3-sys's build script, which asks cmake for

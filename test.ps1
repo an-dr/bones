@@ -66,11 +66,6 @@ function Invoke-InEach {
 
 Invoke-Step "Ensuring the wasm32-wasip2 target is installed" { rustup target add wasm32-wasip2 }
 
-# Each guest build below prints one `function signature mismatch: shutdown`
-# warning from rust-lld. It is expected, understood, and cannot be fixed
-# without an ABI break -- wit/README.md's known-issue section has the cause.
-Write-Host "    (guest builds warn about the 'shutdown' export name; see wit/README.md)"
-
 foreach ($fixture in $fixtures) {
     Push-Location (Join-Path $PSScriptRoot $fixture)
     try {

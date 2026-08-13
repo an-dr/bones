@@ -89,6 +89,7 @@ Immutable ADRs in [adr/](adr/):
 - [ADR-029](adr/ADR-029-the-two-version-lines-are-the-two-public-surfaces.md) — the two version lines are the two public surfaces, both starting at 1.0.0
 - [ADR-030](adr/ADR-030-package-structure-follows-consumer-use-cases.md) — package structure follows consumer use cases: flat under crates/, with the kernel and modules nested in bones-engine
 - [ADR-031](adr/ADR-031-native-modules-reach-each-other-only-through-services.md) — native modules reach each other only through services, and input is offered topmost-first
+- [ADR-032](adr/ADR-032-the-extension-abi-is-bones-extension-with-qualified-exports.md) — the extension ABI is bones:extension, with qualified exports
 
 ## History
 

@@ -1,7 +1,7 @@
 use std::cell::Cell;
 
 use bones_wasm_sdk::Guest;
-use bones_wasm_sdk::bindings::bones::core::host_api::{log, publish, send, subscribe, Level};
+use bones_wasm_sdk::bindings::bones::extension::host_api::{log, publish, send, subscribe, Level};
 use bones_wasm_sdk::messages::persistence::{Save, ENDPOINT};
 use bones_wasm_sdk::messages::{EncodeMessage, Message};
 

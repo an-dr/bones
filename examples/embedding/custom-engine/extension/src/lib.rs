@@ -8,7 +8,7 @@
 //! The facts land on screen through the core `ui/*` vocabulary, so one panel
 //! shows a custom request/reply and a bones-owned message side by side.
 
-use bones_wasm_sdk::bindings::bones::core::host_api::{log, send, Level};
+use bones_wasm_sdk::bindings::bones::extension::host_api::{log, send, Level};
 use bones_wasm_sdk::messages::ui::{Spec, Widget};
 use bones_wasm_sdk::messages::{DecodeMessage, EncodeMessage, Message};
 use bones_wasm_sdk::Guest;
@@ -64,7 +64,7 @@ impl Guest for Component {
                 },
             ],
         };
-        bones_wasm_sdk::bindings::bones::core::host_api::publish(Spec::TOPIC, &spec.encode());
+        bones_wasm_sdk::bindings::bones::extension::host_api::publish(Spec::TOPIC, &spec.encode());
     }
 
     fn shutdown() {}

@@ -29,7 +29,7 @@ $version = (cargo metadata --no-deps --format-version 1 | ConvertFrom-Json).pack
     Select-Object -ExpandProperty version
 if (-not $version) { throw "could not read the bones package version" }
 
-$abiVersion = (Select-String -Path "wit/core.wit" -Pattern '^package\s+bones:core@(\S+);').Matches[0].Groups[1].Value.TrimEnd(';')
+$abiVersion = (Select-String -Path "wit/extension.wit" -Pattern '^package\s+bones:extension@(\S+);').Matches[0].Groups[1].Value.TrimEnd(';')
 
 # Platform tag for the archive name. A bundle carries a native executable and a
 # statically linked SDL, so it is only valid for the OS and architecture it was
@@ -74,12 +74,12 @@ Get-ChildItem -Path "crates" -Directory -Filter "bones-extension-*" | ForEach-Ob
 }
 
 # The ABI ships with the engine that implements it. An extension author in any
-# language needs core.wit to build against, and pairing it with the binary is
-# what makes the bones:core version in it verifiable rather than advisory --
+# language needs extension.wit to build against, and pairing it with the binary is
+# what makes the bones:extension version in it verifiable rather than advisory --
 # wasmtime refuses to instantiate a component whose imported interface version
 # differs from this engine's.
 #
-# The whole directory, not just core.wit: WIT describes the calls but not the
+# The whole directory, not just extension.wit: WIT describes the calls but not the
 # bytes they carry, so an author outside Rust also needs wire-format.md to build
 # a payload and vectors/ to check that they built it correctly.
 Write-Host "==> Copying the extension ABI..."
@@ -161,7 +161,7 @@ Write-Host "==> Writing the release README..."
 
 The bones engine and its reference extension, for $os-$arch.
 
-Engine version $version; extension ABI bones:core@$abiVersion. The two move
+Engine version $version; extension ABI bones:extension@$abiVersion. The two move
 independently -- see docs/adr/ADR-029 in the repository.
 
 ## Run it
@@ -178,7 +178,7 @@ a terminal.
     $exeName                  the engine
     bones.toml                configuration; every value is the default
     extensions/               extensions loaded at startup
-    wit/core.wit              the extension ABI: the calls
+    wit/extension.wit              the extension ABI: the calls
     wit/wire-format.md        the extension ABI: the bytes those calls carry
     wit/vectors/              conformance vectors for the wire format
     LICENSE                   MIT, covering bones itself
@@ -187,10 +187,10 @@ a terminal.
 ## Write an extension
 
 Drop any component built for wasm32-wasip2 into extensions/. In Rust, depend on
-bones-wasm-sdk; in any other language, generate bindings from wit/core.wit and
+bones-wasm-sdk; in any other language, generate bindings from wit/extension.wit and
 build payloads per wit/wire-format.md.
 
-An extension built against a different bones:core version will not load. That is
+An extension built against a different bones:extension version will not load. That is
 deliberate and is checked at instantiation, not at runtime.
 
 ## Where this came from
@@ -201,7 +201,7 @@ https://github.com/an-dr/bones
 if ($NoArchive) {
     Write-Host ""
     Write-Host "Distribution ready: $dist/$exeName (extensions in $dist/extensions/)"
-    Write-Host "Extension ABI: $dist/wit/core.wit (bones:core@$abiVersion)"
+    Write-Host "Extension ABI: $dist/wit/extension.wit (bones:extension@$abiVersion)"
     return
 }
 
@@ -230,6 +230,6 @@ Set-Content -Path "$archive.sha256" -Value "$hash  $archive"
 
 Write-Host ""
 Write-Host "Distribution ready: $dist/$exeName (extensions in $dist/extensions/)"
-Write-Host "Extension ABI: $dist/wit/core.wit (bones:core@$abiVersion)"
+Write-Host "Extension ABI: $dist/wit/extension.wit (bones:extension@$abiVersion)"
 Write-Host "Release archive: $archive"
 Write-Host "SHA256: $hash"

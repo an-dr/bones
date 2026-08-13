@@ -1,6 +1,6 @@
 # hello — the reference extension
 
-The one extension a bones distribution ships, and the place to start if you are writing your own. It exercises the whole contract in [`wit/core.wit`](../../wit/core.wit): it subscribes in `init`, logs on every callback, publishes in response to messages, and cleans up in `shutdown`.
+The one extension a bones distribution ships, and the place to start if you are writing your own. It exercises the whole contract in [`wit/extension.wit`](../../wit/extension.wit): it subscribes in `init`, logs on every callback, publishes in response to messages, and cleans up in `shutdown`.
 
 This page doubles as the write-your-first-extension tutorial.
 

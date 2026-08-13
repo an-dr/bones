@@ -16,7 +16,7 @@ Two version lines, deliberately independent ([ADR-029](docs/adr/ADR-029-the-two-
 | Line | What it covers | Moves when |
 | --- | --- | --- |
 | **engine** — `bones`, `bones-engine` | the Rust API an embedder links | the library surface changes |
-| **ABI** — `bones:core`, `bones-messages`, `bones-wasm-sdk` | the contract a `.wasm` extension is built against | the guest contract changes |
+| **ABI** — `bones:extension`, `bones-messages`, `bones-wasm-sdk` | the contract a `.wasm` extension is built against | the guest contract changes |
 
 An extension outlives the engine build that loaded it, and may not be written in Rust; one number cannot promise both audiences. See [CHANGELOG.md](CHANGELOG.md) for what has moved.
 
@@ -72,7 +72,7 @@ There is no CI ([docs/roadmap.md](docs/roadmap.md) tracks adding it), so "suppor
 
 ## Your first extension
 
-Start at [crates/bones-extension-hello](crates/bones-extension-hello/README.md) — the reference extension, and the only one a distribution ships. It exercises the whole contract in [wit/core.wit](wit/core.wit): subscribing in `init`, handling `on-tick` and `on-message`, publishing, and cleaning up in `shutdown`.
+Start at [crates/bones-extension-hello](crates/bones-extension-hello/README.md) — the reference extension, and the only one a distribution ships. It exercises the whole contract in [wit/extension.wit](wit/extension.wit): subscribing in `init`, handling `on-tick` and `on-message`, publishing, and cleaning up in `shutdown`.
 
 Drop any built `.wasm` into `extensions/` next to wherever you run the engine and it loads on start.
 
@@ -96,7 +96,7 @@ Start at [docs/index.md](docs/index.md) — map of the architecture, detailed de
 
 ## Cutting a release
 
-1. Decide which line moves. The engine line is `[workspace.package]`'s `version` in the root `Cargo.toml`; the ABI line is `bones:core@` in [wit/core.wit](wit/core.wit) plus the explicit `version` in `bones-messages` and `bones-wasm-sdk`. They move independently — do not bump one to match the other.
+1. Decide which line moves. The engine line is `[workspace.package]`'s `version` in the root `Cargo.toml`; the ABI line is `bones:extension@` in [wit/extension.wit](wit/extension.wit) plus the explicit `version` in `bones-messages` and `bones-wasm-sdk`. They move independently — do not bump one to match the other.
 2. If the ABI moved, regenerate the conformance vectors (`BONES_WRITE_VECTORS=1 cargo test --test conformance` from `crates/bones-messages`) and read the diff. It is the list of things you just broke.
 3. `pwsh test.ps1` — all gates and both feature sets green.
 4. Update [CHANGELOG.md](CHANGELOG.md) and commit.

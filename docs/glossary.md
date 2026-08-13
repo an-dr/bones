@@ -10,7 +10,7 @@ Almost every other term is positioned by this one distinction.
 
 **Guest** — the WASM component the host loads. In bones that is an extension: a `.wasm` file the engine finds at startup. It *implements* the exports and *calls* the host's imports, and it can do nothing else — no OS access, no rendering, no linking native libraries.
 
-[`wit/core.wit`](../wit/README.md) names both halves explicitly: `interface host-api` is what a guest may call, and `world extension` is what a guest must export. The host bindings are generated in `bones-kernel`'s contract module, the guest bindings in [`crates/bones-wasm-sdk`](../crates/bones-wasm-sdk/README.md), from that one file.
+[`wit/extension.wit`](../wit/README.md) names both halves explicitly: `interface host-api` is what a guest may call, and `world extension` is what a guest must export. The host bindings are generated in `bones-kernel`'s contract module, the guest bindings in [`crates/bones-wasm-sdk`](../crates/bones-wasm-sdk/README.md), from that one file.
 
 ## Who is building what
 
@@ -32,7 +32,7 @@ Each has its own version line, and the line is what tells you which surface you 
 
 **Engine surface** — `bones-engine`, what an embedder pins. Moves in lockstep with the kernel and native-module crates in `crates/`.
 
-**ABI surface** — `bones:core` in `wit/core.wit` plus `bones-messages`, what an extension author pins, in any language. Moves only when the guest contract changes. `bones-wasm-sdk` rides this line, since it is a packaging of exactly that contract for Rust.
+**ABI surface** — `bones:extension` in `wit/extension.wit` plus `bones-messages`, what an extension author pins, in any language. Moves only when the guest contract changes. `bones-wasm-sdk` rides this line, since it is a packaging of exactly that contract for Rust.
 
 ## Where does my code go
 
