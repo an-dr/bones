@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/bones-engine", "crates/bones-engine/bones-kernel", "crates/bones-engine/bones-module-renderer", "crates/bones-engine/bones-module-ui", "crates/bones-engine/bones-module-audio", "crates/bones-engine/bones-module-game-core", "crates/bones-engine/bones-module-web", "crates/bones"]
+members = ["crates/bones-engine", "crates/bones-engine/bones-kernel", "crates/bones-engine/bones-module-renderer", "crates/bones-engine/bones-module-ui", "crates/bones-engine/bones-module-audio", "crates/bones-engine/bones-module-game-core", "crates/bones-engine/bones-module-web", "crates/bones-engine/bones-module-os", "crates/bones", "crates/bones-upgrader"]
 # bones-messages and bones-wasm-sdk must also compile for wasm32-wasip2 guests,
 # so they carry their own workspaces. vendor/pubsub-bus is a submodule: cargo
 # would otherwise adopt it as a member because a member depends on it by path,
@@ -32,7 +32,7 @@ opt-level = 2
 debug = false
 
 [workspace.package]
-version = "1.0.0"
+version = "1.1.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/an-dr/bones"

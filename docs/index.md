@@ -90,6 +90,7 @@ Immutable ADRs in [adr/](adr/):
 - [ADR-030](adr/ADR-030-package-structure-follows-consumer-use-cases.md) — package structure follows consumer use cases: flat under crates/, with the kernel and modules nested in bones-engine
 - [ADR-031](adr/ADR-031-native-modules-reach-each-other-only-through-services.md) — native modules reach each other only through services, and input is offered topmost-first
 - [ADR-032](adr/ADR-032-the-extension-abi-is-bones-extension-with-qualified-exports.md) — the extension ABI is bones:extension, with qualified exports
+- [ADR-033](adr/ADR-033-self-update-is-a-crate-and-its-binaries-avoid-installer-words.md) — self-update is a crate, and its binaries avoid installer words
 
 ## History
 

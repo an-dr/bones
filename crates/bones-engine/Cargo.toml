@@ -10,6 +10,9 @@ publish.workspace = true
 default = ["presentation", "audio", "game-core"]
 presentation = ["bones-kernel/platform", "dep:bones-module-renderer", "dep:bones-module-ui"]
 web = ["presentation", "dep:bones-module-web"]
+# Off by default: it pulls in a TLS stack and native dialogs, which an
+# embedder shipping a headless or game-only build has no use for.
+os = ["dep:bones-module-os"]
 audio = ["dep:bones-module-audio"]
 game-core = ["dep:bones-module-game-core"]
 
@@ -20,6 +23,7 @@ wasmtime = { version = "47.0.0", features = ["component-model"] }
 bones-module-renderer = { path = "./bones-module-renderer", optional = true }
 bones-module-ui = { path = "./bones-module-ui", optional = true }
 bones-module-web = { path = "./bones-module-web", features = ["wry-backend"], optional = true }
+bones-module-os = { path = "./bones-module-os", optional = true }
 bones-module-audio = { path = "./bones-module-audio", optional = true }
 bones-module-game-core = { path = "./bones-module-game-core", optional = true }
 

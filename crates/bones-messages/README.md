@@ -4,9 +4,12 @@ Typed core-defined bus messages shared by native engine components and Rust WASM
 
 The crate also exposes the fixed-layout little-endian `Reader` and `Writer` used by those messages. It stays dependency-free so it builds for `wasm32-wasip2` and native targets. The encoding remains simple enough for guests in other languages to reproduce without Rust or serde.
 
+`Writer::str` and `Writer::blob` state their length limits as preconditions and panic when one is broken, which suits the engine-controlled values the messages here carry. `try_str` and `try_blob` encode identically but report an `EncodeError` instead, for a host writing a value it did not choose -- a filesystem path, clipboard text, anything that arrived from outside the process.
+
 - `tick` — `Tick` on `core/tick`.
 - `lifecycle` — `LifecycleEvent` and `Event` on `core/lifecycle`.
 - `window` — `CloseRequested` on `window/close-requested`.
+- `os` — `Request` and `Result` on `os/*`: clipboard, browser, native file dialogs and HTTPS fetch, performed by the trusted `os` module on a sandboxed guest's behalf.
 - `web` — direct commands to the `web` endpoint for panel lifecycle, navigation, and extension-to-page JSON; `web/*` lifecycle and page-message events back to guests.
 - `input` — `KeyDown` and `KeyUp` keyboard events.
 - `gfx` — `Clear`, `LoadSprite`, `DrawSprite`, `DrawRect`, `DrawLine`, `DrawCircle`, `DrawTriangle`, and `DrawText`, plus the wildcard-friendly `Command` dispatcher used by the renderer.

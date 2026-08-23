@@ -39,6 +39,7 @@ Both are first-class products; the app is the common case.
 | app | `bones`: the engine executable, default modules via the public builder, shipped with the ABI it implements | Most projects — write WASM extensions only |
 | library | `bones-engine`: the curated builder and module API | Embedders needing native modules (subrepo / git dep) |
 | Rust SDK | `bones-wasm-sdk`: the WIT, its generated bindings, and the message vocabulary | Extension authors writing Rust |
+| self-update | `bones-upgrader`: version folders, a permanent launcher, staged installs and rollback | Embedders shipping a desktop app outside a store |
 | ABI | `bones:extension` and the message wire format | Extension authors in any other language |
 
 ### How each one is obtained
@@ -114,9 +115,11 @@ bones/
 │   │   ├── bones-module-ui/           #
 │   │   ├── bones-module-audio/        #
 │   │   ├── bones-module-game-core/    #  ECS/physics/tiles/graphics, see docs/code-style.md
-│   │   └── bones-module-web/          #  optional wry presentation module
+│   │   ├── bones-module-web/          #  optional wry presentation module
+│   │   └── bones-module-os/           #  optional desktop capabilities for guests
 │   ├── bones/                         #  the engine executable (default composition)
 │   ├── bones-messages/                #  crate both host and WASM guest code depend on
+│   ├── bones-upgrader/                #  optional self-update for a shipped desktop app
 │   ├── bones-wasm-sdk/                #  the Rust extension SDK, incl. the optional game_ui
 │   └── bones-extension-hello/         #  the reference extension, the only one shipped
 ├── wit/                       # contract: the WIT package

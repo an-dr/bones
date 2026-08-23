@@ -7,6 +7,23 @@ Two independent version lines (ADR-029), so each entry says which one it belongs
 
 An ABI entry concerns every extension in existence, in any language. An engine entry concerns only projects that link the library.
 
+## engine 1.1.0 / ABI 1.1.0
+
+Two capabilities every desktop application needs and none of them should write again: self-update, and the OS surface a sandboxed extension cannot reach.
+
+`bones:extension` stays at 1.0.0. Nothing in `wit/` changed, so every extension in the field still instantiates -- the ABI line moves because `bones-messages` gained a module, not because the guest contract did.
+
+### Engine
+
+- `bones-upgrader`: self-update for an application shipping outside a store -- manifest fetch, version comparison, version folders, a permanent launcher, staged installs and rollback. The four host-specific names arrive at compile time through `option_env!`, so the crate spells no application into itself. Its one host requirement is `Fetch::fetch_url`; everything else is filesystem and version arithmetic. It is called `upgrader` because Windows auto-elevates executables whose filename contains `update`, `install`, `setup` or `patch` (ADR-033).
+- `bones-module-os`, behind the engine's `os` feature and `.os()` on the builder: clipboard, browser, native file dialogs and HTTPS fetch, performed on a guest's behalf. Off by default, because it pulls in a TLS stack and native dialogs a headless build has no use for. `OsBackend` is the seam, so a host can substitute one that opens no dialogs.
+- [examples/embedding/self-updating-app](examples/embedding/self-updating-app/README.md): an application that replaces itself, and the launcher that starts whichever version is current. It builds two versions so the update is real rather than a check reporting "up to date", and covers rollback.
+
+### ABI
+
+- `bones-messages::os`: `Request` and `Result` on `os/*`, the typed vocabulary for the module above.
+- `Writer::try_str` and `Writer::try_blob`: `str` and `blob` state their length limits as preconditions and panic, which suits the engine-controlled values the other messages carry. A host encoding a filesystem path or clipboard text did not choose the length, and needs it reported rather than asserted. They encode identical bytes.
+
 ## engine 1.0.0 / ABI 1.0.0
 
 First tagged release. Both lines start at 1.0.0 (ADR-029) because the interfaces are settled, not because they arrived together; they are expected to diverge from here.

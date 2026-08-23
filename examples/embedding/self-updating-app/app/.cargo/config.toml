@@ -1,0 +1,10 @@
+# Who this application is. `bones-upgrader` reads these at compile time
+# through `option_env!`, so both binaries agree without either parsing
+# configuration at runtime -- which matters because the launcher has to find
+# the install before it knows anything else.
+[env]
+UPGRADER_INSTALL_DIR_NAME = ".demo-app"
+UPGRADER_INSTALL_ENV_VAR = "DEMO_APP_INSTALL_DIR"
+UPGRADER_LAUNCHER_STEM = "demo"
+UPGRADER_APP_STEM = "demo-app"
+UPGRADER_LAUNCHER_VERSION = "1.0.0"

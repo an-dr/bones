@@ -1,5 +1,7 @@
+use super::EncodeError;
+
 /// Builder for the fixed-layout little-endian core-message encoding.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Writer(Vec<u8>);
 
 impl Writer {
@@ -60,6 +62,24 @@ impl Writer {
     pub fn blob(self, v: &[u8]) -> Self {
         let len: u32 = v.len().try_into().expect("blob exceeds u32::MAX bytes");
         self.u32(len).bytes(v)
+    }
+
+    /// `str`'s fallible counterpart, for a string whose length is not under
+    /// the caller's control -- a filesystem path, clipboard text, a value
+    /// that arrived from outside the process. `str` states its limit as a
+    /// precondition and panics when it is broken, which is right for the
+    /// engine-controlled messages in this crate; a host encoding whatever a
+    /// user pasted cannot make that promise and needs the limit as a value.
+    pub fn try_str(self, v: &str) -> Result<Self, EncodeError> {
+        let len: u16 = v.len().try_into().map_err(|_| EncodeError::StringTooLong)?;
+        Ok(self.u16(len).bytes(v.as_bytes()))
+    }
+
+    /// `blob`'s fallible counterpart, for the same reason as [`Writer::try_str`]:
+    /// a payload whose size the caller did not choose.
+    pub fn try_blob(self, v: &[u8]) -> Result<Self, EncodeError> {
+        let len: u32 = v.len().try_into().map_err(|_| EncodeError::BlobTooLong)?;
+        Ok(self.u32(len).bytes(v))
     }
 
     /// Returns the completed payload.

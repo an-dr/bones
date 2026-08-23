@@ -29,8 +29,9 @@ The one extension that *is* shipped lives in [crates/bones-extension-hello](../c
 | Example | Proves |
 | --- | --- |
 | [custom-engine](embedding/custom-engine/README.md) | Your own `bones` executable: the shipped stack plus a native module, plus a message vocabulary bones does not own, spoken by a WASM extension on the other side of the sandbox |
+| [self-updating-app](embedding/self-updating-app/README.md) | An application that replaces itself with a newer version, and the launcher that starts whichever one is current — `bones-upgrader` end to end, including rollback |
 
-It is three crates rather than one, and that is the lesson rather than an accident: the vocabulary has to compile for the native host *and* for `wasm32-wasip2`, so it cannot live in either the binary or the guest.
+`custom-engine` is three crates rather than one, and that is the lesson rather than an accident: the vocabulary has to compile for the native host *and* for `wasm32-wasip2`, so it cannot live in either the binary or the guest. `self-updating-app` is two binaries from one package for a related reason — they must agree on an identity read at compile time.
 
 ## Why every name ends in -demo
 

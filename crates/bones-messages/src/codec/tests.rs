@@ -70,3 +70,52 @@ fn read_blob_rejects_a_truncated_field() {
     let mut r = Reader::new(&[10, 0, 0, 0, 1, 2]);
     assert_eq!(r.read_blob(), Err(DecodeError::Truncated));
 }
+
+#[test]
+fn try_str_matches_str_for_an_ordinary_string() {
+    // The fallible writers are an error-handling choice, not a second format:
+    // whatever both can encode, they encode identically.
+    assert_eq!(
+        Writer::new().try_str("main").unwrap().finish(),
+        Writer::new().str("main").finish()
+    );
+}
+
+#[test]
+fn try_blob_matches_blob_for_an_ordinary_blob() {
+    assert_eq!(
+        Writer::new().try_blob(&[1, 2, 3]).unwrap().finish(),
+        Writer::new().blob(&[1, 2, 3]).finish()
+    );
+}
+
+#[test]
+fn try_str_reports_a_string_too_long_for_its_prefix() {
+    let oversized = "a".repeat(usize::from(u16::MAX) + 1);
+    assert_eq!(
+        Writer::new().try_str(&oversized).unwrap_err(),
+        EncodeError::StringTooLong
+    );
+}
+
+#[test]
+fn try_str_accepts_a_string_exactly_filling_its_prefix() {
+    let limit = "a".repeat(usize::from(u16::MAX));
+    let bytes = Writer::new().try_str(&limit).unwrap().finish();
+    assert_eq!(
+        Reader::new(&bytes).read_str().unwrap().len(),
+        usize::from(u16::MAX)
+    );
+}
+
+#[test]
+fn try_str_measures_bytes_not_characters() {
+    // Just over the limit in bytes while well under it in characters: the
+    // check has to agree with the prefix it is protecting.
+    let oversized = "é".repeat(usize::from(u16::MAX) / 2 + 1);
+    assert!(oversized.chars().count() < usize::from(u16::MAX));
+    assert_eq!(
+        Writer::new().try_str(&oversized).unwrap_err(),
+        EncodeError::StringTooLong
+    );
+}

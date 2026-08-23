@@ -1,0 +1,24 @@
+[workspace]
+
+[package]
+name = "demo-app"
+version = "0.0.0"
+edition = "2021"
+publish = false
+build = "build.rs"
+
+# The app and the launcher ship from one package, because they must agree on
+# the identity: `option_env!` reads it at compile time, so two packages built
+# separately could disagree about where the install lives.
+[[bin]]
+name = "demo-app"
+path = "src/main.rs"
+
+# Not "demo-updater": Windows auto-elevates executables whose filename
+# contains "update", "install", "setup" or "patch" (ADR-033).
+[[bin]]
+name = "demo-launcher"
+path = "src/launcher.rs"
+
+[dependencies]
+bones-upgrader = { path = "../../../../crates/bones-upgrader" }

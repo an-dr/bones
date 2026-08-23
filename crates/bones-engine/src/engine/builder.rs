@@ -258,6 +258,16 @@ impl Engine {
         self
     }
 
+    /// Attaches the optional `os` module: clipboard, browser, native file
+    /// dialogs and HTTPS fetch, for guests that have none of their own.
+    ///
+    /// Needs no window, unlike `.web()` and `.renderer()` -- the dialogs it
+    /// opens are the platform's own.
+    #[cfg(feature = "os")]
+    pub fn os(self) -> Self {
+        self.module(bones_module_os::OsModule::default())
+    }
+
     /// Registers a custom native module (design/modules.md, ADR-017):
     /// runs `init` in registration order at `build()` time, then hooks its
     /// `filter_event`/`render`/`present` each `run` iteration. Every module
