@@ -54,4 +54,4 @@ A crate prefixed `bones-extension-` is an actual extension a bones distribution 
 - A native module never depends on another module's crate; it goes through a service in the registry `bones-kernel`'s bus owns (ADR-031). `bones-engine` is the sole exception, and only because composing them is its job.
 - Nothing depends on `bones`, and nothing outside `bones-engine/` depends on `bones-kernel` or a `bones-module-*` crate except `bones-engine` itself.
 
-The dependency graph, and what counts as a violation, is in [docs/structure.md](../docs/structure.md). File-layout conventions — one type per file, tests out of line, what a crate README should say — are in [docs/code-style.md](../docs/code-style.md).
+The dependency graph, and what counts as a violation, is in [docs/architecture/structure.md](../docs/architecture/structure.md). File-layout conventions — one type per file, tests out of line, what a crate README should say — are in [docs/code-style.md](../docs/code-style.md).

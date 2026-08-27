@@ -12,11 +12,11 @@ Detailed design of the platform layer — the only component that touches the OS
 | Timing | Frame pacing and `core/tick` generation with delta time |
 | Webview hosting | Native parenting/positioning for web panels (ADR-006) |
 
-Single window for now; multi-window is out of scope per [architecture.md](../architecture.md) and would arrive via a new ADR.
+The platform opens exactly one window. Multi-window is not supported and would arrive via a new ADR.
 
 ## Frame loop
 
-The concrete sequence behind the event-loop diagram in [architecture.md](../architecture.md):
+The concrete sequence behind the frame diagram in [architecture/messaging.md](../architecture/messaging.md):
 
 1. **Poll** OS events from SDL.
 2. **Route input** through the focus layers (web → egui → `input/*`), translate window/tray events onto their topics.

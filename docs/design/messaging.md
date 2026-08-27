@@ -1,6 +1,8 @@
 # Messaging
 
-Detailed design of the message bus. Decisions: [ADR-003](../adr/ADR-003-hybrid-messaging.md) (hybrid topology), [ADR-009](../adr/ADR-009-delivery-semantics.md) (delivery semantics), [ADR-010](../adr/ADR-010-synchronous-send.md) (synchronous send).
+Detailed design of the message bus: the envelope, the topic namespace, and how each guarantee is actually enforced. The topology and what it promises are in [architecture/messaging.md](../architecture/messaging.md); this page is the level below it.
+
+Decisions: [ADR-003](../adr/ADR-003-hybrid-messaging.md) (hybrid topology), [ADR-009](../adr/ADR-009-delivery-semantics.md) (delivery semantics), [ADR-010](../adr/ADR-010-synchronous-send.md) (synchronous send).
 
 ## Message envelope
 
@@ -57,11 +59,9 @@ sequenceDiagram
     end
 ```
 
-## Boundary pattern: chunky, not chatty
+## Enforcement
 
-Every message crossing the bus copies its payload twice (components do not share memory), so the cost scales with message *count* more than size. Design extension boundaries around events and coarse data transfers — publish a snapshot or event stream per frame, send static data once at load — rather than fine-grained queries on hot paths. Synchronous send (ADR-010) makes per-frame queries *possible*; this pattern is why they should stay rare.
-
-## Guarantees and limits
+[architecture/messaging.md](../architecture/messaging.md) states the guarantees; this is how each is kept. The copy cost behind its chunky-not-chatty advice is concrete: every message crossing the bus copies its payload twice, because components do not share memory.
 
 - **Ordering:** per-sender FIFO per topic; nothing promised across senders or topics (ADR-009).
 - **Delivery:** at-most-once; drops happen only toward non-Running extensions (ADR-009).

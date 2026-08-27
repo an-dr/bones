@@ -18,7 +18,7 @@ Almost every other term is positioned by this one distinction.
 
 **Embedder** — someone writing their *own* host: they depend on `bones-engine`, compose the modules they want, and produce their own binary. The three known embedders are listed in the root [README](../README.md). Note that embedder and extension author are roles one project plays at once, not two populations — all three write extensions too.
 
-**Native module** — host-side, optional, and consumer-composed (ADR-011, ADR-017). It owns a native resource — a GPU surface, an egui context, a webview — or a simulation the engine runs, and it joins the frame loop by implementing the `Module` trait and being injected with `.module(...)`. `renderer`, `ui`, `audio`, `game-core`, and `web` are the shipped ones.
+**Native module** — host-side, optional, and consumer-composed (ADR-011, ADR-017). It owns a native resource — a GPU surface, an egui context, a webview — or a simulation the engine runs, and it joins the frame loop by implementing the `Module` trait and being injected with `.module(...)`. `renderer`, `ui`, `audio`, `game-core`, `web`, and `os` are the shipped ones.
 
 **Kernel tier** — the host code that is always present and names no native module, as opposed to the modules themselves: `bus`, `wasm-extensions` (including extension loading and supervision), `contract`, `platform`, `logging`, and `runner`, merged into the one `bones-kernel` crate (ADR-030, ADR-031). What stays outside it is the composition root — the builder in `bones-engine`, the one place that names concrete module types. The kernel must build and run with no modules registered at all. See [crates/](../crates/README.md), which lists both tiers.
 

@@ -2,7 +2,7 @@
 
 The one crate an embedder depends on. Everything reachable from `bones-engine` is public API; everything under `crates/` that it does not re-export is an implementation detail.
 
-That distinction is enforced by the dependency graph rather than by convention. `bones` — the engine executable — depends on this crate and on nothing else here, so structure.md's rule that the app has no access an embedder lacks cannot quietly stop being true.
+That distinction is enforced by the dependency graph rather than by convention. `bones` — the engine executable — depends on this crate and on nothing else here, so architecture/structure.md's rule that the app has no access an embedder lacks cannot quietly stop being true.
 
 ## Public shape
 

@@ -82,4 +82,4 @@ A native module is a plain Rust type implementing two traits from `bones_engine:
 - `Module::respond` answers direct sends addressed to it by name.
 - `filter_event`, `render`, `present`, and `shutdown` are the remaining hooks, each defaulting to a no-op.
 
-[engine/src/host_facts.rs](engine/src/host_facts.rs) uses three of them and ignores the rest. For the frame phases, the typed service registry modules use to reach each other, and the rules on what may depend on what, see [docs/design/modules.md](../../../docs/design/modules.md) and [docs/structure.md](../../../docs/structure.md).
+[engine/src/host_facts.rs](engine/src/host_facts.rs) uses three of them and ignores the rest. For the frame phases, the typed service registry modules use to reach each other, and the rules on what may depend on what, see [docs/design/modules.md](../../../docs/design/modules.md) and [docs/architecture/structure.md](../../../docs/architecture/structure.md).

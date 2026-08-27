@@ -1,6 +1,8 @@
 # Extensions and the extension host
 
-Detailed design of the extension model. Decisions: [ADR-001](../adr/ADR-001-wasm-component-model.md) (Component Model ABI), [ADR-004](../adr/ADR-004-event-driven-execution.md) (event-driven execution), [ADR-007](../adr/ADR-007-watchdog-quarantine.md) (watchdog and quarantine).
+Detailed design of the extension model: the contract, the state machine, and what a fault or reload actually does. What an extension *is* and why it is sandboxed is in [architecture/overview.md](../architecture/overview.md).
+
+Decisions: [ADR-001](../adr/ADR-001-wasm-component-model.md) (Component Model ABI), [ADR-004](../adr/ADR-004-event-driven-execution.md) (event-driven execution), [ADR-007](../adr/ADR-007-watchdog-quarantine.md) (watchdog and quarantine).
 
 ## What an extension is
 
@@ -26,7 +28,7 @@ Every call runs under the ADR-007 time budget.
 
 ## Lifecycle
 
-Refines the state diagram in [architecture.md](../architecture.md) with the Faulted state:
+The full state machine, including the Faulted state:
 
 ```mermaid
 stateDiagram-v2

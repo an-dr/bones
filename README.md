@@ -34,7 +34,7 @@ That produces `dist/` plus a versioned, checksummed `bones-<version>-<os>-<arch>
 cargo run -p bones
 ```
 
-**As a library.** 1.0 is distributed by git tag, not through crates.io — every package carries `publish = false`, and each manifest says why it cannot produce a self-contained archive. [docs/structure.md](docs/structure.md#how-each-one-is-obtained) has the details and what a tag promises.
+**As a library.** 1.0 is distributed by git tag, not through crates.io — every package carries `publish = false`, and each manifest says why it cannot produce a self-contained archive. [docs/architecture/structure.md](docs/architecture/structure.md#how-each-one-is-obtained) has the details and what a tag promises.
 
 ```toml
 [dependencies]
@@ -52,13 +52,11 @@ Clone with `--recurse-submodules`; `vendor/pubsub-bus` is one.
 
 ## Building and testing
 
-Requires a Rust toolchain (current stable — there is no MSRV policy), PowerShell 7+ (`pwsh`, cross-platform), and a C compiler with CMake — `crates/bones-engine/bones-kernel` builds SDL3 from source.
-
 ```sh
 pwsh test.ps1
 ```
 
-One command from a clean clone to a release-green tree: it builds the extension fixtures the integration tests need, then runs formatting, clippy with warnings denied, the default and all-feature test suites, and the documentation build.
+One command from a clean clone to a release-green tree. It needs a Rust toolchain, PowerShell 7+, and a C compiler with CMake, since the kernel builds SDL3 from source — [docs/contributing/building.md](docs/contributing/building.md) has the prerequisites and [docs/contributing/testing.md](docs/contributing/testing.md) what the script gates.
 
 ## Platform support
 
@@ -90,23 +88,13 @@ For something richer, [examples/extensions/](examples/README.md) has ten runnabl
 
 Start at [docs/index.md](docs/index.md) — map of the architecture, detailed designs, decisions (ADRs), and worked examples. The short version:
 
-- [docs/architecture.md](docs/architecture.md) — components, message flows, lifecycles.
-- [docs/structure.md](docs/structure.md) — what lives where and what may depend on what.
+- [docs/architecture/](docs/architecture/index.md) — the system: parts, structure, messaging, upgrading.
+- [docs/architecture/structure.md](docs/architecture/structure.md) — what lives where and what may depend on what.
 - [docs/adr/](docs/adr/) — why the design is the way it is.
-
-## Cutting a release
-
-1. Decide which line moves. The engine line is `[workspace.package]`'s `version` in the root `Cargo.toml`; the ABI line is `bones:extension@` in [wit/extension.wit](wit/extension.wit) plus the explicit `version` in `bones-messages` and `bones-wasm-sdk`. They move independently — do not bump one to match the other.
-2. If the ABI moved, regenerate the conformance vectors (`BONES_WRITE_VECTORS=1 cargo test --test conformance` from `crates/bones-messages`) and read the diff. It is the list of things you just broke.
-3. `pwsh test.ps1` — all gates and both feature sets green.
-4. Update [CHANGELOG.md](CHANGELOG.md) and commit.
-5. `pwsh dist.ps1` on each platform you are publishing for. Keep each archive and its `.sha256`.
-6. Tag: `v<version>` for the engine line, `abi-v<version>` for the ABI line. Tags are immutable — a fix is a new tag, never a moved one, because a git dependency has no checksum a consumer can verify against.
-7. Attach the archives and their checksums to the release. Publish the checksum of the archive you actually uploaded: zip entries carry timestamps, so two runs of `dist.ps1` do not produce byte-identical archives.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for build prerequisites, how to run the tests, and the commit format.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for how to build, test, and land a change. Cutting a release is [docs/contributing/releasing.md](docs/contributing/releasing.md).
 
 ## AI agents
 

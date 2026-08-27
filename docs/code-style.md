@@ -132,4 +132,4 @@ Every crate (anything with its own `Cargo.toml` under `crates/`) has a `README.m
 
 ## What this document is not
 
-This is not architecture, design, or decision documentation — that's [architecture.md](architecture.md), `design/`, and `adr/`. Nothing here should ever need to change because of a refactoring that keeps the same file-layout conventions; it changes only when the conventions themselves change (a new exception discovered, a new pattern adopted).
+This is not architecture, design, or decision documentation — that's [architecture/](architecture/index.md), `design/`, and `adr/`. Nothing here should ever need to change because of a refactoring that keeps the same file-layout conventions; it changes only when the conventions themselves change (a new exception discovered, a new pattern adopted).

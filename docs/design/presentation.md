@@ -36,6 +36,9 @@ One extension may use several backends at once (e.g. a game on `gfx/*` with a se
 - Messages between the extension and its page are opaque JSON, bridged between the bus and the page's script environment. The page cannot reach the bus directly — everything passes through (and is attributable to) the owning extension.
 - Panels are OS webviews composited above the SDL content as native children of the resizable SDL window on supported desktop window systems. Their bounds track the live client area.
 - A service embedder may attach a temporary wry presentation to its existing headless engine's bus. Closing removes the `web` endpoint and destroys the native window; reopening creates a fresh presentation without rebuilding or restarting that engine.
+- An `Html` panel is served over a custom protocol rather than set as a document string, so the page loads at a real origin and can use storage and anything else subject to a same-origin check. A `Url` panel navigates as given.
+
+The webview itself sits behind a backend interface, and the protocol half — panel ownership, command decoding, lifecycle events, closing a faulted owner's panels — does not depend on it. That is what lets this crate and a headless consumer build without webview system libraries at all, and what makes the wry implementation replaceable rather than assumed.
 
 ## Input routing
 

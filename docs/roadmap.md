@@ -23,11 +23,3 @@ Completion artifact: two runs of the release job over the same commit producing 
 The message fields are not undocumented in substance: [wit/wire-format.md](../wit/wire-format.md) specifies every one of them, for every language rather than only Rust, which is where an extension author should be reading. What is missing is the rustdoc a Rust author sees at the call site, and the lint that would keep it honest.
 
 Completion artifact: `missing_docs` enabled on both crates with the gap closed, and the message documentation generated from or checked against the wire-format specification rather than written twice.
-
-## Desktop OS capabilities as a module
-
-`platform` is documented as the only component touching the OS, but it covers the SDL window and input devices only. An embedder building a desktop tool brings its own clipboard access, external-URL opening, and file/folder pickers; the one bones app that does (a Git client) carries a bus-mediated module for exactly that, correlating requests and replies the way `files` does.
-
-The shape is already settled by what exists here — a trusted native module answering direct sends, with a backend trait so tests use a stub instead of a real desktop. What is not settled is the dependency question ADR-019 framed for `game-core`: clipboard and native dialogs mean bought dependencies (`arboard`, `rfd`) that only a desktop composition needs, so this wants an ADR and a feature-gate decision before code.
-
-Completion artifact: a feature-gated module whose capabilities are exercised through a stub backend in tests, and a desktop composition that no longer needs its own copy.

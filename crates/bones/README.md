@@ -1,6 +1,6 @@
 # app
 
-The engine executable (structure.md): the default composition most projects run as-is, writing only WASM extensions. Built solely on `bones-engine`'s public surface (ADR-011, ADR-030) — no access an embedder using the same crate lacks, which its dependency list now enforces rather than merely asserts. Package and built binary are both named `bones`.
+The engine executable (architecture/structure.md): the default composition most projects run as-is, writing only WASM extensions. Built solely on `bones-engine`'s public surface (ADR-011, ADR-030) — no access an embedder using the same crate lacks, which its dependency list now enforces rather than merely asserts. Package and built binary are both named `bones`.
 
 Opens one window (800x600 by default), feeds keyboard events onto `input/*`, and renders `gfx/*` draw commands (`crates/bones-engine/bones-module-renderer`).
 
