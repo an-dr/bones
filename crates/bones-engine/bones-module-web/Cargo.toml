@@ -15,6 +15,7 @@ wry-backend = [
     "dep:send_wrapper",
     "dep:serde_json",
     "dep:wry",
+    "dep:gtk",
 ]
 
 [dependencies]
@@ -25,6 +26,12 @@ sdl3 = { version = "0.18.4", features = ["build-from-source-static", "raw-window
 send_wrapper = { version = "0.6.0", optional = true }
 serde_json = { version = "1.0", optional = true }
 wry = { version = "0.55.1", optional = true }
+
+# wry's webkitgtk backend needs GTK initialized before it opens a webview
+# (see `wry_backend::init_gtk`). Only present on the same targets wry itself
+# pulls its own gtk dependency in for.
+[target.'cfg(any(target_os = "linux", target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
+gtk = { version = "0.18", optional = true }
 
 [dev-dependencies]
 sdl3 = { version = "0.18.4", features = ["build-from-source-static", "raw-window-handle", "test-mode"] }

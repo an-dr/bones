@@ -40,6 +40,10 @@ One extension may use several backends at once (e.g. a game on `gfx/*` with a se
 
 The webview itself sits behind a backend interface, and the protocol half — panel ownership, command decoding, lifecycle events, closing a faulted owner's panels — does not depend on it. That is what lets this crate and a headless consumer build without webview system libraries at all, and what makes the wry implementation replaceable rather than assumed.
 
+## GTK platforms
+
+Child web panels require an X11 SDL window and an X11 GTK display. On Linux, start the host with `SDL_VIDEO_DRIVER=x11 GDK_BACKEND=x11` and an available X server or Xwayland. A native Wayland GTK display cannot embed these child views. GTK initialization stays on the runner thread and never changes the process environment; an embedder that already initialized GTK must reuse that thread and an X11 display. The backend pumps GLib without blocking once per frame.
+
 ## Input routing
 
 Per ADR-008, events traverse layers top-down; each layer consumes or passes:
