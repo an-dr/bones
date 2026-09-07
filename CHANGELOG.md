@@ -7,6 +7,14 @@ Two independent version lines (ADR-029), so each entry says which one it belongs
 
 An ABI entry concerns every extension in existence, in any language. An engine entry concerns only projects that link the library.
 
+## engine 1.1.1
+
+`bones:extension` and `bones-messages` are unchanged, so there is no ABI entry.
+
+### Engine
+
+- `bones-module-web`: fixed linux webview crashes and black windows -- initialize GTK on the SDL runner thread before wry creates child views, select X11 through GDK APIs without changing the process environment, reject incompatible GTK threads and displays before wry can panic, and drain bounded GLib work each frame so pages render and exchange IPC.
+
 ## engine 1.1.0 / ABI 1.1.0
 
 Two capabilities every desktop application needs and none of them should write again: self-update, and the OS surface a sandboxed extension cannot reach.
