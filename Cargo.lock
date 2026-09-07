@@ -444,7 +444,7 @@ dependencies = [
 
 [[package]]
 name = "bones"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "bones-engine",
  "serde",
@@ -453,7 +453,7 @@ dependencies = [
 
 [[package]]
 name = "bones-engine"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "bones-kernel",
  "bones-messages",
@@ -469,7 +469,7 @@ dependencies = [
 
 [[package]]
 name = "bones-kernel"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "bones-messages",
  "pubsub-bus",
@@ -484,7 +484,7 @@ version = "1.1.0"
 
 [[package]]
 name = "bones-module-audio"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "bones-kernel",
  "bones-messages",
@@ -493,7 +493,7 @@ dependencies = [
 
 [[package]]
 name = "bones-module-game-core"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "bones-kernel",
  "bones-messages",
@@ -505,7 +505,7 @@ dependencies = [
 
 [[package]]
 name = "bones-module-os"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "arboard",
  "base64",
@@ -520,7 +520,7 @@ dependencies = [
 
 [[package]]
 name = "bones-module-renderer"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "ab_glyph",
  "bones-kernel",
@@ -532,7 +532,7 @@ dependencies = [
 
 [[package]]
 name = "bones-module-ui"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "bones-kernel",
  "bones-messages",
@@ -542,7 +542,7 @@ dependencies = [
 
 [[package]]
 name = "bones-module-web"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "bones-kernel",
  "bones-messages",
@@ -556,7 +556,7 @@ dependencies = [
 
 [[package]]
 name = "bones-upgrader"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "base64",
  "dirs",
