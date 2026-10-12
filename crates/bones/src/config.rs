@@ -36,7 +36,7 @@ impl Default for Config {
             web: false,
             // Unlike renderer/ui, not every deployment target has a working
             // audio device (headless CI, some containers) — opt-in via
-            // bones.toml rather than risking `Engine::build()` failing by
+            // bones.toml rather than risking `Kernel::build()` failing by
             // default on environments this scaffold hasn't been proven
             // against yet.
             audio: false,

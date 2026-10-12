@@ -6,7 +6,7 @@ bones is a small native core that owns the machine — window, tray, input, audi
 
 Everything in a running engine is one of three things, and the difference is about trust and lifetime rather than about what a part does.
 
-| | Kernel | Native module | Extension |
+| | Kernel infrastructure | Native module | Extension |
 | --- | --- | --- | --- |
 | Always present | yes | no | no |
 | Written in | Rust, compiled in | Rust, compiled in | any language, loaded as `.wasm` |
@@ -14,7 +14,7 @@ Everything in a running engine is one of three things, and the difference is abo
 | Hot-reloadable | no | no | yes |
 | Reaches the OS | yes | yes | never |
 
-The **kernel** is what cannot be removed: the bus, extension hosting, the WIT contract, the platform layer, logging, and the frame loop. It names no module and runs with none registered — that is what makes a headless build possible ([ADR-011](../adr/ADR-011-native-core-modules.md), [ADR-014](../adr/ADR-014-headless-runner-skeleton.md)).
+The **kernel infrastructure** is what cannot be removed: the bus, extension hosting, the WIT contract, the platform layer, logging, and the frame loop. It names no module and runs with none registered — that is what makes a headless build possible ([ADR-011](../adr/ADR-011-native-core-modules.md), [ADR-014](../adr/ADR-014-headless-runner-skeleton.md)).
 
 **Native modules** are optional and composed by whoever builds the binary. A module owns a native resource — a GPU surface, an egui context, a webview, an audio device — or runs a simulation the engine steps each frame. Modules reach each other only through typed services, never by naming each other's crates ([ADR-031](../adr/ADR-031-native-modules-reach-each-other-only-through-services.md)).
 
@@ -24,7 +24,7 @@ On the bus these three are indistinguishable. A module and an extension both reg
 
 ```mermaid
 graph TD
-    subgraph Kernel["Kernel — always present"]
+    subgraph Kernel infrastructure["Kernel infrastructure — always present"]
         Bus["Message bus"]
         Host["Extension host (wasmtime)"]
         Platform["Platform (SDL)<br/>window · tray · input"]
@@ -39,6 +39,7 @@ graph TD
         Audio["audio"]
         GameCore["game-core"]
         OS["os"]
+        App["instance · desktop<br/>upgrader · devtools"]
     end
 
     subgraph Ext["Extensions — WASM, any language"]
@@ -56,13 +57,14 @@ graph TD
     Bus <--> Audio
     Bus <--> GameCore
     Bus <--> OS
+    Bus <--> App
     Runner --> Bus
     Renderer --> Platform
 ```
 
 ## The shipped modules
 
-Six modules ship first-party. An embedder may replace any of them or add their own.
+Ten modules ship first-party. An embedder may replace any of them or add their own.
 
 - **renderer** — owns all drawing. Extensions never draw; they publish batches of draw commands and the renderer executes them against the window ([ADR-002](../adr/ADR-002-engine-owned-rendering.md)).
 - **ui** — egui embedded in the core. Extensions declare widgets; the layer turns them into draw data and sends interaction events back ([ADR-005](../adr/ADR-005-egui-ui-layer.md)).
@@ -70,8 +72,14 @@ Six modules ship first-party. An embedder may replace any of them or add their o
 - **audio** — sound effects and music on `audio/*`.
 - **game-core** — a 2D simulation: entities, collision, tilemaps, sprite animation. It publishes authoritative transform snapshots the presentation draws ([ADR-019](../adr/ADR-019-2d-game-core-module-native-bought-dependencies.md), [ADR-026](../adr/ADR-026-game-core-publishes-authoritative-entity-transform-snapshots.md)).
 - **os** — the desktop capabilities the sandbox denies a guest: clipboard, browser, native file dialogs, HTTPS fetch. Each request runs off the frame thread, so a dialog waiting on a user cannot stall the engine.
+- **instance** — for an application that keeps one window per user: each later launch arrives as `instance/launched` and the window comes to the front ([ADR-035](../adr/ADR-035-single-instance-is-a-per-user-local-socket-claimed-before-the-engine.md)).
+- **desktop** — registers the application in the system's application list and as "Open in" on folders, for the one application the composition names ([ADR-036](../adr/ADR-036-desktop-registration-is-its-own-crate-and-opt-in-module.md)).
+- **upgrader** — checks, stages, and installs releases of the application on a page's or guest's behalf ([ADR-037](../adr/ADR-037-the-update-flow-is-functions-and-its-bus-module-owns-the-download.md)).
+- **devtools** — an opt-in, loopback-only channel that drives the real application from a test or an agent: post a page message, read back the bus.
 
-Two levels of optional apply, and they are independent. A module is **compiled in** by a cargo feature, and then **registered** by whoever composes the binary. The engine executable compiles audio and game-core by default but registers them only when its configuration asks for one; web and os are not even compiled unless their feature is on. A module that is compiled in but never registered costs nothing at runtime.
+Two of those modules also offer their capability as plain functions, for code that runs before or without a kernel: the single-instance claim in `main`, and desktop registration in an installer. Two **kernel libraries** have no module at all — launching programs and terminals, and folder watching — because only an application's native code uses them. Self-update is the one capability outside the kernel, because its launcher must not link it ([structure.md](structure.md#kernel-libraries)).
+
+Two levels of optional apply, and they are independent. A module is **compiled in** by a cargo feature, and then **registered** by whoever composes the binary. The engine executable compiles audio and game-core by default but registers them only when its configuration asks for one; web, os, instance, desktop, upgrader, and devtools are not even compiled unless their feature is on. A module that is compiled in but never registered costs nothing at runtime.
 
 Implementation detail for each module lives in its crate README; the module system itself is in [design/modules.md](../design/modules.md).
 
@@ -93,7 +101,7 @@ bones is consumed two ways, and they version independently because their audienc
 
 | Surface | Is | Pinned by | Moves when |
 | --- | --- | --- | --- |
-| **engine** | the Rust API of `bones-engine` | an embedder | the library surface changes |
+| **engine** | the Rust API of `bones-kernel` | an embedder | the library surface changes |
 | **ABI** | `bones:extension` plus the wire format | an extension author, in any language | the guest contract changes |
 
 The split exists because a `.wasm` file outlives the engine build that loaded it and need not be written in Rust. One number cannot promise both audiences: a renderer fix must not invalidate every extension, and a contract break must stay visible even when no Rust API moved.

@@ -132,6 +132,32 @@ web/page-message 090064617368626f61726404006d61696e7b2261223a317d owner=dashboar
 
 persistence/save 010203 bytes=010203
 
+instance/launched 08002f686f6d652f6d65020003002d2d78010079 cwd=/home/me;count=2;args=--x,y
+
+desktop/request 0100000000 request_id=1;action=0
+
+desktop/request 0200000002 request_id=2;action=2
+
+desktop/result 010000000001 request_id=1;tag=0;registered=true
+
+desktop/result 030000000164656e696564 request_id=3;tag=1;reason=denied
+
+upgrader/request 0100000000 request_id=1;action=0
+
+upgrader/request 0200000003 request_id=2;action=3
+
+upgrader/result 0100000000312e322e30 request_id=1;tag=0;version=1.2.0
+
+upgrader/result 0100000001 request_id=1;tag=1
+
+upgrader/result 0200000002312e322e30 request_id=2;tag=2;version=1.2.0
+
+upgrader/result 030000000301 request_id=3;tag=3;fresh=true
+
+upgrader/result 0400000004010500312e312e30312e322e30 request_id=4;tag=4;has_previous=true;previous=1.1.0;current=1.2.0
+
+upgrader/result 05000000056f66666c696e65 request_id=5;tag=5;reason=offline
+
 web 0004006d61696e003c703e68693c2f703e tag=0;panel=main;source_kind=0;source=<p>hi</p>
 
 web 0004006d61696e0168747470733a2f2f6578616d706c652e74657374 tag=0;panel=main;source_kind=1;source=https://example.test

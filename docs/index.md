@@ -32,7 +32,7 @@ The altitude test: **an ordinary refactoring must not require a documentation up
 The chapter to read to understand the current state of the system, or to propose a change to it.
 
 - [architecture/index.md](architecture/index.md) — the chapter map and the rules above.
-- [architecture/overview.md](architecture/overview.md) — kernel, native modules, extensions; the shipped modules, the three presentation levels, the two public surfaces.
+- [architecture/overview.md](architecture/overview.md) — kernel infrastructure, native modules, extensions; the shipped modules, the three presentation levels, the two public surfaces.
 - [architecture/structure.md](architecture/structure.md) — component inventory, dependency rules, source layout, distributions.
 - [architecture/messaging.md](architecture/messaging.md) — bus topology, guarantees, the frame loop, shutdown.
 - [architecture/upgrading.md](architecture/upgrading.md) — how a shipped application replaces itself.

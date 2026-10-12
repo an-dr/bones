@@ -29,7 +29,7 @@ $standaloneCrates = @(
 # skipping it. Paths are the crate directories; each builds to its own
 # target/wasm32-wasip2/release/<name>.wasm.
 $fixtures = @(
-    "crates/bones-extension-hello"
+    "examples/extensions/hello-demo"
     "examples/extensions/keyecho-demo"
     "examples/extensions/sprite-demo"
     "examples/extensions/runaway-demo"

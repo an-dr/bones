@@ -190,10 +190,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "bones-engine"
-version = "1.0.0"
+name = "bones-kernel"
+version = "2.0.0"
 dependencies = [
- "bones-kernel",
+ "bones-kernel-infra",
  "bones-messages",
  "bones-module-audio",
  "bones-module-game-core",
@@ -203,8 +203,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "bones-kernel"
-version = "1.0.0"
+name = "bones-kernel-infra"
+version = "2.0.0"
 dependencies = [
  "bones-messages",
  "pubsub-bus",
@@ -215,22 +215,22 @@ dependencies = [
 
 [[package]]
 name = "bones-messages"
-version = "1.0.0"
+version = "1.2.0"
 
 [[package]]
 name = "bones-module-audio"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = [
- "bones-kernel",
+ "bones-kernel-infra",
  "bones-messages",
  "kira",
 ]
 
 [[package]]
 name = "bones-module-game-core"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = [
- "bones-kernel",
+ "bones-kernel-infra",
  "bones-messages",
  "glam",
  "hecs",
@@ -240,10 +240,10 @@ dependencies = [
 
 [[package]]
 name = "bones-module-renderer"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = [
  "ab_glyph",
- "bones-kernel",
+ "bones-kernel-infra",
  "bones-messages",
  "epaint_default_fonts",
  "sdl3",
@@ -252,9 +252,9 @@ dependencies = [
 
 [[package]]
 name = "bones-module-ui"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = [
- "bones-kernel",
+ "bones-kernel-infra",
  "bones-messages",
  "egui",
  "sdl3",
@@ -707,7 +707,7 @@ dependencies = [
 name = "custom-engine"
 version = "0.0.0"
 dependencies = [
- "bones-engine",
+ "bones-kernel",
  "host-facts-messages",
 ]
 

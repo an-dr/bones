@@ -1,9 +1,9 @@
 //! The native module: answers [`host_facts_messages`] requests with things a
 //! WASM extension cannot find out for itself.
 
-use bones_engine::bus::{Envelope, Handler, Module, ModuleContext};
-use bones_engine::logging::Logger;
-use bones_engine::messages::{DecodeMessage, EncodeMessage};
+use bones_kernel::bus::{Envelope, Handler, Module, ModuleContext};
+use bones_kernel::logging::Logger;
+use bones_kernel::messages::{DecodeMessage, EncodeMessage};
 use host_facts_messages::{Fact, FactsReply, FactsRequest, ENDPOINT};
 
 /// Reads host facts on behalf of extensions.

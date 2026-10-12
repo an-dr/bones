@@ -6,7 +6,7 @@ This page doubles as the guide to embedding bones as a library.
 
 ## When to embed
 
-Most projects should not. If your product behaviour fits in WASM extensions, use the shipped engine binary and start at [crates/bones-extension-hello](../../../crates/bones-extension-hello/README.md) — you get sandboxing, hot reload, and language choice for free.
+Most projects should not. If your product behaviour fits in WASM extensions, use the shipped engine binary and start at [examples/extensions/hello-demo](../../../examples/extensions/hello-demo/README.md) — you get sandboxing, hot reload, and language choice for free.
 
 Embed when the capability you need does not exist and cannot, because it requires native access the sandbox refuses to grant:
 
@@ -34,9 +34,9 @@ The native module answers questions a sandboxed extension cannot answer for itse
 pwsh build.ps1
 ```
 
-Builds all three, plus the stock `hello` extension, into `dist/`. Run `dist/custom-engine(.exe)`. Requires a C toolchain and CMake — the engine links SDL3, built from source. If cmake cannot find a generator and Ninja is installed, set `CMAKE_GENERATOR=Ninja`; [scripts/native-build-env.ps1](../../../scripts/native-build-env.ps1) does exactly this and is what `dist.ps1` and `test.ps1` use.
+Builds all three, plus the `hello-demo` example extension, into `dist/`. Run `dist/custom-engine(.exe)`. Requires a C toolchain and CMake — the engine links SDL3, built from source. If cmake cannot find a generator and Ninja is installed, set `CMAKE_GENERATOR=Ninja`; [scripts/native-build-env.ps1](../../../scripts/native-build-env.ps1) does exactly this and is what `dist.ps1` and `test.ps1` use.
 
-The log shows `host-probe` asking the native module for each fact, and a widget panel shows two of them. `hello` runs beside it untouched — a stock extension and a custom one in one process, against one engine.
+The log shows `host-probe` asking the native module for each fact, and a widget panel shows two of them. `hello_demo` runs beside it untouched — an ordinary extension and a custom one in one process, against one engine.
 
 ## The difference from shipped bones
 
@@ -75,7 +75,7 @@ Note what happens when the contract is not met. Drop `host_probe.wasm` into the 
 
 ## Writing a native module
 
-A native module is a plain Rust type implementing two traits from `bones_engine::bus`. On the bus it is indistinguishable from a WASM extension ([ADR-011](../../../docs/adr/ADR-011-native-core-modules.md)) — same topics, same delivery rules — it simply runs natively and in-process.
+A native module is a plain Rust type implementing two traits from `bones_kernel::bus`. On the bus it is indistinguishable from a WASM extension ([ADR-011](../../../docs/adr/ADR-011-native-core-modules.md)) — same topics, same delivery rules — it simply runs natively and in-process.
 
 - `Handler::handle` receives bus deliveries for whatever `init` subscribed to.
 - `Module::init` requests subscriptions and resolves services.

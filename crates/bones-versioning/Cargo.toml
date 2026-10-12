@@ -1,0 +1,12 @@
+[package]
+name = "bones-versioning"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+readme = "README.md"
+description = "Pure version comparison and version-folder semantics, without I/O or application identity."
+
+[dependencies]
+semver = "1.0.28"

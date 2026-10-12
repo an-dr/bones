@@ -8,7 +8,7 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 cargo build --manifest-path "$PSScriptRoot/Cargo.toml" --target wasm32-wasip2 --release
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-cargo build --manifest-path "$PSScriptRoot/../../../crates/bones-extension-hello/Cargo.toml" --target wasm32-wasip2 --release
+cargo build --manifest-path "$PSScriptRoot/../../../examples/extensions/hello-demo/Cargo.toml" --target wasm32-wasip2 --release
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "Built: target/wasm32-wasip2/release/flood_demo.wasm"
@@ -67,7 +67,7 @@ New-Item -ItemType Directory -Path "$dist/extensions" -Force | Out-Null
 Copy-Item "$repoRoot/target/release/$exeName" "$dist/$exeName"
 Copy-Item "$PSScriptRoot/bones.toml" "$dist/bones.toml"
 Copy-Item "$PSScriptRoot/target/wasm32-wasip2/release/flood_demo.wasm" "$dist/extensions/flood_demo.wasm"
-Copy-Item "$PSScriptRoot/../../../crates/bones-extension-hello/target/wasm32-wasip2/release/bones_extension_hello.wasm" "$dist/extensions/bones_extension_hello.wasm"
+Copy-Item "$PSScriptRoot/../../../examples/extensions/hello-demo/target/wasm32-wasip2/release/hello_demo.wasm" "$dist/extensions/hello_demo.wasm"
 
 Write-Host ""
 Write-Host "Packaged: $dist/$exeName (flood_demo + healthy hello peer)"

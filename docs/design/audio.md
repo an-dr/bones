@@ -33,4 +33,4 @@ Audio is compiled in by default but registered only when the composition asks fo
 
 ## Where the detail lives
 
-Message field layouts are in [wit/wire-format.md](../../wit/wire-format.md). Implementation notes — the backend, the amplitude conversion, how caching works — belong beside the code in [bones-module-audio](../../crates/bones-engine/bones-module-audio/README.md).
+Message field layouts are in [wit/wire-format.md](../../wit/wire-format.md). Implementation notes — the backend, the amplitude conversion, how caching works — belong beside the code in [bones-module-audio](../../crates/bones-kernel/bones-module-audio/README.md).

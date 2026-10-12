@@ -1,0 +1,15 @@
+[package]
+name = "bones-module-game-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+bones-kernel-infra = { path = "../bones-kernel-infra", default-features = false }
+bones-messages = { path = "../../bones-messages" }
+hecs = "0.10"
+rapier2d = "0.22"
+glam = "0.30"
+tiled = "0.16"

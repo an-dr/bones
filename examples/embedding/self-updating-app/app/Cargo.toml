@@ -21,4 +21,7 @@ name = "demo-launcher"
 path = "src/launcher.rs"
 
 [dependencies]
-bones-upgrader = { path = "../../../../crates/bones-upgrader" }
+# Headless: the update runs through the engine's `upgrader` module, as it
+# would for a page or extension, but this example opens no window.
+bones-kernel = { path = "../../../../crates/bones-kernel", default-features = false, features = ["upgrade", "desktop"] }
+bones-launcher = { path = "../../../../crates/bones-launcher" }

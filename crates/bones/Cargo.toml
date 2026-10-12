@@ -8,9 +8,9 @@ publish.workspace = true
 
 [features]
 default = []
-web = ["bones-engine/web"]
+web = ["bones-kernel/web"]
 
 [dependencies]
-bones-engine = { path = "../bones-engine" }
+bones-kernel = { path = "../bones-kernel" }
 serde = { version = "1.0.228", features = ["derive"] }
 toml = "1.1.2"

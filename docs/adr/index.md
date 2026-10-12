@@ -37,11 +37,16 @@ Most readers want the [architecture chapter](../architecture/index.md) instead. 
 | [027](ADR-027-feature-gate-native-presentation.md) | Feature-gate the native presentation stack | active |
 | [028](ADR-028-detachable-native-modules-and-wry-presentation.md) | Attach native modules and wry presentation to a live headless engine | active |
 | [029](ADR-029-the-two-version-lines-are-the-two-public-surfaces.md) | The two version lines are the two public surfaces | active |
-| [030](ADR-030-package-structure-follows-consumer-use-cases.md) | Package structure follows consumer use cases | active |
+| [030](ADR-030-package-structure-follows-consumer-use-cases.md) | Package structure follows consumer use cases | active; crate names superseded by 038 |
 | [031](ADR-031-native-modules-reach-each-other-only-through-services.md) | Native modules reach each other only through services | active |
 | [032](ADR-032-the-extension-abi-is-bones-extension-with-qualified-exports.md) | The extension ABI is `bones:extension`, with qualified exports | active |
-| [033](ADR-033-self-update-is-a-crate-and-its-binaries-avoid-installer-words.md) | Self-update is a crate, and its binaries avoid installer words | active |
+| [033](ADR-033-self-update-is-a-crate-and-its-binaries-avoid-installer-words.md) | Self-update is a crate, and its binaries avoid installer words | crate boundary superseded by 039 |
 | [034](ADR-034-os-capabilities-are-an-optional-module-splittable-per-capability.md) | OS capabilities are an optional module, splittable per capability | active |
+| [035](ADR-035-single-instance-is-a-per-user-local-socket-claimed-before-the-engine.md) | Single instance is a per-user local socket, claimed before the engine | active |
+| [036](ADR-036-desktop-registration-is-its-own-crate-and-opt-in-module.md) | Desktop registration is its own crate and opt-in module | active |
+| [037](ADR-037-the-update-flow-is-functions-and-its-bus-module-owns-the-download.md) | The update flow is functions, and its bus module owns the download | standalone flow superseded by 039 |
+| [038](ADR-038-the-assembled-system-is-the-kernel-built-on-kernel-infrastructure.md) | The assembled system is the kernel, built on the kernel infrastructure | active |
+| [039](ADR-039-versioning-is-pure-the-launcher-launches-and-the-upgrade-module-owns-installation.md) | Pure versioning, a launch-only launcher, and module-owned upgrading | active |
 
 ## The two reversals
 

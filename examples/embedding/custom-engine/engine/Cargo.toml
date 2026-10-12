@@ -6,10 +6,10 @@ version = "0.0.0"
 edition = "2021"
 publish = false
 
-# Two dependencies, and no more: `bones-engine` is the whole engine (ADR-030),
+# Two dependencies, and no more: `bones-kernel` is the whole engine (ADR-030),
 # and the vocabulary crate is shared with the extension on the other side of the
-# sandbox. Nothing here reaches into bones-kernel or a bones-module-* crate,
+# sandbox. Nothing here reaches into bones-kernel-infra or a bones-module-* crate,
 # because an embedder cannot.
 [dependencies]
-bones-engine = { path = "../../../../crates/bones-engine" }
+bones-kernel = { path = "../../../../crates/bones-kernel" }
 host-facts-messages = { path = "../messages" }

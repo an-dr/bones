@@ -9,7 +9,7 @@ Each `struct`/`enum`, its impls, and any private helpers that exist only to serv
 **Exception, stated inline**: two types stay in one file only when one is a private implementation detail of the other — never constructed or named outside that file, no independent identity of its own. State the reason as a comment above the private type. Real examples in this codebase:
 
 ```rust
-// crates/bones-engine/bones-kernel/src/wasm_extensions/host.rs
+// crates/bones-kernel/bones-kernel-infra/src/wasm_extensions/host.rs
 // `State` and `Host` stay in one file rather than splitting further: `State`
 // is purely `Host`'s internal store data (implements the WIT imports and
 // `WasiView` only for `Host`'s own use), never meaningful on its own.
@@ -18,7 +18,7 @@ pub struct Host { /* ... */ }
 ```
 
 ```rust
-// crates/bones-engine/bones-module-renderer/src/renderer.rs
+// crates/bones-kernel/bones-module-renderer/src/renderer.rs
 // `State` stays in this file rather than splitting further: it's purely
 // `Renderer`'s own internal store (the `SendWrapper` payload), never
 // constructed or named outside this file, never meaningful on its own.
@@ -128,7 +128,7 @@ For a flat file with no submodule split (a true single-type file), the same rule
 
 ## READMEs
 
-Every crate (anything with its own `Cargo.toml` under `crates/`) has a `README.md` at its root. Keep it short and behavioral, matching the tone of existing ones (`crates/bones-engine/bones-module-renderer/README.md`, `crates/bones-engine/bones-kernel/README.md`): what the crate is for, its wire contract or public shape if it has one, and any non-obvious constraint a caller needs to know before depending on it — not a restatement of what the code already says via doc comments.
+Every crate (anything with its own `Cargo.toml` under `crates/`) has a `README.md` at its root. Keep it short and behavioral, matching the tone of existing ones (`crates/bones-kernel/bones-module-renderer/README.md`, `crates/bones-kernel/bones-kernel-infra/README.md`): what the crate is for, its wire contract or public shape if it has one, and any non-obvious constraint a caller needs to know before depending on it — not a restatement of what the code already says via doc comments.
 
 ## What this document is not
 

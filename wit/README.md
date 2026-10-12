@@ -13,7 +13,7 @@ The split is not arbitrary. WIT can describe a `list<u8>` payload but not what i
 
 ## What belongs here
 
-Only the contract. No implementation and no generated code: the host side is generated from `extension.wit` by wasmtime's `bindgen!` inside [`bones-kernel`](../crates/bones-engine/bones-kernel/README.md), and the guest side by `wit_bindgen::generate!` in [`bones-wasm-sdk`](../crates/bones-wasm-sdk/README.md).
+Only the contract. No implementation and no generated code: the host side is generated from `extension.wit` by wasmtime's `bindgen!` inside [`bones-kernel-infra`](../crates/bones-kernel/bones-kernel-infra/README.md), and the guest side by `wit_bindgen::generate!` in [`bones-wasm-sdk`](../crates/bones-wasm-sdk/README.md).
 
 Those two crates are the only places in the repository that name this directory. Extensions do not: a Rust extension depends on `bones-wasm-sdk`, which carries the package and generates the bindings for it.
 

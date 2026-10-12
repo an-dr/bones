@@ -7,12 +7,13 @@ Two groups, because there are two ways to use bones:
 - [extensions/](extensions/) — WASM components loaded by the shipped engine. This is what most projects write.
 - [embedding/](embedding/) — a parent project that links the engine as a library and injects its own native module.
 
-The one extension that *is* shipped lives in [crates/bones-extension-hello](../crates/bones-extension-hello/README.md): the reference extension, and the place to start if you are writing your own.
+Start with [hello-demo](extensions/hello-demo/README.md): the smallest complete extension, and the place to start if you are writing your own.
 
 ## Extensions
 
 | Example | Proves |
 | --- | --- |
+| [hello-demo](extensions/hello-demo/README.md) | The whole extension contract in one file: subscribe in `init`, react to ticks and messages, publish, and clean up in `shutdown`. Also the extension-host test fixture |
 | [sprite-demo](extensions/sprite-demo/README.md) | An extension drives the renderer: loads a sprite, draws it every tick |
 | [notes-demo](extensions/notes-demo/README.md) | An extension drives the egui `ui/*` backend (ADR-005) — the worked example in [docs/examples/egui-app.md](../docs/examples/egui-app.md) |
 | [dashboard-demo](extensions/dashboard-demo/README.md) + [metrics-demo](extensions/metrics-demo/README.md) | Two extensions exchange pushed updates and direct history requests through a real wry web panel — see [docs/examples/web-app.md](../docs/examples/web-app.md) |
@@ -29,7 +30,8 @@ The one extension that *is* shipped lives in [crates/bones-extension-hello](../c
 | Example | Proves |
 | --- | --- |
 | [custom-engine](embedding/custom-engine/README.md) | Your own `bones` executable: the shipped stack plus a native module, plus a message vocabulary bones does not own, spoken by a WASM extension on the other side of the sandbox |
-| [self-updating-app](embedding/self-updating-app/README.md) | An application that replaces itself with a newer version, and the launcher that starts whichever one is current — `bones-upgrader` end to end, including rollback |
+| [self-updating-app](embedding/self-updating-app/README.md) | An application that replaces itself with a newer version through the kernel's `upgrader` module, and the launcher that starts whichever one is current — including rollback, and an `--install` that registers with the desktop |
+| [single-instance-app](embedding/single-instance-app/README.md) | One window per user: a second start hands its arguments to the running instance, which receives them as `instance/launched` and comes to the front |
 
 `custom-engine` is three crates rather than one, and that is the lesson rather than an accident: the vocabulary has to compile for the native host *and* for `wasm32-wasip2`, so it cannot live in either the binary or the guest. `self-updating-app` is two binaries from one package for a related reason — they must agree on an identity read at compile time.
 
@@ -50,7 +52,7 @@ Run the `dist/bones(.exe)` it produces. Requires PowerShell 7+ (`pwsh`), which i
 Two things to know before you copy this pattern:
 
 - **`dashboard-demo` and `metrics-demo` are a bound pair.** `dashboard-demo`'s build script reaches sideways for `metrics-demo` and packages both; building `metrics-demo` alone produces an extension with nothing to talk to.
-- **Examples are not in the distribution.** [dist.ps1](../dist.ps1) builds `extensions/` only, so `pwsh dist.ps1` ships the engine and `hello` — a distribution is the engine plus its reference extension, not a demo bundle. Use an example's own `build.ps1` to run it.
+- **Examples are not in the distribution.** [dist.ps1](../dist.ps1) ships the engine, the ABI, and an empty `extensions/` folder; use an example's own `build.ps1` to run it.
 
 ## Running the whole test suite
 

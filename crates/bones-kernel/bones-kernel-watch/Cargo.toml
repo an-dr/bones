@@ -1,0 +1,17 @@
+[package]
+name = "bones-kernel-watch"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+description = "Watch folders and report debounced changes on a thread of its own: bursts coalesced, non-mutating access ignored."
+publish.workspace = true
+
+# A kernel library with no bus: its consumers are native and each keeps its own topics
+# and its own idea of what a changed path means.
+[dependencies]
+notify = "8.2"
+
+[dev-dependencies]
+tempfile = "3.20"

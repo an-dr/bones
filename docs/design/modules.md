@@ -1,6 +1,6 @@
 # Native modules and the composition root
 
-Detailed design of the module system. Decisions: [ADR-011](../adr/ADR-011-native-core-modules.md) (kernel + consumer-composed modules), [ADR-017](../adr/ADR-017-native-module-trait-and-typed-service-registry.md) (the concrete `Module` trait and service registry), [ADR-031](../adr/ADR-031-native-modules-reach-each-other-only-through-services.md) (modules reach each other only through services). All six shipped modules implement this contract for real, and all six arrive through `.module(...)` — `.renderer()`, `.ui()`, `.web()`, and `.os()` are sugar over it, not a second route in. `wasm-extensions::persistence` also implements it (reusing `init`/`handle`/`respond` rather than duplicating that machinery) but, unlike the others, isn't part of the optional consumer-composed set — `Engine::build` always registers it (ADR-020).
+Detailed design of the module system. Decisions: [ADR-011](../adr/ADR-011-native-core-modules.md) (kernel infrastructure + consumer-composed modules), [ADR-017](../adr/ADR-017-native-module-trait-and-typed-service-registry.md) (the concrete `Module` trait and service registry), [ADR-031](../adr/ADR-031-native-modules-reach-each-other-only-through-services.md) (modules reach each other only through services). All six shipped modules implement this contract for real, and all six arrive through `.module(...)` — `.renderer()`, `.ui()`, `.web()`, and `.os()` are sugar over it, not a second route in. `wasm-extensions::persistence` also implements it (reusing `init`/`handle`/`respond` rather than duplicating that machinery) but, unlike the others, isn't part of the optional consumer-composed set — `Kernel::build` always registers it (ADR-020).
 
 ## What a module is
 
@@ -31,9 +31,9 @@ A `Module` (crate: `bus`) requires `Handler` as a supertrait — a module is a b
 
 ## Frame phases
 
-The kernel's **runner** owns the loop skeleton. Modules hook named phases; within one phase, registration order breaks ties.
+The kernel infrastructure's **runner** owns the loop skeleton. Modules hook named phases; within one phase, registration order breaks ties.
 
-| Phase | Kernel work | Typical module hooks |
+| Phase | Kernel infrastructure work | Typical module hooks |
 | --- | --- | --- |
 | `input` | Platform pumps events → bus messages | every module's `filter_event`, topmost first, first claim wins |
 | `dispatch` | Bus delivers to subscribers | ui consumes `ui/*` specs (`Handler::handle`) |
@@ -51,13 +51,14 @@ The bus carries *behavior*; **services** carry in-process plumbing that must not
 
 | Service | Provider | Consumers | Carries |
 | --- | --- | --- | --- |
-| window-surface | platform (kernel), via `Engine::build` | renderer, web | `sdl3::video::Window` |
-| bus | kernel, via `Engine::build` | game-core | `bus::Bus` |
+| window-surface | platform (kernel infrastructure), via `Kernel::build` | renderer, web | `sdl3::video::Window` |
+| bus | kernel infrastructure, via `Kernel::build` | game-core | `bus::Bus` |
 | draw-target | renderer, via its own `init` | ui | `Box<dyn DrawTarget>`: textures plus `UiMesh` submission |
+| window-control | platform (kernel infrastructure), via `Kernel::build` | instance | `WindowControl`: `raise()` — un-minimise, raise, and focus the window, where the platform allows (ADR-035) |
 
-`window-surface` is provided by the builder — web borrows it and `renderer`'s `init` consumes it. `bus` is provided by the builder unconditionally: unlike `renderer`/`ui`/`web`, which get a `Bus` handle from their own builder sugar, a module injected via the generic `.module(...)` path (game-core is the first that needs to publish) has no other way to reach one. `draw-target` is the first service one *module* provides to another: `renderer` registers it during its own `init`, and `ui` consumes it during its, so neither builder nor consumer names the other's crate (ADR-031).
+`window-surface` is provided by the builder — web borrows it and `renderer`'s `init` consumes it. `bus` is provided by the builder unconditionally: unlike `renderer`/`ui`/`web`, which get a `Bus` handle from their own builder sugar, a module injected via the generic `.module(...)` path (game-core is the first that needs to publish) has no other way to reach one. `window-control` exists because `window-surface` cannot serve a module that only needs to act on the window: the renderer consumes the window outright, and the window cannot leave the frame thread. `window-control` is a cloneable handle that carries the capability without the window, read with `get` and never consumed, so any number of modules can hold one; its calls run on the frame thread, which is where every module hook already runs. `draw-target` is the first service one *module* provides to another: `renderer` registers it during its own `init`, and `ui` consumes it during its, so neither builder nor consumer names the other's crate (ADR-031).
 
-Modules never depend on each other's crates — only on kernel crates and on services (which the kernel or a providing module defines by registering a value of a given type). This is what lets an embedder swap the SDL renderer for its own: any module providing the same service types slots in under an unchanged consumer.
+Modules never depend on each other's crates — only on kernel infrastructure crates and on services (which the kernel infrastructure or a providing module defines by registering a value of a given type). This is what lets an embedder swap the SDL renderer for its own: any module providing the same service types slots in under an unchanged consumer.
 
 ## Trust model
 
@@ -68,14 +69,14 @@ Modules are native and trusted: no time or queue budgets, no watchdog, no quaran
 bones has two first-class distributions built from the same code path:
 
 - **The app** — the engine executable composing the default SDL renderer and egui UI, plus web when built with the `web` feature and enabled in config. This is the main product and the common case: most projects take the app as-is and implement everything as WASM extensions — no Rust, no build of bones itself.
-- **The library** — the workspace of kernel and module crates plus the builder API, for the embedding case: projects that need their own native modules (custom renderer, native game core) own the composition root — the `main` that wires kernel + modules — themselves.
+- **The library** — the workspace of kernel infrastructure and module crates plus the builder API, for the embedding case: projects that need their own native modules (custom renderer, native game core) own the composition root — the `main` that wires kernel infrastructure + modules — themselves.
 
 The app is built solely on the public builder API with **no privileged access**: if the app can't do something cleanly, embedders can't either, so the API stays honest and the two distributions cannot drift.
 
 Sketch of an embedder's composition root:
 
 ```rust
-bones::Engine::new()
+bones::Kernel::new()
     .module(gpu_renderer::GpuRenderer::new())   // replaces the SDL renderer
     .module(bones_ui::EguiUi::default())        // reused from bones
     .module(game_core::GameCore::new())         // native-speed game logic
@@ -88,4 +89,4 @@ bones::Engine::new()
 The intended pattern is bones as a **git subrepo** (submodule) with path dependencies, or a cargo git dependency — both build from source in one build graph, so module injection is static dispatch with zero ABI machinery. Consequences the embedder owns:
 
 - **Pinning is the stability model**: the parent pins a bones commit and upgrades deliberately; no semver promise before 1.0 (ADR-011).
-- The parent's toolchain and feature unification govern bones' build; the kernel brings wasmtime as an inherent dependency.
+- The parent's toolchain and feature unification govern bones' build; the kernel infrastructure brings wasmtime as an inherent dependency.

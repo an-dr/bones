@@ -38,4 +38,4 @@ The four capabilities are grouped because each needs the host, not because they 
 
 ## Where the detail lives
 
-Message field layouts are in [wit/wire-format.md](../../wit/wire-format.md). Implementation notes belong beside the code in [bones-module-os](../../crates/bones-engine/bones-module-os/README.md).
+Message field layouts are in [wit/wire-format.md](../../wit/wire-format.md). Implementation notes belong beside the code in [bones-module-os](../../crates/bones-kernel/bones-module-os/README.md).

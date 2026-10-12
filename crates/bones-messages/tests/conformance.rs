@@ -21,6 +21,10 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use bones_messages::audio::{LoadSound, PlayMusic, PlaySound, SetMusicVolume, StopMusic};
+use bones_messages::desktop::{
+    Action as DesktopAction, Outcome as DesktopOutcome, Request as DesktopRequest,
+    Result as DesktopResult,
+};
 use bones_messages::extension_control::{Load, Reload, Unload};
 use bones_messages::game_core::{
     BodyKind, Collision, EntityOp, EntityOpMessage, EntityTransform, LoadTilemap, PhysicsWorlds,
@@ -34,11 +38,16 @@ use bones_messages::input::{
     GamepadAxis, GamepadButtonDown, GamepadButtonUp, GamepadConnected, GamepadDisconnected,
     KeyDown, KeyUp, MouseDown, MouseMove, MouseUp, MouseWheel,
 };
+use bones_messages::instance::Launched;
 use bones_messages::lifecycle::{Event, LifecycleEvent};
 use bones_messages::persistence::Save;
 use bones_messages::renderer::{DisplayChanged, LogicalCanvas};
 use bones_messages::tick::Tick;
 use bones_messages::ui::{Changed, Clicked, Spec, Widget};
+use bones_messages::upgrader::{
+    Action as UpgraderAction, Outcome as UpgraderOutcome, Request as UpgraderRequest,
+    Result as UpgraderResult,
+};
 use bones_messages::web::{
     ClosePanel, Command as WebCommand, Navigate, OpenPanel, PageMessage, PanelClosed, PanelFailed,
     PanelOpened, PanelSource, SendJson,
@@ -507,6 +516,103 @@ fn vectors() -> Vec<Vector> {
         ),
         // -- persistence ------------------------------------------------
         vector(&Save { bytes: &[1, 2, 3] }, "bytes=010203"),
+        // -- instance -----------------------------------------------------
+        vector(
+            &Launched {
+                args: vec!["--x", "y"],
+                cwd: "/home/me",
+            },
+            "cwd=/home/me;count=2;args=--x,y",
+        ),
+        // -- desktop ------------------------------------------------------
+        vector(
+            &DesktopRequest {
+                request_id: 1,
+                action: DesktopAction::Register,
+            },
+            "request_id=1;action=0",
+        ),
+        vector(
+            &DesktopRequest {
+                request_id: 2,
+                action: DesktopAction::Status,
+            },
+            "request_id=2;action=2",
+        ),
+        vector(
+            &DesktopResult {
+                request_id: 1,
+                outcome: DesktopOutcome::Registered(true),
+            },
+            "request_id=1;tag=0;registered=true",
+        ),
+        vector(
+            &DesktopResult {
+                request_id: 3,
+                outcome: DesktopOutcome::Failed("denied"),
+            },
+            "request_id=3;tag=1;reason=denied",
+        ),
+        // -- upgrader -----------------------------------------------------
+        vector(
+            &UpgraderRequest {
+                request_id: 1,
+                action: UpgraderAction::Check,
+            },
+            "request_id=1;action=0",
+        ),
+        vector(
+            &UpgraderRequest {
+                request_id: 2,
+                action: UpgraderAction::LastApplied,
+            },
+            "request_id=2;action=3",
+        ),
+        vector(
+            &UpgraderResult {
+                request_id: 1,
+                outcome: UpgraderOutcome::Available { version: "1.2.0" },
+            },
+            "request_id=1;tag=0;version=1.2.0",
+        ),
+        vector(
+            &UpgraderResult {
+                request_id: 1,
+                outcome: UpgraderOutcome::UpToDate,
+            },
+            "request_id=1;tag=1",
+        ),
+        vector(
+            &UpgraderResult {
+                request_id: 2,
+                outcome: UpgraderOutcome::Staged { version: "1.2.0" },
+            },
+            "request_id=2;tag=2;version=1.2.0",
+        ),
+        vector(
+            &UpgraderResult {
+                request_id: 3,
+                outcome: UpgraderOutcome::Installed { fresh: true },
+            },
+            "request_id=3;tag=3;fresh=true",
+        ),
+        vector(
+            &UpgraderResult {
+                request_id: 4,
+                outcome: UpgraderOutcome::LastApplied {
+                    previous: Some("1.1.0"),
+                    current: "1.2.0",
+                },
+            },
+            "request_id=4;tag=4;has_previous=true;previous=1.1.0;current=1.2.0",
+        ),
+        vector(
+            &UpgraderResult {
+                request_id: 5,
+                outcome: UpgraderOutcome::Failed { reason: "offline" },
+            },
+            "request_id=5;tag=5;reason=offline",
+        ),
         // -- direct sends -----------------------------------------------
         send_vector(
             "web",

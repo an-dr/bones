@@ -10,6 +10,9 @@ The crate also exposes the fixed-layout little-endian `Reader` and `Writer` used
 - `lifecycle` — `LifecycleEvent` and `Event` on `core/lifecycle`.
 - `window` — `CloseRequested` on `window/close-requested`.
 - `os` — `Request` and `Result` on `os/*`: clipboard, browser, native file dialogs and HTTPS fetch, performed by the trusted `os` module on a sandboxed guest's behalf.
+- `instance` — `Launched` on `instance/launched`: a later launch of a single-instance application, with its arguments and working directory.
+- `desktop` — `Request` and `Result` on `desktop/*`: register, unregister, or check the one application the composition fixed.
+- `upgrader` — `Request` and `Result` on `upgrader/*`: check, stage, or install a release, or ask which version ran before this one.
 - `web` — direct commands to the `web` endpoint for panel lifecycle, navigation, and extension-to-page JSON; `web/*` lifecycle and page-message events back to guests.
 - `input` — `KeyDown` and `KeyUp` keyboard events.
 - `gfx` — `Clear`, `LoadSprite`, `DrawSprite`, `DrawRect`, `DrawLine`, `DrawCircle`, `DrawTriangle`, and `DrawText`, plus the wildcard-friendly `Command` dispatcher used by the renderer.

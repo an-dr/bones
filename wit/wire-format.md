@@ -485,6 +485,75 @@ Published by the web module, not to it — panels are opened by a direct `send` 
 
 The JSON is not parsed by the engine. It is carried verbatim between the page and the owning extension.
 
+## `instance/*`
+
+Published by the instance module when a later launch of a single-instance application hands its arguments to the running one (ADR-035). The application's own startup arguments are never published here.
+
+### `instance/launched`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `cwd` | `str` | the launching process's working directory |
+| `count` | `u16` | number of arguments that follow |
+| `args` | `count` × `str` | the arguments, without the program name, in order |
+
+## `desktop/*`
+
+Request and result for registering one application with the desktop (ADR-036). Which application, and under which names, is fixed by whoever composed the engine; a request only chooses the action. Replies arrive in the order the work finishes, so `request_id` pairs each result with its request.
+
+### `desktop/request`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `request_id` | `u32` | chosen by the caller, echoed on the result |
+| `action` | `u8` | `0` register, `1` unregister, `2` status |
+
+### `desktop/result`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `request_id` | `u32` | the request this answers |
+| `tag` | `u8` | which outcome follows |
+
+| Tag | Outcome | Fields after the tag |
+| ---: | --- | --- |
+| 0 | registered | `registered: bool` — whether every part of the registration is now present |
+| 1 | failed | `reason: str-rest` |
+
+## `upgrader/*`
+
+Request and result for self-update (ADR-037). Where releases come from is fixed by whoever composed the engine; a request only chooses the action. Replies arrive in the order the work finishes, so `request_id` pairs each result with its request.
+
+### `upgrader/request`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `request_id` | `u32` | chosen by the caller, echoed on the result |
+| `action` | `u8` | `0` check, `1` stage, `2` install, `3` last-applied |
+
+- **check** reads the release manifest and reports whether it is newer than the running version.
+- **stage** downloads and verifies a newer release into its own version folder; the launcher starts it next time.
+- **install** copies the running build into the install location — the "install this portable copy" action.
+- **last-applied** reports the version that ran before this one, so an application can say it was just updated.
+
+### `upgrader/result`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `request_id` | `u32` | the request this answers |
+| `tag` | `u8` | which outcome follows |
+
+| Tag | Outcome | Fields after the tag |
+| ---: | --- | --- |
+| 0 | available | `version: str-rest` — a newer release exists |
+| 1 | up-to-date | none |
+| 2 | staged | `version: str-rest` — staged for the next start |
+| 3 | installed | `fresh: bool` — true when nothing was installed before, so the files went straight to the install location |
+| 4 | last-applied | `has_previous: bool`, `previous: str`, `current: str-rest` |
+| 5 | failed | `reason: str-rest` |
+
+`has_previous` is false on the first run of an installed application and on every run outside an install; `previous` is then empty. An application shows "updated" only when `has_previous` is true and `previous` differs from `current`.
+
 ## Direct-send endpoints
 
 A direct `send` (ADR-010) names an endpoint rather than a topic, and completes within the call with a reply. Three endpoints are core-owned.

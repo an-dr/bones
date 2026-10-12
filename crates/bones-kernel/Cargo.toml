@@ -1,0 +1,55 @@
+[package]
+name = "bones-kernel"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[features]
+default = ["presentation", "audio", "game-core"]
+presentation = ["bones-kernel-infra/platform", "dep:bones-module-renderer", "dep:bones-module-ui"]
+web = ["presentation", "dep:bones-module-web"]
+# Off by default: it pulls in a TLS stack and native dialogs, which an
+# embedder shipping a headless or game-only build has no use for.
+os = ["dep:bones-module-os"]
+audio = ["dep:bones-module-audio"]
+game-core = ["dep:bones-module-game-core"]
+# The application-shell set: each off by default, because each is something
+# an application chooses to be -- single-instance, registered with the
+# desktop, self-updating, or drivable from development tools -- not something an engine
+# is by default.
+instance = ["dep:bones-module-single-instance"]
+desktop = ["dep:bones-module-desktop"]
+upgrade = ["dep:bones-module-upgrade"]
+devtools = ["dep:bones-module-devtools"]
+# Plain libraries for an application's own native code, with no bus module:
+# nothing a guest may reach starts programs or watches folders.
+launch = ["dep:bones-kernel-launch"]
+watch = ["dep:bones-kernel-watch"]
+
+[dependencies]
+bones-kernel-infra = { path = "./bones-kernel-infra", default-features = false }
+bones-messages = { path = "../bones-messages" }
+wasmtime = { version = "47.0.0", features = ["component-model"] }
+bones-module-renderer = { path = "./bones-module-renderer", optional = true }
+bones-module-ui = { path = "./bones-module-ui", optional = true }
+bones-module-web = { path = "./bones-module-web", features = ["wry-backend"], optional = true }
+bones-module-os = { path = "./bones-module-os", optional = true }
+bones-module-audio = { path = "./bones-module-audio", optional = true }
+bones-module-game-core = { path = "./bones-module-game-core", optional = true }
+bones-module-single-instance = { path = "./bones-module-single-instance", optional = true }
+bones-module-desktop = { path = "./bones-module-desktop", optional = true }
+bones-module-upgrade = { path = "./bones-module-upgrade", optional = true }
+bones-module-devtools = { path = "./bones-module-devtools", optional = true }
+# Plain libraries reached through this crate's own re-exports, so an
+# application depends on bones-kernel alone.
+bones-kernel-launch = { path = "./bones-kernel-launch", optional = true }
+bones-kernel-watch = { path = "./bones-kernel-watch", optional = true }
+
+[dev-dependencies]
+# test-mode: cargo test runs tests on worker threads, not the process's
+# main thread; SDL refuses to init anywhere else unless this is set. Reaches
+# bones-kernel-infra's platform module through this crate's own default features.
+sdl3 = { version = "0.18.4", features = ["build-from-source-static", "test-mode"] }
+bones-module-audio = { path = "./bones-module-audio" }

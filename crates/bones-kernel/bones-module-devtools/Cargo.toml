@@ -1,0 +1,16 @@
+[package]
+name = "bones-module-devtools"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+description = "An opt-in, loopback-only HTTP channel that injects page messages into a running bones application and records its bus."
+publish.workspace = true
+
+[dependencies]
+# The bus lives in the kernel infrastructure, not the facade: a module depending on
+# `bones-kernel` would cycle, since the facade composes the modules.
+bones-kernel-infra = { path = "../bones-kernel-infra", default-features = false }
+bones-messages = { path = "../../bones-messages" }
+serde_json = "1.0"

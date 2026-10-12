@@ -1,10 +1,10 @@
 #!/usr/bin/env pwsh
-# Builds the app and every shipped extension, assembling a runnable dist/
+# Builds the app, assembling a runnable dist/
 # directory and a versioned, checksummed release archive beside it.
 # Run with: pwsh dist.ps1
 #
-# examples/ is deliberately not built here: a distribution is the engine plus
-# its reference extension, not a demo bundle. Build an example through its own
+# examples/ is deliberately not built here: a distribution is the engine, the
+# ABI it implements, and an empty extensions/ folder, not a demo bundle. Build an example through its own
 # examples/<name>/build.ps1, which assembles a self-contained dist/ beside it.
 #
 # -NoArchive stops after dist/, for the inner-loop case of running the engine
@@ -13,7 +13,7 @@ param([switch]$NoArchive)
 
 $ErrorActionPreference = "Stop"
 
-# crates/bones-engine/bones-kernel's platform module builds SDL3 from source via cmake; this sets up
+# crates/bones-kernel/bones-kernel-infra's platform module builds SDL3 from source via cmake; this sets up
 # whatever compiler and generator this machine has. Shared with test.ps1.
 . "$PSScriptRoot/scripts/native-build-env.ps1"
 Initialize-NativeBuildEnvironment
@@ -50,28 +50,7 @@ Remove-Item -Recurse -Force $dist -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Path "$dist/extensions" -Force | Out-Null
 Copy-Item "target/release/$exeName" "$dist/$exeName"
 
-# Only crates matching the bones-extension-* prefix reserved for shipped
-# extensions (ADR-030, ADR-030), never examples/ -- see the note at the top
-# of this file.
-Get-ChildItem -Path "crates" -Directory -Filter "bones-extension-*" | ForEach-Object {
-    $name = $_.Name
-    $buildScript = Join-Path $_.FullName "build.ps1"
-    if (-not (Test-Path $buildScript)) { return }
-
-    Write-Host "==> Building extension '$name'..."
-    Push-Location $_.FullName
-    try {
-        pwsh ./build.ps1
-        if ($LASTEXITCODE -ne 0) { throw "build failed for extension '$name'" }
-    } finally {
-        Pop-Location
-    }
-
-    # cargo names the artifact after the crate, with underscores for hyphens.
-    $artifactName = $name -replace '-', '_'
-    $wasm = Join-Path $_.FullName "target/wasm32-wasip2/release/$artifactName.wasm"
-    Copy-Item $wasm "$dist/extensions/$artifactName.wasm"
-}
+# extensions/ ships empty: it is where a user drops their own .wasm files.
 
 # The ABI ships with the engine that implements it. An extension author in any
 # language needs extension.wit to build against, and pairing it with the binary is
@@ -159,9 +138,9 @@ Write-Host "==> Writing the release README..."
 @"
 # bones $version
 
-The bones engine and its reference extension, for $os-$arch.
+The bones engine, for $os-$arch.
 
-Engine version $version; extension ABI bones:extension@$abiVersion. The two move
+Kernel version $version; extension ABI bones:extension@$abiVersion. The two move
 independently -- see docs/adr/ADR-029 in the repository.
 
 ## Run it

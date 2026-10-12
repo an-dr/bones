@@ -16,11 +16,11 @@ checksum = "b588b76d00fde79687d7646a9b5bdf3cc0f655e0bbd080335a95d7e96f3587da"
 
 [[package]]
 name = "bones-messages"
-version = "1.0.0"
+version = "1.2.0"
 
 [[package]]
 name = "bones-wasm-sdk"
-version = "1.0.0"
+version = "1.2.0"
 dependencies = [
  "bones-messages",
  "wit-bindgen",

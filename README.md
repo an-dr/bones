@@ -9,13 +9,13 @@ Two ways to use it:
 - **Write extensions only.** Use the shipped engine binary as-is and put your game, tool, or GUI in WASM components. Most projects want this.
 - **Embed the engine.** Depend on the crates, own the composition root, and inject your own native modules with `.module(...)`. For projects that need native capabilities the core does not ship.
 
-**Status: 1.0.** The kernel, renderer, egui UI, audio, game-core, optional wry web panels, hot reload, orderly shutdown, extension flow-control budgets, and custom native-module injection all work today.
+**Status: 1.0.** The kernel infrastructure, renderer, egui UI, audio, game-core, optional wry web panels, hot reload, orderly shutdown, extension flow-control budgets, and custom native-module injection all work today.
 
 Two version lines, deliberately independent ([ADR-029](docs/adr/ADR-029-the-two-version-lines-are-the-two-public-surfaces.md)), both starting at 1.0.0:
 
 | Line | What it covers | Moves when |
 | --- | --- | --- |
-| **engine** — `bones`, `bones-engine` | the Rust API an embedder links | the library surface changes |
+| **engine** — `bones`, `bones-kernel` | the Rust API an embedder links | the library surface changes |
 | **ABI** — `bones:extension`, `bones-messages`, `bones-wasm-sdk` | the contract a `.wasm` extension is built against | the guest contract changes |
 
 An extension outlives the engine build that loaded it, and may not be written in Rust; one number cannot promise both audiences. See [CHANGELOG.md](CHANGELOG.md) for what has moved.
@@ -28,7 +28,7 @@ An extension outlives the engine build that loaded it, and may not be written in
 pwsh dist.ps1
 ```
 
-That produces `dist/` plus a versioned, checksummed `bones-<version>-<os>-<arch>.zip` containing the engine, the reference extension, the ABI, a sample `bones.toml`, the licence, and third-party notices. Run `dist/bones(.exe)` directly, or without the bundling step:
+That produces `dist/` plus a versioned, checksummed `bones-<version>-<os>-<arch>.zip` containing the engine, an empty `extensions/` folder, the ABI, a sample `bones.toml`, the licence, and third-party notices. Run `dist/bones(.exe)` directly, or without the bundling step:
 
 ```sh
 cargo run -p bones
@@ -38,7 +38,7 @@ cargo run -p bones
 
 ```toml
 [dependencies]
-bones-engine = { git = "https://github.com/an-dr/bones", tag = "v1.0.0" }
+bones-kernel = { git = "https://github.com/an-dr/bones", tag = "v2.0.0" }
 ```
 
 **As an extension author in Rust**, on the ABI line rather than the engine line:
@@ -56,7 +56,7 @@ Clone with `--recurse-submodules`; `vendor/pubsub-bus` is one.
 pwsh test.ps1
 ```
 
-One command from a clean clone to a release-green tree. It needs a Rust toolchain, PowerShell 7+, and a C compiler with CMake, since the kernel builds SDL3 from source — [docs/contributing/building.md](docs/contributing/building.md) has the prerequisites and [docs/contributing/testing.md](docs/contributing/testing.md) what the script gates.
+One command from a clean clone to a release-green tree. It needs a Rust toolchain, PowerShell 7+, and a C compiler with CMake, since the kernel infrastructure builds SDL3 from source — [docs/contributing/building.md](docs/contributing/building.md) has the prerequisites and [docs/contributing/testing.md](docs/contributing/testing.md) what the script gates.
 
 ## Platform support
 
@@ -70,7 +70,7 @@ There is no CI ([docs/roadmap.md](docs/roadmap.md) tracks adding it), so "suppor
 
 ## Your first extension
 
-Start at [crates/bones-extension-hello](crates/bones-extension-hello/README.md) — the reference extension, and the only one a distribution ships. It exercises the whole contract in [wit/extension.wit](wit/extension.wit): subscribing in `init`, handling `on-tick` and `on-message`, publishing, and cleaning up in `shutdown`.
+Start at [examples/extensions/hello-demo](examples/extensions/hello-demo/README.md) — the first example to read. It exercises the whole contract in [wit/extension.wit](wit/extension.wit): subscribing in `init`, handling `on-tick` and `on-message`, publishing, and cleaning up in `shutdown`.
 
 Drop any built `.wasm` into `extensions/` next to wherever you run the engine and it loads on start.
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env pwsh
 # Builds the custom engine binary, the extension that speaks its vocabulary,
-# and the stock `hello` extension, then assembles a runnable dist/ beside this
+# and the hello-demo example extension, then assembles a runnable dist/ beside this
 # script. Run with: pwsh build.ps1
 #
 # Unlike the extension examples, the executable here is *not* the shipped
@@ -65,8 +65,8 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 # Packaged alongside so the window shows a stock extension and a custom one
 # running in the same process, against the same engine.
-Write-Host "==> Building the stock hello extension..."
-cargo build --manifest-path "$repoRoot/crates/bones-extension-hello/Cargo.toml" --target wasm32-wasip2 --release
+Write-Host "==> Building the hello-demo extension..."
+cargo build --manifest-path "$repoRoot/examples/extensions/hello-demo/Cargo.toml" --target wasm32-wasip2 --release
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "==> Building the custom engine..."
@@ -80,7 +80,7 @@ New-Item -ItemType Directory -Path "$dist/extensions" -Force | Out-Null
 Copy-Item "$PSScriptRoot/engine/target/release/$exeName" "$dist/$exeName"
 Copy-Item "$PSScriptRoot/bones.toml" "$dist/bones.toml"
 Copy-Item "$PSScriptRoot/extension/target/wasm32-wasip2/release/host_probe.wasm" "$dist/extensions/host_probe.wasm"
-Copy-Item "$repoRoot/crates/bones-extension-hello/target/wasm32-wasip2/release/bones_extension_hello.wasm" "$dist/extensions/bones_extension_hello.wasm"
+Copy-Item "$repoRoot/examples/extensions/hello-demo/target/wasm32-wasip2/release/hello_demo.wasm" "$dist/extensions/hello_demo.wasm"
 
 Write-Host ""
 Write-Host "Packaged: $dist/$exeName"

@@ -14,7 +14,7 @@
 //! - Bytes, not text: what a page or an extension does with the contents is its
 //!   own concern, so the capability does not judge encodings.
 //!
-//! Absent unless the embedder grants a root (`Engine::files_root`). A read
+//! Absent unless the embedder grants a root (`Kernel::files_root`). A read
 //! capability's resource is a *specific* directory, so unlike `persistence`
 //! there is nothing sensible to default to.
 

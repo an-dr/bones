@@ -1,0 +1,17 @@
+[package]
+name = "bones-kernel-launch"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "README.md"
+description = "Start a program in a folder, detached, or open a terminal there: PATH and PATHEXT resolution and a table of known terminals."
+publish.workspace = true
+
+# A kernel library with no bus: both consumers are native code, and a guest-facing
+# "start any program" action would widen the trust boundary (ADR-034).
+[dependencies]
+dirs = "6.0.0"
+
+[dev-dependencies]
+tempfile = "3.20"

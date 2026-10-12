@@ -17,7 +17,7 @@
 
 mod host_facts;
 
-use bones_engine::logging::Logger;
+use bones_kernel::logging::Logger;
 
 use host_facts::HostFacts;
 
@@ -28,10 +28,10 @@ fn main() {
     }
 }
 
-fn run() -> bones_engine::Result<()> {
+fn run() -> bones_kernel::Result<()> {
     let logger = Logger::default();
 
-    bones_engine::Engine::new()
+    bones_kernel::Kernel::new()
         .logger(logger.clone())
         // Everything from here to `.ui()` is what the shipped `bones` binary
         // composes. `extensions_dir` is relative to the executable, not the

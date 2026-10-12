@@ -31,7 +31,6 @@ function Build-Version([string]$version) {
     $env:UPGRADER_INSTALL_ENV_VAR = "DEMO_APP_INSTALL_DIR"
     $env:UPGRADER_LAUNCHER_STEM = "demo"
     $env:UPGRADER_APP_STEM = "demo-app"
-    $env:UPGRADER_LAUNCHER_VERSION = $version
     cargo build --manifest-path "$app/Cargo.toml" --release
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     Remove-Item Env:\DEMO_APP_VERSION
@@ -79,4 +78,4 @@ Write-Host "  $dist/app/$entryExe"
 Write-Host ""
 Write-Host "The first run reports 1.0.0 and stages 1.1.0; the second starts 1.1.0."
 Write-Host "  $dist/app/$entryExe --version    what is installed"
-Write-Host "  $dist/app/$entryExe --rollback   go back to the previous version"
+Write-Host "  $dist/app/$entryExe --previous --rollback   go back to the previous version"

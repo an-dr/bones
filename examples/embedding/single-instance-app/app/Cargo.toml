@@ -1,0 +1,12 @@
+[workspace]
+
+[package]
+name = "single-instance-app"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# One dependency: the claim, the handoff and the module all arrive through
+# `bones-kernel`'s `instance` feature.
+[dependencies]
+bones-kernel = { path = "../../../../crates/bones-kernel", features = ["instance"] }

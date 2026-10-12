@@ -4,7 +4,7 @@ One bus carries everything, and one loop drives everything. Together they decide
 
 ## One fabric, two shapes
 
-Every part addresses every other part the same way, whether it is a kernel component, a native module, or a sandboxed extension. There is no side channel, no direct call between extensions, and no privileged path a module has and an extension lacks.
+Every part addresses every other part the same way, whether it is a kernel infrastructure component, a native module, or a sandboxed extension. There is no side channel, no direct call between extensions, and no privileged path a module has and an extension lacks.
 
 The bus offers two shapes, because two genuinely different needs exist ([ADR-003](../adr/ADR-003-hybrid-messaging.md)):
 

@@ -30,9 +30,9 @@ fn main() {
 fn run() -> Result<(), String> {
     let config = Config::load(paths::config_path())?;
 
-    let mut engine = bones_engine::Engine::new()
+    let mut engine = bones_kernel::Kernel::new()
         .extensions_dir(paths::config_relative(&config.extensions_dir))
-        .extension_budget(bones_engine::bus::BudgetLimits {
+        .extension_budget(bones_kernel::bus::BudgetLimits {
             max_inbound: config.extension_max_inbound,
             max_publishes: config.extension_max_publishes,
         })
@@ -59,10 +59,10 @@ fn run() -> Result<(), String> {
         }
     }
     if config.audio {
-        engine = engine.module(bones_engine::audio::Audio::new());
+        engine = engine.module(bones_kernel::audio::Audio::new());
     }
     if config.game_core {
-        engine = engine.module(bones_engine::game_core::GameCore::new());
+        engine = engine.module(bones_kernel::game_core::GameCore::new());
     }
     if config.persistence_read_only {
         engine = engine.read_only_persistence();

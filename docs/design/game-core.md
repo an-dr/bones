@@ -48,4 +48,4 @@ Paused is a global freeze, not a slowed tick. No world steps, nothing settles or
 
 ## Where the detail lives
 
-Message field layouts are specified in [wit/wire-format.md](../../wit/wire-format.md), for every language rather than only Rust. Implementation notes — how the physics backends are tuned, how contacts are filtered, why the internal grouping is what it is — belong beside the code in [bones-module-game-core](../../crates/bones-engine/bones-module-game-core/README.md) and its own doc comments.
+Message field layouts are specified in [wit/wire-format.md](../../wit/wire-format.md), for every language rather than only Rust. Implementation notes — how the physics backends are tuned, how contacts are filtered, why the internal grouping is what it is — belong beside the code in [bones-module-game-core](../../crates/bones-kernel/bones-module-game-core/README.md) and its own doc comments.

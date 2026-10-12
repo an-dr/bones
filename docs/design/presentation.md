@@ -37,12 +37,13 @@ One extension may use several backends at once (e.g. a game on `gfx/*` with a se
 - Panels are OS webviews composited above the SDL content as native children of the resizable SDL window on supported desktop window systems. Their bounds track the live client area.
 - A service embedder may attach a temporary wry presentation to its existing headless engine's bus. Closing removes the `web` endpoint and destroys the native window; reopening creates a fresh presentation without rebuilding or restarting that engine.
 - An `Html` panel is served over a custom protocol rather than set as a document string, so the page loads at a real origin and can use storage and anything else subject to a same-origin check. A `Url` panel navigates as given.
+- No panel loads while the frame thread is busy. Measured on Windows, a page waits for that thread whatever serves it — a custom protocol, a `data:` URL, or a loopback HTTP server alike — so a long step on the frame thread, such as loading a large extension, leaves a newly opened panel blank until it ends ([roadmap](../roadmap.md#panels-that-paint-while-the-frame-thread-is-busy)).
 
 The webview itself sits behind a backend interface, and the protocol half — panel ownership, command decoding, lifecycle events, closing a faulted owner's panels — does not depend on it. That is what lets this crate and a headless consumer build without webview system libraries at all, and what makes the wry implementation replaceable rather than assumed.
 
 ## GTK platforms
 
-Child web panels require an X11 SDL window and an X11 GTK display. On Linux, start the host with `SDL_VIDEO_DRIVER=x11 GDK_BACKEND=x11` and an available X server or Xwayland. A native Wayland GTK display cannot embed these child views. GTK initialization stays on the runner thread and never changes the process environment; an embedder that already initialized GTK must reuse that thread and an X11 display. The backend pumps GLib without blocking once per frame.
+Child web panels require an X11 SDL window and an X11 GTK display. On Linux the engine selects both when web panels are composed — SDL's video driver through an SDL hint and GTK's backend through GDK — so a Wayland session needs only Xwayland, with no variable set by the user or the application. Neither selection writes the process environment, so every program the application starts inherits the user's own `GDK_BACKEND` and `SDL_VIDEO_DRIVER`. A native Wayland GTK display cannot embed these child views. GTK initialization stays on the runner thread; an embedder that already initialized GTK must reuse that thread and an X11 display. The backend pumps GLib without blocking once per frame.
 
 ## Input routing
 
