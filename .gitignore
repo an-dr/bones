@@ -1,16 +1,16 @@
 target
 dist
-# Release archives and their checksums, produced by dist.ps1. Built artifacts
-# belong on a release page, not in history.
+# Release archives and their checksums, produced by `cargo xtask dist`. Built
+# artifacts belong on a release page, not in history.
 bones-*.zip
 bones-*.zip.sha256
 bones-*.tar.gz
 bones-*.tar.gz.sha256
-docs/reviews/
-docs/progress/
-.verify-scratch/
+# Agent scratch output (code reviews, reports, analysis): never repository
+# content.
+.artifacts/
 # persistence's default save directory. Real for the app (bones.toml's
-# saves_dir); also created harmlessly by any test that builds an Engine
+# saves_dir); also created harmlessly by any test that builds a Kernel
 # without pointing .saves_dir(...) elsewhere, since persistence is
-# unconditional (core/wasm-extensions/src/persistence.rs).
+# kernel-tier and always present (ADR-020).
 saves/

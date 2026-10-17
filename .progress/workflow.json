@@ -1,0 +1,415 @@
+{
+  "schemaVersion": 1,
+  "flow": "DetailedAuto",
+  "phase": "COMMIT",
+  "baseBranch": "main",
+  "baseCommit": "0afba309c4338466b180dc39f9e7c2df0b240cba",
+  "featureBranch": "feature/xtask-build-system",
+  "requirements": {
+    "goal": "One universal, Rust-native build/automation entry point (cargo xtask) for every package bones builds, replacing the duplicated ps1 scripts; plans updated with Android as future work.",
+    "constraints": "No new required toolchain beyond Rust + existing C compiler/CMake for SDL. Install nothing automatically. Windows ARM64 primary, portable code. Same outputs as today (dist zip layout, test gates, example .wasm and dist folders).",
+    "done": "cargo xtask test / dist / example reproduce what the ps1 scripts did and test is green; ps1 scripts removed; .gitignore clean; docs and roadmap current with Android planned.",
+    "outOfScope": "Implementing Android support (planned only); mise/tool provisioning; CI setup; vendor/pubsub-bus changes (stashed edits stay stashed)."
+  },
+  "currentIncrementId": "ff546cb0ddbd47c79dcf9fa86e7f523b",
+  "commitBaseline": "0afba309c4338466b180dc39f9e7c2df0b240cba",
+  "increments": [
+    {
+      "id": "ff546cb0ddbd47c79dcf9fa86e7f523b",
+      "number": 1,
+      "status": "verified",
+      "scope": "xtask-core",
+      "description": "xtask crate + cargo alias; prerequisite-check module with install hints (rust targets, C compiler, cmake, ninja preference, MSVC vcvarsall); cargo xtask test ported from test.ps1; delete test.ps1 and scripts/native-build-env.ps1; .gitignore cleanup."
+    },
+    {
+      "id": "6f7a06212a3640ed85745ca5732799d6",
+      "number": 2,
+      "status": "planned",
+      "scope": "xtask-dist-examples",
+      "description": "cargo xtask dist (same zip layout + checksum) and cargo xtask example <name> from a table; delete dist.ps1 and all 15 examples/*/build.ps1."
+    },
+    {
+      "id": "768a23a5bd13426595a42e2a80af21f7",
+      "number": 3,
+      "status": "planned",
+      "scope": "docs",
+      "description": "README, docs/contributing, example READMEs, code comments referencing ps1; docs/roadmap.md outdated items removed and Android (SDLActivity APK, bones-android crate, cargo xtask android preflight) added; ADR for the xtask build system."
+    }
+  ],
+  "requests": [
+    {
+      "id": "7c6717dfcd0f4a4e88cb2ba4fecf289c",
+      "number": 1,
+      "text": "Replace the PowerShell build system (test.ps1, dist.ps1, scripts/native-build-env.ps1, every examples/*/build.ps1) with a universal cargo xtask that owns dependency checks, automation logic, and every package build"
+    },
+    {
+      "id": "753a85e890b44c04a3623e4cb25462af",
+      "number": 2,
+      "text": "Shared prerequisite checks: each missing tool fails fast with where/how to install it; nothing is installed automatically"
+    },
+    {
+      "id": "b8ef0c1cc8124026be019f846092db34",
+      "number": 3,
+      "text": "Update the plans (docs/roadmap.md): remove outdated items and add Android support as planned future work using the design from this session"
+    },
+    {
+      "id": "870a955fa0d748b0bb297b49abd84daa",
+      "number": 4,
+      "text": "Remove outdated content from the docs, including every reference to the replaced ps1 scripts"
+    },
+    {
+      "id": "7f3040731363411d9e203e0d9d7245e3",
+      "number": 5,
+      "text": "Proper .gitignore entries: add .artifacts/, fix stale comments, drop dead entries"
+    }
+  ],
+  "questions": [
+    {
+      "id": "2bceaf27a8f74d59a6758fed2c7c5bc7",
+      "number": 1,
+      "status": "answered",
+      "text": "Scope of \"Android support\": engine runs WASM extensions on an Android device as an APK (shipped engine + bundled extensions), or also embedding as a library in a host Android app?",
+      "answer": "Whatever is easiest for a simple app: standalone APK."
+    },
+    {
+      "id": "6126d4c688a842e593c573d957c00fa8",
+      "number": 2,
+      "status": "answered",
+      "text": "Which native modules must work on Android in this branch: renderer+input+audio (SDL3) only, or also egui UI, wry web panels (Android WebView), game-core, persistence? Tray, self-update, single-instance, desktop registration, OS module are assumed out of scope.",
+      "answer": "Use every module that supports Android out of the box; skip the rest."
+    },
+    {
+      "id": "e77403321a6849c6a4fa858acf100f7f",
+      "number": 3,
+      "status": "answered",
+      "text": "How do extensions arrive on device: bundled into APK assets only, or also loaded from app storage (enabling hot reload over adb push)?",
+      "answer": "Bundled in the APK."
+    },
+    {
+      "id": "693f36262f804538b5b17872c9c89c67",
+      "number": 4,
+      "status": "answered",
+      "text": "Target ABIs and min API level (suggest arm64-v8a only, API 26+)? Is there a physical device or emulator to verify on, and is Android SDK/NDK installed here?",
+      "answer": "Agreed: arm64-v8a, API 26+."
+    },
+    {
+      "id": "7293bdd09fbc4945a9c08dc85ef75a77",
+      "number": 5,
+      "status": "answered",
+      "text": "Definition of done: APK builds via one pwsh script and hello-demo + one sprite example run on device — or more?",
+      "answer": "Fine: one pwsh script builds the APK; hello-demo and a sprite example run on device."
+    },
+    {
+      "id": "f10a4c904cb74cbdbff1ce9503f18a70",
+      "number": 6,
+      "status": "answered",
+      "text": "Android SDK, NDK, and JDK 17 are not installed and no Android Rust target is present. May I install them (Android command-line tools + NDK r27 + platform 35 under %LOCALAPPDATA%\\Android\\Sdk, Temurin JDK 17 via winget, rustup target aarch64-linux-android, cargo-ndk)? And verify on a physical phone over adb, or an emulator (arm64 emulator on Windows ARM is limited)?",
+      "answer": "Do not install. android.ps1 runs a preflight that checks each prerequisite (JDK 17, ANDROID_HOME/SDK, platform 35, build-tools, NDK, rustup aarch64-linux-android target, cargo-ndk, adb/device for install) and fails with a clear message and where/how to install it. Device verification is done by the user after installing."
+    }
+  ],
+  "approvals": [
+    {
+      "gate": "intake",
+      "phase": "INTAKE",
+      "incrementId": null,
+      "note": "User: \"A. Plus update the plans, remove outdated from docs, add the android thing. Use this WF only for the proper building\" + \"add proper gitignore entries to the repo as well.\"",
+      "approvedAt": "2026-10-17T16:58:24.3428071Z"
+    },
+    {
+      "gate": "implement",
+      "phase": "SPLIT",
+      "incrementId": null,
+      "note": "User: \"y\" in reply to \"Say implement and I will build all three increments\"",
+      "approvedAt": "2026-10-17T17:02:09.8945548Z"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-10-17T16:38:15.5533283Z",
+      "action": "start",
+      "detail": "Started DetailedAuto workflow."
+    },
+    {
+      "at": "2026-10-17T16:38:16.4048381Z",
+      "action": "add-request",
+      "detail": "Recorded request 1: Android support (big new feature)"
+    },
+    {
+      "at": "2026-10-17T16:38:26.709337Z",
+      "action": "add-question",
+      "detail": "Recorded question 1: Scope of \"Android support\": engine runs WASM extensions on an Android device as an APK (shipped engine + bundled extensions), or also embedding as a library in a host Android app?"
+    },
+    {
+      "at": "2026-10-17T16:38:27.5141447Z",
+      "action": "add-question",
+      "detail": "Recorded question 2: Which native modules must work on Android in this branch: renderer+input+audio (SDL3) only, or also egui UI, wry web panels (Android WebView), game-core, persistence? Tray, self-update, single-instance, desktop registration, OS module are assumed out of scope."
+    },
+    {
+      "at": "2026-10-17T16:38:28.2900511Z",
+      "action": "add-question",
+      "detail": "Recorded question 3: How do extensions arrive on device: bundled into APK assets only, or also loaded from app storage (enabling hot reload over adb push)?"
+    },
+    {
+      "at": "2026-10-17T16:38:29.2270009Z",
+      "action": "add-question",
+      "detail": "Recorded question 4: Target ABIs and min API level (suggest arm64-v8a only, API 26+)? Is there a physical device or emulator to verify on, and is Android SDK/NDK installed here?"
+    },
+    {
+      "at": "2026-10-17T16:38:30.0426894Z",
+      "action": "add-question",
+      "detail": "Recorded question 5: Definition of done: APK builds via one pwsh script and hello-demo + one sprite example run on device — or more?"
+    },
+    {
+      "at": "2026-10-17T16:40:43.7485977Z",
+      "action": "answer-question",
+      "detail": "Answered question 1."
+    },
+    {
+      "at": "2026-10-17T16:40:44.56768Z",
+      "action": "answer-question",
+      "detail": "Answered question 2."
+    },
+    {
+      "at": "2026-10-17T16:40:45.3651215Z",
+      "action": "answer-question",
+      "detail": "Answered question 3."
+    },
+    {
+      "at": "2026-10-17T16:40:46.3119042Z",
+      "action": "answer-question",
+      "detail": "Answered question 4."
+    },
+    {
+      "at": "2026-10-17T16:40:47.1750763Z",
+      "action": "answer-question",
+      "detail": "Answered question 5."
+    },
+    {
+      "at": "2026-10-17T16:41:20.3006473Z",
+      "action": "set-requirement",
+      "detail": "Set constraints."
+    },
+    {
+      "at": "2026-10-17T16:41:21.2004692Z",
+      "action": "set-requirement",
+      "detail": "Set done."
+    },
+    {
+      "at": "2026-10-17T16:41:21.935504Z",
+      "action": "set-requirement",
+      "detail": "Set outOfScope."
+    },
+    {
+      "at": "2026-10-17T16:41:22.7742811Z",
+      "action": "approve",
+      "detail": "Approved intake during INTAKE."
+    },
+    {
+      "at": "2026-10-17T16:41:23.6356568Z",
+      "action": "advance",
+      "detail": "Advanced from INTAKE to DESIGN."
+    },
+    {
+      "at": "2026-10-17T16:41:24.3865013Z",
+      "action": "add-question",
+      "detail": "Recorded question 6: Android SDK, NDK, and JDK 17 are not installed and no Android Rust target is present. May I install them (Android command-line tools + NDK r27 + platform 35 under %LOCALAPPDATA%\\Android\\Sdk, Temurin JDK 17 via winget, rustup target aarch64-linux-android, cargo-ndk)? And verify on a physical phone over adb, or an emulator (arm64 emulator on Windows ARM is limited)?"
+    },
+    {
+      "at": "2026-10-17T16:41:25.0953418Z",
+      "action": "advance",
+      "detail": "Advanced from DESIGN to SPLIT."
+    },
+    {
+      "at": "2026-10-17T16:41:25.9615245Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 1: portability"
+    },
+    {
+      "at": "2026-10-17T16:41:26.7430665Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 2: android-app"
+    },
+    {
+      "at": "2026-10-17T16:41:27.635937Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 3: packaging"
+    },
+    {
+      "at": "2026-10-17T16:48:38.5661275Z",
+      "action": "answer-question",
+      "detail": "Answered question 6."
+    },
+    {
+      "at": "2026-10-17T16:48:46.236393Z",
+      "action": "remove-increment",
+      "detail": "Removed increment 3: packaging."
+    },
+    {
+      "at": "2026-10-17T16:48:47.0963026Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 3: packaging"
+    },
+    {
+      "at": "2026-10-17T16:53:39.5235023Z",
+      "action": "set-requirement",
+      "detail": "Set goal."
+    },
+    {
+      "at": "2026-10-17T16:53:40.2425771Z",
+      "action": "set-requirement",
+      "detail": "Set constraints."
+    },
+    {
+      "at": "2026-10-17T16:53:41.0317215Z",
+      "action": "set-requirement",
+      "detail": "Set done."
+    },
+    {
+      "at": "2026-10-17T16:53:41.7631398Z",
+      "action": "set-requirement",
+      "detail": "Set outOfScope."
+    },
+    {
+      "at": "2026-10-17T16:54:06.8977251Z",
+      "action": "set-requirement",
+      "detail": "Set goal."
+    },
+    {
+      "at": "2026-10-17T16:54:07.7862276Z",
+      "action": "set-requirement",
+      "detail": "Set constraints."
+    },
+    {
+      "at": "2026-10-17T16:54:08.6810884Z",
+      "action": "set-requirement",
+      "detail": "Set done."
+    },
+    {
+      "at": "2026-10-17T16:54:09.5764571Z",
+      "action": "set-requirement",
+      "detail": "Set outOfScope."
+    },
+    {
+      "at": "2026-10-17T16:58:14.4792408Z",
+      "action": "switch-flow",
+      "detail": "Switched from DetailedAuto/SPLIT to Detailed/INTAKE; dropped every approval and 3 planned increment(s)."
+    },
+    {
+      "at": "2026-10-17T16:58:15.433914Z",
+      "action": "switch-flow",
+      "detail": "Switched from Detailed/INTAKE to DetailedAuto/INTAKE; dropped every approval and 0 planned increment(s)."
+    },
+    {
+      "at": "2026-10-17T16:58:16.241012Z",
+      "action": "remove-request",
+      "detail": "Removed request 1: Android support (big new feature)"
+    },
+    {
+      "at": "2026-10-17T16:58:16.9765998Z",
+      "action": "add-request",
+      "detail": "Recorded request 1: Replace the PowerShell build system (test.ps1, dist.ps1, scripts/native-build-env.ps1, every examples/*/build.ps1) with a universal cargo xtask that owns dependency checks, automation logic, and every package build"
+    },
+    {
+      "at": "2026-10-17T16:58:17.8026158Z",
+      "action": "add-request",
+      "detail": "Recorded request 2: Shared prerequisite checks: each missing tool fails fast with where/how to install it; nothing is installed automatically"
+    },
+    {
+      "at": "2026-10-17T16:58:18.6220645Z",
+      "action": "add-request",
+      "detail": "Recorded request 3: Update the plans (docs/roadmap.md): remove outdated items and add Android support as planned future work using the design from this session"
+    },
+    {
+      "at": "2026-10-17T16:58:19.4279117Z",
+      "action": "add-request",
+      "detail": "Recorded request 4: Remove outdated content from the docs, including every reference to the replaced ps1 scripts"
+    },
+    {
+      "at": "2026-10-17T16:58:20.2136445Z",
+      "action": "add-request",
+      "detail": "Recorded request 5: Proper .gitignore entries: add .artifacts/, fix stale comments, drop dead entries"
+    },
+    {
+      "at": "2026-10-17T16:58:21.0751327Z",
+      "action": "set-requirement",
+      "detail": "Set goal."
+    },
+    {
+      "at": "2026-10-17T16:58:21.9800044Z",
+      "action": "set-requirement",
+      "detail": "Set constraints."
+    },
+    {
+      "at": "2026-10-17T16:58:22.7383877Z",
+      "action": "set-requirement",
+      "detail": "Set done."
+    },
+    {
+      "at": "2026-10-17T16:58:23.5595589Z",
+      "action": "set-requirement",
+      "detail": "Set outOfScope."
+    },
+    {
+      "at": "2026-10-17T16:58:24.3461702Z",
+      "action": "approve",
+      "detail": "Approved intake during INTAKE."
+    },
+    {
+      "at": "2026-10-17T16:58:25.0588151Z",
+      "action": "advance",
+      "detail": "Advanced from INTAKE to DESIGN."
+    },
+    {
+      "at": "2026-10-17T16:58:25.9033851Z",
+      "action": "advance",
+      "detail": "Advanced from DESIGN to SPLIT."
+    },
+    {
+      "at": "2026-10-17T16:58:26.6939344Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 1: xtask-core"
+    },
+    {
+      "at": "2026-10-17T16:58:27.5109061Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 2: xtask-dist-examples"
+    },
+    {
+      "at": "2026-10-17T16:58:28.5175788Z",
+      "action": "add-increment",
+      "detail": "Inserted increment 3: docs"
+    },
+    {
+      "at": "2026-10-17T17:02:09.8980397Z",
+      "action": "approve",
+      "detail": "Approved implement during SPLIT."
+    },
+    {
+      "at": "2026-10-17T17:02:10.6690404Z",
+      "action": "advance",
+      "detail": "Advanced from SPLIT to BRANCH."
+    },
+    {
+      "at": "2026-10-17T17:02:18.4544596Z",
+      "action": "advance",
+      "detail": "Advanced from BRANCH to DOCS."
+    },
+    {
+      "at": "2026-10-17T17:04:12.52958Z",
+      "action": "advance",
+      "detail": "Advanced from DOCS to BUILD."
+    },
+    {
+      "at": "2026-10-17T17:06:39.6699307Z",
+      "action": "advance",
+      "detail": "Advanced from BUILD to VERIFY."
+    },
+    {
+      "at": "2026-10-17T17:19:30.3939576Z",
+      "action": "advance",
+      "detail": "Advanced from VERIFY to COMMIT."
+    }
+  ],
+  "createdAt": "2026-10-17T16:38:15.4542275Z",
+  "updatedAt": "2026-10-17T17:19:30.4053898Z"
+}

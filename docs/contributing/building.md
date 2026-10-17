@@ -3,22 +3,29 @@
 ## What you need
 
 - A **Rust toolchain**, plus the `wasm32-wasip2` target for extensions: `rustup target add wasm32-wasip2`.
-- **PowerShell 7+** (`pwsh`) — cross-platform, and the only script runtime this repository uses.
-- **A C compiler and CMake.** `crates/bones-kernel/bones-kernel-infra` builds SDL3 from source. Any compiler works — MSVC, clang, clang-cl, gcc; nothing here is MSVC-specific.
+- **A C compiler and CMake.** `crates/bones-kernel/bones-kernel-infra` builds SDL3 from source. Any compiler works — MSVC, clang, clang-cl, gcc; nothing here is MSVC-specific. Ninja is used when present.
 
 Clone with `--recurse-submodules`: `vendor/pubsub-bus` is one.
 
-## The two scripts
+Nothing else. The automation is a Rust program in [xtask/](../../xtask/), run through a cargo alias, so the toolchain that builds the engine also runs its build scripts.
+
+## The commands
 
 ```sh
-pwsh dist.ps1     # engine and ABI into dist/, plus a release archive
-pwsh test.ps1     # fixtures, gates, and every test
+cargo xtask doctor          # check every prerequisite and say how to install what is missing
+cargo xtask dist            # engine and ABI into dist/, plus a release archive
+cargo xtask test            # fixtures, gates, and every test
+cargo xtask example <name>  # build one example into its own dist/ and say how to run it
 ```
 
-`pwsh dist.ps1 -NoArchive` stops after `dist/`, which is the inner loop for running the engine you just built.
+`cargo xtask dist --no-archive` stops after `dist/`, which is the inner loop for running the engine you just built. `cargo xtask example` with no name lists the examples.
 
-## Prefer the scripts over bare cargo
+## Checking prerequisites
 
-For anything touching `crates/bones-kernel/bones-kernel-infra`, use the scripts. They configure the compiler and the cmake generator through [scripts/native-build-env.ps1](../../scripts/native-build-env.ps1). A bare `cargo build` on a machine with no generator configured fails deep inside SDL's cmake with an error that does not point at the cause.
+Every command checks what it needs before it starts and stops at the first missing tool with what is missing, why it is needed, and where to get it. It never installs anything: a toolchain is the developer's choice, and a build script that silently provisions one hides what the build depends on. `cargo xtask doctor` runs every check at once and reports all of them.
+
+## Prefer xtask over bare cargo
+
+For anything touching `crates/bones-kernel/bones-kernel-infra`, use xtask. It configures the compiler and the cmake generator for the cargo it runs — preferring a compiler already on `PATH`, and on Windows falling back to loading MSVC through `vcvarsall.bat`. A bare `cargo build` on a machine with no generator configured fails deep inside SDL's cmake with an error that does not point at the cause.
 
 Testing, and the traps specific to it, are in [testing.md](testing.md).
