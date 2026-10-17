@@ -25,7 +25,7 @@ An extension outlives the engine build that loaded it, and may not be written in
 **As a binary.** Download the release archive for your platform, or build one:
 
 ```sh
-pwsh dist.ps1
+cargo xtask dist
 ```
 
 That produces `dist/` plus a versioned, checksummed `bones-<version>-<os>-<arch>.zip` containing the engine, an empty `extensions/` folder, the ABI, a sample `bones.toml`, the licence, and third-party notices. Run `dist/bones(.exe)` directly, or without the bundling step:
@@ -53,10 +53,10 @@ Clone with `--recurse-submodules`; `vendor/pubsub-bus` is one.
 ## Building and testing
 
 ```sh
-pwsh test.ps1
+cargo xtask test
 ```
 
-One command from a clean clone to a release-green tree. It needs a Rust toolchain, PowerShell 7+, and a C compiler with CMake, since the kernel infrastructure builds SDL3 from source — [docs/contributing/building.md](docs/contributing/building.md) has the prerequisites and [docs/contributing/testing.md](docs/contributing/testing.md) what the script gates.
+One command from a clean clone to a release-green tree. It needs a Rust toolchain and a C compiler with CMake, since the kernel infrastructure builds SDL3 from source; `cargo xtask doctor` checks all of them and says how to install what is missing. [docs/contributing/building.md](docs/contributing/building.md) has the prerequisites and [docs/contributing/testing.md](docs/contributing/testing.md) what the command gates.
 
 ## Platform support
 
@@ -64,6 +64,7 @@ One command from a clean clone to a release-green tree. It needs a Rust toolchai
 | --- | --- |
 | Windows on ARM64 | **Supported.** Every release is built and tested here, web panels included |
 | Windows on x64 | Expected to work; not routinely built |
+| Android | Planned — see [docs/roadmap.md](docs/roadmap.md) |
 | Linux, macOS | Best effort. The engine is written to be portable and the SDL and wry backends are cross-platform, but no release has been produced or tested on either. The wry web-panel integration tests are gated to Windows |
 
 There is no CI ([docs/roadmap.md](docs/roadmap.md) tracks adding it), so "supported" means one maintainer's machine. Treat anything outside the first row as a report worth filing rather than a promise.
@@ -74,7 +75,7 @@ Start at [examples/extensions/hello-demo](examples/extensions/hello-demo/README.
 
 Drop any built `.wasm` into `extensions/` next to wherever you run the engine and it loads on start.
 
-For something richer, [examples/extensions/](examples/README.md) has ten runnable extensions — sprites, egui widgets, web panels, gamepad input, tilemaps, hot reload, persistence, and the watchdog — each proving one capability end to end, each with its own `build.ps1`. [examples/embedding/](examples/embedding/custom-engine/README.md) covers the other way in.
+For something richer, [examples/extensions/](examples/README.md) has twelve runnable extensions — sprites, egui widgets, web panels, gamepad input, tilemaps, hot reload, persistence, and the watchdog — each proving one capability end to end, each built and packaged by `cargo xtask example <name>`. [examples/embedding/](examples/embedding/custom-engine/README.md) covers the other way in.
 
 ## Projects using bones
 

@@ -5,9 +5,9 @@ Loads its own counter from `persistence` at `init` (a direct `send` — 0 if not
 ## Build
 
 ```sh
-pwsh build.ps1
+cargo xtask example persistence-demo
 ```
 
-Requires PowerShell 7+ (`pwsh`). Output: `target/wasm32-wasip2/release/persistence_demo.wasm`.
+Run it from the repository root. The component alone builds in this directory with `cargo build --target wasm32-wasip2 --release`; output: `target/wasm32-wasip2/release/persistence_demo.wasm`.
 
-The same script also builds the `bones` engine and assembles a runnable `dist/` next to this README — `dist/bones(.exe)`, `dist/bones.toml`, and `dist/extensions/persistence_demo.wasm`, ready to run directly.
+The command also builds the `bones` engine and assembles a runnable `dist/` next to this README — `dist/bones(.exe)`, `dist/bones.toml`, and `dist/extensions/persistence_demo.wasm`, ready to run directly.

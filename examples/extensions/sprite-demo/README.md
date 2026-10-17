@@ -5,9 +5,9 @@ Loads `robot_william.png` (a 256x64 strip of four 64x64 frames — only the firs
 ## Build
 
 ```sh
-pwsh build.ps1
+cargo xtask example sprite-demo
 ```
 
-Requires PowerShell 7+ (`pwsh`). Output: `target/wasm32-wasip2/release/sprite_demo.wasm`.
+Run it from the repository root. The component alone builds in this directory with `cargo build --target wasm32-wasip2 --release`; output: `target/wasm32-wasip2/release/sprite_demo.wasm`.
 
-The same script also builds the `bones` engine and assembles a runnable `dist/` next to this README — `dist/bones(.exe)`, `dist/bones.toml`, and `dist/extensions/sprite_demo.wasm`, ready to run directly.
+The command also builds the `bones` engine and assembles a runnable `dist/` next to this README — `dist/bones(.exe)`, `dist/bones.toml`, and `dist/extensions/sprite_demo.wasm`, ready to run directly.

@@ -5,9 +5,9 @@ Subscribes to `input/key-down`, `input/mouse-down`, `input/mouse-up`, `input/mou
 ## Build
 
 ```sh
-pwsh build.ps1
+cargo xtask example keyecho-demo
 ```
 
-Requires PowerShell 7+ (`pwsh`). Output: `target/wasm32-wasip2/release/keyecho_demo.wasm`.
+Run it from the repository root. The component alone builds in this directory with `cargo build --target wasm32-wasip2 --release`; output: `target/wasm32-wasip2/release/keyecho_demo.wasm`.
 
-The same script also builds the `bones` engine and assembles a runnable `dist/` next to this README — `dist/bones(.exe)`, `dist/bones.toml`, and `dist/extensions/keyecho_demo.wasm`, ready to run directly.
+The command also builds the `bones` engine and assembles a runnable `dist/` next to this README — `dist/bones(.exe)`, `dist/bones.toml`, and `dist/extensions/keyecho_demo.wasm`, ready to run directly.

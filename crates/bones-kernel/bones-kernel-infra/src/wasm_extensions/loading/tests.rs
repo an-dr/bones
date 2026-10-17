@@ -1,6 +1,6 @@
 use super::*;
 
-// Built by examples/extensions/hello-demo/build.ps1 (see its README).
+// Built by `cargo xtask test`, or alone by `cargo xtask example hello-demo`.
 const HELLO_DIR: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../../examples/extensions/hello-demo/target/wasm32-wasip2/release"
@@ -15,7 +15,7 @@ fn find_wasm_files_finds_only_wasm_extensions_sorted() {
     );
     assert!(
         files.iter().any(|f| f.file_stem().unwrap() == "hello_demo"),
-        "expected hello_demo.wasm in {files:?} — run examples/extensions/hello-demo/build.ps1 first"
+        "expected hello_demo.wasm in {files:?} — run cargo xtask example hello-demo first"
     );
     let mut sorted = files.clone();
     sorted.sort();

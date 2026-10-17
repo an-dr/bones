@@ -39,7 +39,7 @@ The only module touching the OS (design/platform.md), behind the `platform` feat
 - `display_modes()` / `native_display_mode()` — resolutions, queried once at startup. Empty or `None` means the query failed, not an error.
 - `take_window()` / `provide_window(services)` / `reclaim_window(services)` — hand the window to a renderer or web panel through the service registry, and take it back (ADR-028).
 
-Builds SDL3 from source (`build-from-source-static`), so no system SDL install is needed — but a C compiler and CMake are. If cmake fails with a "could not create named generator" error, use [`scripts/native-build-env.ps1`](../../../scripts/native-build-env.ps1) (what `dist.ps1` and `test.ps1` both use) instead of bare `cargo`.
+Builds SDL3 from source (`build-from-source-static`), so no system SDL install is needed — but a C compiler and CMake are. If cmake fails with a "could not create named generator" error, build through `cargo xtask`, which configures the compiler and generator, instead of bare `cargo`.
 
 ## wasm_extensions
 

@@ -5,7 +5,7 @@ A status dashboard rendered as a web page: an HTML/JS frontend in a wry panel, f
 ## Run it
 
 ```sh
-pwsh examples/extensions/dashboard-demo/build.ps1
+cargo xtask example dashboard-demo
 ```
 
 Launch `examples/extensions/dashboard-demo/dist/bones(.exe)`. The package contains the app built with its `web` feature, `web = true` configuration, and both components.

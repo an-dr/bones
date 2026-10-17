@@ -36,7 +36,7 @@ pub(crate) fn is_installed_version_dir(identity: &AppIdentity, dir: &std::path::
 /// as a version, and its parent has a launcher executable in it --
 /// regardless of whether that parent happens to be the canonical
 /// `default_install_dir()`. Structural rather than location-based on
-/// purpose: `dist.ps1` assembles a plain build directory in exactly this
+/// purpose: `cargo xtask dist` assembles a plain build directory in exactly this
 /// shape of an installed tree, so a dev
 /// build run straight out of it needs to find its shared data one level up
 /// the same way a real install does, without `COMMITS_INSTALL_DIR` having

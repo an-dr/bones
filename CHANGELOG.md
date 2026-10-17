@@ -7,6 +7,14 @@ Two independent version lines (ADR-029), so each entry says which one it belongs
 
 An ABI entry concerns every extension in existence, in any language. An engine entry concerns only projects that link the library.
 
+## Unreleased
+
+Repository tooling only; neither version line moves.
+
+- **The build is `cargo xtask`.** `test.ps1`, `dist.ps1`, `scripts/native-build-env.ps1`, and every example's `build.ps1` are replaced by `cargo xtask test`, `cargo xtask dist`, and `cargo xtask example <name>`. PowerShell is no longer a prerequisite; the Rust toolchain that builds the engine runs its automation.
+- **Prerequisites are checked, never installed.** Every command stops at the first missing tool with where to get it, and `cargo xtask doctor` reports them all at once.
+- **`dashboard-demo` packages `metrics_demo.wasm`.** Its old script still built a `metrics` crate that no longer existed.
+
 ## engine 2.0.0 / ABI 1.2.0
 
 What a desktop application built on bones needs around the engine, and should not write again: one window per user, a place in the application list, self-update on a page's request, starting programs and terminals, watching folders, and a channel a test can drive the real application through. Each is a leaf library an application's own code calls, plus a bus module only where a page or guest needs one.

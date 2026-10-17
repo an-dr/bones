@@ -21,7 +21,7 @@ mod app_identity;
 use app_identity::app_identity;
 
 /// This build's version. A real app uses `env!("CARGO_PKG_VERSION")`; the
-/// example hardcodes it so `build.ps1` can produce two versions from one
+/// example hardcodes it so `cargo xtask example self-updating-app` can produce two versions from one
 /// source tree and show an update actually happening.
 const VERSION: &str = match option_env!("DEMO_APP_VERSION") {
     Some(version) => version,

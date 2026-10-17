@@ -41,23 +41,23 @@ An extension's bus endpoint name is the stem of its built `.wasm` file, and that
 
 ## Building one
 
-Every example carries its own `build.ps1`, which builds the extension for `wasm32-wasip2`, builds the engine, and assembles a self-contained `dist/` beside it:
+Each example builds from the repository root with one command, which builds the extension for `wasm32-wasip2`, builds the engine, and assembles a self-contained `dist/` beside the example. `cargo xtask example` with no name lists them all:
 
 ```sh
-pwsh examples/extensions/sprite-demo/build.ps1
+cargo xtask example sprite-demo
 ```
 
-Run the `dist/bones(.exe)` it produces. Requires PowerShell 7+ (`pwsh`), which is cross-platform, so this is the only build script needed on any OS.
+Run the `dist/bones(.exe)` it produces. To build only an extension's `.wasm`, run `cargo build --target wasm32-wasip2 --release` in its directory.
 
 Two things to know before you copy this pattern:
 
-- **`dashboard-demo` and `metrics-demo` are a bound pair.** `dashboard-demo`'s build script reaches sideways for `metrics-demo` and packages both; building `metrics-demo` alone produces an extension with nothing to talk to.
-- **Examples are not in the distribution.** [dist.ps1](../dist.ps1) ships the engine, the ABI, and an empty `extensions/` folder; use an example's own `build.ps1` to run it.
+- **`dashboard-demo` and `metrics-demo` are a bound pair.** Building `dashboard-demo` reaches sideways for `metrics-demo` and packages both; building `metrics-demo` alone produces an extension with nothing to talk to.
+- **Examples are not in the distribution.** `cargo xtask dist` ships the engine, the ABI, and an empty `extensions/` folder; use `cargo xtask example <name>` to run one.
 
 ## Running the whole test suite
 
-Several of these double as fixtures for the integration tests, which load their built `.wasm` by path. [test.ps1](../test.ps1) builds every fixture it needs and then runs everything:
+Several of these double as fixtures for the integration tests, which load their built `.wasm` by path. `cargo xtask test` builds every fixture it needs and then runs everything:
 
 ```sh
-pwsh test.ps1
+cargo xtask test
 ```

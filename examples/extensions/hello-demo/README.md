@@ -7,14 +7,14 @@ This page doubles as the write-your-first-extension tutorial.
 ## Build and run
 
 ```sh
-pwsh build.ps1
+cargo xtask example hello-demo
 ```
 
-Requires PowerShell 7+ (`pwsh`) — cross-platform, so this is the only build script needed on any OS. It runs `rustup target add wasm32-wasip2` (safe to repeat), builds the component, then builds the engine and assembles a runnable `dist/` beside this README: `dist/bones(.exe)`, `dist/bones.toml`, and `dist/examples/extensions/hello-demo.wasm`.
+Run it from the repository root. It checks that the `wasm32-wasip2` target is installed (and says how to add it if not), builds the component, then builds the engine and assembles a runnable `dist/` beside this README: `dist/bones(.exe)`, `dist/bones.toml`, and `dist/extensions/hello_demo.wasm`.
 
 Run `dist/bones(.exe)` and watch the log: `init`, then a `tick dt=...` line every frame.
 
-**Always go through the script.** Plain `cargo build` does not error — it silently compiles a native `hello.dll`/`.so` instead, because nothing in the crate says which platform you meant. The output you want is `target/wasm32-wasip2/release/hello.wasm`, a WASM component loaded directly by `bones-kernel-infra`'s wasm_extensions module with no separate componentization step.
+**Always pass the target.** To build only the component, run `cargo build --target wasm32-wasip2 --release` in this directory. Plain `cargo build` does not error — it silently compiles a native `hello_demo.dll`/`.so` instead, because nothing in the crate says which platform you meant. The output you want is `target/wasm32-wasip2/release/hello_demo.wasm`, a WASM component loaded directly by `bones-kernel-infra`'s wasm_extensions module with no separate componentization step.
 
 ## The four exports
 
@@ -76,7 +76,7 @@ For a reply-shaped exchange rather than a broadcast, use `send` to a named endpo
 1. Copy this directory. In `Cargo.toml` keep `crate-type = ["cdylib"]` and the `[workspace]` line — an extension builds standalone, outside the root workspace.
 2. Point `wit_bindgen::generate!` at the `wit/` directory and the `extension` world.
 3. Subscribe to what you need in `init`, and implement the callbacks you care about — unused ones can stay empty.
-4. Build with `build.ps1`, then drop the resulting `.wasm` into the `extensions/` directory beside the engine binary. It loads on start.
+4. Build with `cargo build --target wasm32-wasip2 --release`, then drop the resulting `.wasm` into the `extensions/` directory beside the engine binary. It loads on start.
 
 Any language with WASM Component Model support works the same way (ADR-001); Rust is only what these examples happen to use.
 

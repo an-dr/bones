@@ -27,4 +27,4 @@ Web panels require both the cargo feature and configuration switch: `cargo run -
 
 The two extension limits are per frame and apply independently to every WASM component. Exceeding either allowance drops and counts the excess work, then quarantines only that component.
 
-For a self-contained build (binary + every extension in one directory), run `pwsh dist.ps1` from the repo root — assembles `dist/bones(.exe)` and `dist/extensions/`, copyable anywhere and run as-is.
+For a self-contained build (binary, ABI, and an empty extensions folder), run `cargo xtask dist` from the repo root — assembles `dist/bones(.exe)` and `dist/extensions/`, copyable anywhere and run as-is.

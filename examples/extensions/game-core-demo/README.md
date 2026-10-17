@@ -7,12 +7,12 @@ Movement itself is this extension's own logic: it tracks held WASD keys and the 
 ## Build
 
 ```sh
-pwsh build.ps1
+cargo xtask example game-core-demo
 ```
 
-Requires PowerShell 7+ (`pwsh`). Output: `target/wasm32-wasip2/release/game_core_demo.wasm`.
+Run it from the repository root. The component alone builds in this directory with `cargo build --target wasm32-wasip2 --release`; output: `target/wasm32-wasip2/release/game_core_demo.wasm`.
 
-The same script also builds the `bones` engine and assembles a runnable `dist/` next to this README — `dist/bones(.exe)`, `dist/extensions/ game_core_demo.wasm`, and a `dist/bones.toml` with `game_core = true` and `audio = true` already set (both default off — see `crates/bones`'s config), ready to run directly.
+The command also builds the `bones` engine and assembles a runnable `dist/` next to this README — `dist/bones(.exe)`, `dist/extensions/ game_core_demo.wasm`, and a `dist/bones.toml` with `game_core = true` and `audio = true` already set (both default off — see `crates/bones`'s config), ready to run directly.
 
 ## Run
 

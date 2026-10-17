@@ -24,7 +24,7 @@ The Rust *implementation* of the wire format does not belong here either — it 
 Extension authors outside this repository need `extension.wit` to build against, whatever language they write in.
 
 - **Rust** — do not fetch it at all. Depend on `bones-wasm-sdk`, which carries this package and generates the bindings.
-- **Any other language** — take this whole directory from a distribution built by [`dist.ps1`](../dist.ps1), which copies it next to the engine binary it belongs to, or from the repository at the revision you are targeting. You need `extension.wit` to generate bindings, `wire-format.md` to build payloads, and `vectors/` to check that you built them correctly.
+- **Any other language** — take this whole directory from a distribution built by `cargo xtask dist`, which copies it next to the engine binary it belongs to, or from the repository at the revision you are targeting. You need `extension.wit` to generate bindings, `wire-format.md` to build payloads, and `vectors/` to check that you built them correctly.
 
 Pin what you took. Record the `bones:extension@<version>` line from `extension.wit`'s first line alongside your own sources, and re-check it when you update the engine.
 

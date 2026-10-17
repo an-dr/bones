@@ -251,7 +251,7 @@ fn shared_or_exe_relative_from_stays_beside_the_exe_without_a_launcher_sibling()
 
 #[test]
 fn shared_or_exe_relative_from_steps_up_when_running_from_a_version_folder() {
-    // Purely structural: this is exactly the shape dist.ps1 assembles for a
+    // Purely structural: this is exactly the shape cargo xtask dist assembles for a
     // plain build directory too, not only a real ~/.myapp/app install.
     let dir = tempfile::tempdir().unwrap();
     let install_dir = dir.path().join("app");

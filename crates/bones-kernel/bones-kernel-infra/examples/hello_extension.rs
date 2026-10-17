@@ -1,7 +1,7 @@
 //! Loads the `hello` WASM extension and drives it through a few ticks over
 //! a real bus, proving the log line flows through the engine end to end.
 //!
-//! Build the extension first: pwsh examples/extensions/hello-demo/build.ps1
+//! Build the extension first: cargo xtask example hello-demo
 //! Then: cargo run -p bones-kernel-infra --example hello_extension
 
 use std::sync::atomic::AtomicBool;

@@ -4,11 +4,11 @@ Thanks for looking. Open an issue before starting anything large — [docs/roadm
 
 ## Getting set up
 
-- [docs/contributing/building.md](docs/contributing/building.md) — toolchain, prerequisites, and the two scripts.
-- [docs/contributing/testing.md](docs/contributing/testing.md) — what `test.ps1` gates, and the SDL main-thread trap that will bite you if you skip it.
+- [docs/contributing/building.md](docs/contributing/building.md) — toolchain, prerequisites, and the `cargo xtask` commands.
+- [docs/contributing/testing.md](docs/contributing/testing.md) — what `cargo xtask test` gates, and the SDL main-thread trap that will bite you if you skip it.
 - [docs/contributing/releasing.md](docs/contributing/releasing.md) — cutting a release on either version line.
 
-`pwsh test.ps1` must be green before you open a pull request. There is no CI, so it is the only thing that checks.
+`cargo xtask test` must be green before you open a pull request. There is no CI, so it is the only thing that checks.
 
 ## Understanding the project
 

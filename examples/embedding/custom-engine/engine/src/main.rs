@@ -11,7 +11,7 @@
 //! embedding covers the case where the capability itself does not exist yet,
 //! because it needs native access the sandbox refuses to grant.
 //!
-//! Run it with `pwsh build.ps1`, which packages this binary together with both
+//! Run it with `cargo xtask example custom-engine`, which packages this binary together with both
 //! the custom extension and `hello`, so a native module and two WASM guests are
 //! visibly running in one process.
 

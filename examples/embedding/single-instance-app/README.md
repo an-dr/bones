@@ -3,10 +3,10 @@
 An application that keeps one window per user. Starting it a second time does not open a second window: the new process hands its arguments and working directory to the one already running and exits, and the running one receives them as `instance/launched` and comes to the front ([ADR-035](../../../docs/adr/ADR-035-single-instance-is-a-per-user-local-socket-claimed-before-the-engine.md)).
 
 ```sh
-pwsh examples/embedding/single-instance-app/build.ps1
+cargo xtask example single-instance-app
 ```
 
-Then start the binary the script names, and start it again from another shell:
+Then start the binary the command names, and start it again from another shell:
 
 ```text
 $ single-instance-app

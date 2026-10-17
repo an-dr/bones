@@ -3,12 +3,12 @@ use crate::logging::RecordingSink;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
-// Built by examples/extensions/hello-demo/build.ps1 (see its README).
+// Built by `cargo xtask test`, or alone by `cargo xtask example hello-demo`.
 const HELLO_WASM: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../../examples/extensions/hello-demo/target/wasm32-wasip2/release/hello_demo.wasm"
 );
-// Built by examples/extensions/runaway-demo/build.ps1 (see its README).
+// Built by `cargo xtask test`, or alone by `cargo xtask example runaway-demo`.
 const RUNAWAY_WASM: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../../examples/extensions/runaway-demo/target/wasm32-wasip2/release/runaway_demo.wasm"
@@ -28,9 +28,7 @@ fn load_hello(bus: Bus, logger: Logger) -> Host {
         EndpointBudget::new(crate::bus::BudgetLimits::default()),
         ExtensionTimeouts::default(),
     )
-    .expect(
-        "build examples/extensions/hello-demo first: pwsh examples/extensions/hello-demo/build.ps1",
-    )
+    .expect("build examples/extensions/hello-demo first: cargo xtask example hello-demo")
 }
 
 fn test_state(name: &str, registry: Registry) -> State {
@@ -260,7 +258,7 @@ fn a_call_that_never_returns_traps_and_faults_instead_of_hanging_forever() {
         EndpointBudget::new(crate::bus::BudgetLimits::default()),
         ExtensionTimeouts::default(),
     )
-    .expect("build examples/extensions/runaway-demo first: pwsh examples/extensions/runaway-demo/build.ps1");
+    .expect("build examples/extensions/runaway-demo first: cargo xtask example runaway-demo");
     assert!(!host.is_faulted(), "must not start out faulted");
 
     host.handle(&tick_envelope()); // blocks for ~the time budget, then traps
@@ -293,7 +291,7 @@ fn a_faulted_host_ignores_further_deliveries_instead_of_hanging_again() {
         EndpointBudget::new(crate::bus::BudgetLimits::default()),
         ExtensionTimeouts::default(),
     )
-    .expect("build examples/extensions/runaway-demo first: pwsh examples/extensions/runaway-demo/build.ps1");
+    .expect("build examples/extensions/runaway-demo first: cargo xtask example runaway-demo");
     host.handle(&tick_envelope());
     assert!(host.is_faulted());
 

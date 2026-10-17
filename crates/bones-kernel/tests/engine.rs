@@ -81,37 +81,37 @@ macro_rules! sdl_test {
     };
 }
 
-// Built by examples/extensions/hello-demo/build.ps1 (see its README).
+// Built by `cargo xtask test`, or alone by `cargo xtask example hello-demo`.
 const HELLO_DIR: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../examples/extensions/hello-demo/target/wasm32-wasip2/release"
 );
-// Built by examples/extensions/keyecho-demo/build.ps1 (see its README).
+// Built by `cargo xtask test`, or alone by `cargo xtask example keyecho-demo`.
 const KEYECHO_DEMO_DIR: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../examples/extensions/keyecho-demo/target/wasm32-wasip2/release"
 );
-// Built by examples/extensions/sprite-demo/build.ps1 (see its README).
+// Built by `cargo xtask test`, or alone by `cargo xtask example sprite-demo`.
 const SPRITE_DEMO_DIR: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../examples/extensions/sprite-demo/target/wasm32-wasip2/release"
 );
-// Built by examples/extensions/runaway-demo/build.ps1 (see its README).
+// Built by `cargo xtask test`, or alone by `cargo xtask example runaway-demo`.
 const RUNAWAY_DEMO_DIR: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../examples/extensions/runaway-demo/target/wasm32-wasip2/release"
 );
-// Built by examples/extensions/flood-demo/build.ps1 (see its README).
+// Built by `cargo xtask test`, or alone by `cargo xtask example flood-demo`.
 const FLOOD_DEMO_DIR: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../examples/extensions/flood-demo/target/wasm32-wasip2/release"
 );
-// Built by examples/extensions/audio-demo/build.ps1 (see its README).
+// Built by `cargo xtask test`, or alone by `cargo xtask example audio-demo`.
 const AUDIO_DEMO_DIR: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../examples/extensions/audio-demo/target/wasm32-wasip2/release"
 );
-// Built by examples/extensions/persistence-demo/build.ps1 (see its README).
+// Built by `cargo xtask test`, or alone by `cargo xtask example persistence-demo`.
 const PERSISTENCE_DEMO_DIR: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../examples/extensions/persistence-demo/target/wasm32-wasip2/release"
@@ -141,9 +141,7 @@ fn build_discovers_loads_and_registers_a_real_extension() {
         .extensions_dir(HELLO_DIR)
         .logger(logger)
         .build()
-        .expect(
-            "build examples/extensions/hello-demo first: pwsh examples/extensions/hello-demo/build.ps1",
-        );
+        .expect("build examples/extensions/hello-demo first: cargo xtask example hello-demo");
     assert!(platform.is_none(), "no .window() was set");
     let names: Vec<String> = modules
         .iter()
@@ -180,9 +178,7 @@ fn shutdown_all_calls_cleanup_unregisters_and_publishes_stopped() {
         .extensions_dir(HELLO_DIR)
         .logger(Logger::new(Arc::new(sink.clone())))
         .build()
-        .expect(
-            "build examples/extensions/hello-demo first: pwsh examples/extensions/hello-demo/build.ps1",
-        );
+        .expect("build examples/extensions/hello-demo first: cargo xtask example hello-demo");
     let events = Arc::new(Mutex::new(Vec::new()));
     let captured = events.clone();
     let endpoint = runner
@@ -224,9 +220,7 @@ fn orderly_shutdown_dispatches_close_cleanup_and_stopped_in_order() {
         .extensions_dir(HELLO_DIR)
         .module(module.clone())
         .build()
-        .expect(
-            "build examples/extensions/hello-demo first: pwsh examples/extensions/hello-demo/build.ps1",
-        );
+        .expect("build examples/extensions/hello-demo first: cargo xtask example hello-demo");
     let observed = Arc::new(Mutex::new(Vec::new()));
     let captured = observed.clone();
     let endpoint = engine
@@ -433,7 +427,7 @@ sdl_test! { fn a_key_down_envelope_reaches_an_extension_through_a_real_window() 
         .logger(logger)
         .window("test", 64, 64)
         .build()
-        .expect("build examples/extensions/keyecho-demo first: pwsh examples/extensions/keyecho-demo/build.ps1");
+        .expect("build examples/extensions/keyecho-demo first: cargo xtask example keyecho-demo");
     assert!(platform.is_some(), ".window() was set");
 
     runner.bus().publish(Envelope {
@@ -467,7 +461,7 @@ sdl_test! { fn a_mouse_down_envelope_reaches_an_extension_through_a_real_window(
         .logger(logger)
         .window("test", 64, 64)
         .build()
-        .expect("build examples/extensions/keyecho-demo first: pwsh examples/extensions/keyecho-demo/build.ps1");
+        .expect("build examples/extensions/keyecho-demo first: cargo xtask example keyecho-demo");
     assert!(platform.is_some(), ".window() was set");
 
     runner.bus().publish(Envelope {
@@ -503,7 +497,7 @@ fn audio_demo_loads_plays_music_and_reacts_to_a_key_press_through_a_real_audio_m
         .logger(logger)
         .module(bones_module_audio::Audio::new())
         .build()
-        .expect("build examples/extensions/audio-demo first: pwsh examples/extensions/audio-demo/build.ps1");
+        .expect("build examples/extensions/audio-demo first: cargo xtask example audio-demo");
 
     runner.step(1.0 / 60.0);
 
@@ -550,7 +544,7 @@ fn persistence_demo_state_survives_a_full_engine_rebuild() {
         .logger(Logger::new(Arc::new(sink_a.clone())))
         .saves_dir(&dir)
         .build()
-        .expect("build examples/extensions/persistence-demo first: pwsh examples/extensions/persistence-demo/build.ps1");
+        .expect("build examples/extensions/persistence-demo first: cargo xtask example persistence-demo");
 
     // dt=1.5 clears the demo's 1-second save throttle in a single tick;
     // the `persistence/save` it reactively publishes from inside that
@@ -668,7 +662,7 @@ sdl_test! { fn a_real_extension_draws_a_sprite_through_a_real_renderer() {
         .window("test", 400, 300)
         .renderer()
         .build()
-        .expect("build examples/extensions/sprite-demo first: pwsh examples/extensions/sprite-demo/build.ps1");
+        .expect("build examples/extensions/sprite-demo first: cargo xtask example sprite-demo");
     assert!(
         engine
             .modules
@@ -708,14 +702,12 @@ fn a_runaway_extension_is_quarantined_while_the_engine_keeps_running() {
         format!("{HELLO_DIR}/hello_demo.wasm"),
         dir.join("hello.wasm"),
     )
-    .expect(
-        "build examples/extensions/hello-demo first: pwsh examples/extensions/hello-demo/build.ps1",
-    );
+    .expect("build examples/extensions/hello-demo first: cargo xtask example hello-demo");
     std::fs::copy(
         format!("{RUNAWAY_DEMO_DIR}/runaway_demo.wasm"),
         dir.join("runaway_demo.wasm"),
     )
-    .expect("build examples/extensions/runaway-demo first: pwsh examples/extensions/runaway-demo/build.ps1");
+    .expect("build examples/extensions/runaway-demo first: cargo xtask example runaway-demo");
 
     let sink = RecordingSink::new();
     let logger = Logger::new(Arc::new(sink.clone()));
@@ -962,16 +954,12 @@ fn a_flooding_extension_is_faulted_without_starving_its_peer() {
         format!("{HELLO_DIR}/hello_demo.wasm"),
         dir.join("hello.wasm"),
     )
-    .expect(
-        "build examples/extensions/hello-demo first: pwsh examples/extensions/hello-demo/build.ps1",
-    );
+    .expect("build examples/extensions/hello-demo first: cargo xtask example hello-demo");
     std::fs::copy(
         format!("{FLOOD_DEMO_DIR}/flood_demo.wasm"),
         dir.join("flood_demo.wasm"),
     )
-    .expect(
-        "build examples/extensions/flood-demo first: pwsh examples/extensions/flood-demo/build.ps1",
-    );
+    .expect("build examples/extensions/flood-demo first: cargo xtask example flood-demo");
 
     let sink = RecordingSink::new();
     let BuiltKernel {
@@ -1328,9 +1316,8 @@ fn a_changed_wasm_file_is_hot_reloaded_in_place() {
     let dir = std::env::temp_dir().join("bones-kernel-test-hot-reload");
     std::fs::create_dir_all(&dir).unwrap();
     let wasm_path = dir.join("level.wasm");
-    std::fs::copy(format!("{HELLO_DIR}/hello_demo.wasm"), &wasm_path).expect(
-        "build examples/extensions/hello-demo first: pwsh examples/extensions/hello-demo/build.ps1",
-    );
+    std::fs::copy(format!("{HELLO_DIR}/hello_demo.wasm"), &wasm_path)
+        .expect("build examples/extensions/hello-demo first: cargo xtask example hello-demo");
 
     let sink = RecordingSink::new();
     let logger = Logger::new(Arc::new(sink.clone()));

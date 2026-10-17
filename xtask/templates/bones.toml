@@ -1,0 +1,28 @@
+# bones configuration. Read from beside the executable, or from the path in
+# BONES_CONFIG. Every value below is the default, so deleting this file changes
+# nothing; delete the lines you do not want to pin.
+
+extensions_dir = "extensions"
+saves_dir = "states"
+
+window_title = "bones"
+window_width = 800
+window_height = 600
+
+# Presentation modules. renderer draws gfx/* batches; ui draws egui widget
+# specs above it; web adds wry panels and needs a build with --features web.
+renderer = true
+ui = true
+web = false
+
+# Off by default: not every machine has a working audio device, and a
+# non-game project has no use for the game-core simulation.
+audio = false
+game_core = false
+
+# Extensions can save state unless this is true.
+persistence_read_only = false
+
+# Per-frame allowances per extension. Exceeding either quarantines it.
+extension_max_inbound = 1024
+extension_max_publishes = 1024

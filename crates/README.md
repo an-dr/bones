@@ -48,7 +48,7 @@ Nested beside `bones-kernel-infra`, not inside it: each is its own crate, so a d
 
 ## The shared contract
 
-[bones-messages](bones-messages/README.md) is the one crate both the host and WASM guest code depend on — typed core messages and their payload codecs (tick, input, gfx, ui, audio, web, lifecycle, extension control). It is excluded from the root workspace because it must also compile for `wasm32-wasip2` guests, so it cannot pull in wasmtime, SDL, or anything else host-only; [test.ps1](../test.ps1) runs its tests in a separate pass for the same reason. It cannot be folded into the guest SDK below without inverting the dependency graph — the host links it directly, and a package that runs `wit_bindgen::generate!` cannot sit underneath the engine.
+[bones-messages](bones-messages/README.md) is the one crate both the host and WASM guest code depend on — typed core messages and their payload codecs (tick, input, gfx, ui, audio, web, lifecycle, extension control). It is excluded from the root workspace because it must also compile for `wasm32-wasip2` guests, so it cannot pull in wasmtime, SDL, or anything else host-only; `cargo xtask test` runs its tests in a separate pass for the same reason. It cannot be folded into the guest SDK below without inverting the dependency graph — the host links it directly, and a package that runs `wit_bindgen::generate!` cannot sit underneath the engine.
 
 ## The guest SDK
 

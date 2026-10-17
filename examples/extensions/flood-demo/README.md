@@ -5,8 +5,8 @@ Proves the queue half of the extension watchdog (ADR-007). On its first tick, `f
 ## Run
 
 ```sh
-pwsh build.ps1
+cargo xtask example flood-demo
 ./dist/bones
 ```
 
-Requires PowerShell 7+ (`pwsh`). The script builds both WASM components and the native engine, then assembles `dist/` with `bones.toml`, `flood_demo.wasm`, and `hello.wasm`. The log shows `hello` continuing after the engine reports `flood_demo` with its publish drop count. Close the window to stop cleanly.
+Run it from the repository root. It builds both WASM components and the native engine, then assembles `dist/` with `bones.toml`, `flood_demo.wasm`, and `hello_demo.wasm`. The log shows `hello_demo` continuing after the engine reports `flood_demo` with its publish drop count. Close the window to stop cleanly.

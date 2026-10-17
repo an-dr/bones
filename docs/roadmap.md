@@ -2,17 +2,29 @@
 
 Add future work here only when it has a demonstrable completion artifact; completed work belongs in git history.
 
+## Android
+
+The engine runs on Android as a standalone APK: arm64-v8a, API level 26 and up, with its extensions bundled inside the package. Embedding the engine in a host Android app, other ABIs, and Play Store signing are out of scope for the first version.
+
+- **Packaging.** SDL3 ships Android support — a Java `SDLActivity` plus a native `SDL_main` — and the engine already sits on SDL3, so the APK is SDL's activity loading the engine as `libmain.so`. A new `bones-android` crate is that library: the same `Kernel` builder as the desktop `bones` binary, with an `SDL_main` entry point instead of `main`. The desktop composition does not change.
+- **Extensions.** Bundled under the APK's `assets/extensions/` and unpacked to app-internal storage at startup, so the kernel's existing `extensions_dir` loading picks them up unchanged. Saves go to SDL's per-app preference path.
+- **Modules.** Only what works on Android out of the box: renderer, input, egui UI, kira audio, game-core, and persistence. wry web panels stay desktop-only — wry needs its own Android activity and cannot share SDL's. Tray, self-update, single-instance, desktop registration, and the OS module are desktop concepts.
+- **Portability work first.** The kernel and the enabled modules must compile for `aarch64-linux-android`, which means gating the desktop-only dependencies (single-instance, the file watcher, desktop paths) behind `cfg`.
+- **Build.** `cargo xtask android` builds `libmain.so` with `cargo-ndk`, stages the example extensions into an `android/` Gradle project, and produces a debug APK, optionally installing it over `adb`. Its prerequisite checks cover JDK 17, the Android SDK (platform 35 and build-tools), the NDK, the `aarch64-linux-android` Rust target, `cargo-ndk`, and `adb`, each failing with where to install it; nothing is installed automatically.
+
+Completion artifact: `cargo xtask android` producing an APK from a clean clone on a machine with the prerequisites, on which `hello-demo` and `sprite-demo` run on an arm64 device.
+
 ## Continuous integration and supply-chain checks
 
-There is no tracked CI. `test.ps1` runs formatting, clippy with warnings denied, both feature sets, and the documentation build, which is why the gates exist at all — but it only runs where someone runs it, and today that is one Windows ARM64 machine. Everything the README calls best-effort is best-effort for exactly this reason.
+There is no tracked CI. `cargo xtask test` runs formatting, clippy with warnings denied, both feature sets, and the documentation build, which is why the gates exist at all — but it only runs where someone runs it, and today that is one Windows ARM64 machine. Everything the README calls best-effort is best-effort for exactly this reason.
 
-Three things are missing, and they are separable. **CI** running the existing gates on a declared platform matrix, which needs the Linux and macOS questions answered first — the wry web-panel tests are gated to Windows and have never run elsewhere. **A dependency advisory and licence scan**, which matters more than usual here because the engine links its whole tree statically and ships generated third-party notices. **An MSRV policy**, or an explicit decision that the policy is current-stable-only; the README says the latter today, which is a statement, not a check.
+Three things are missing, and they are separable. **CI** running the existing gates on a declared platform matrix, which needs the Linux and macOS questions answered first — the wry web-panel tests are gated to Windows and have never run elsewhere. **A dependency advisory and licence scan**, which matters more than usual here because the engine links its whole tree statically and ships generated third-party notices. **An MSRV policy**, or an explicit, documented decision that the policy is current-stable-only; today there is neither.
 
-Completion artifact: a CI configuration running the `test.ps1` gates plus an advisory scan on every platform the README claims support for, and a `rust-version` in `[workspace.package]` or a documented policy that CI enforces.
+Completion artifact: a CI configuration running `cargo xtask test` plus an advisory scan on every platform the README claims support for, and a `rust-version` in `[workspace.package]` or a documented policy that CI enforces.
 
 ## Reproducible release archives
 
-`dist.ps1` writes a SHA256 beside each archive, which verifies a download but not a build: zip entries carry modification times, so two runs over identical inputs produce different hashes. A consumer cannot check that the archive they downloaded is the one this repository's source produces.
+`cargo xtask dist` writes a SHA256 beside each archive, which verifies a download but not a build: zip entries carry modification times, so two runs over identical inputs produce different hashes. A consumer cannot check that the archive they downloaded is the one this repository's source produces.
 
 Completion artifact: two runs of the release job over the same commit producing byte-identical archives, and the checksum published from source rather than from the upload.
 

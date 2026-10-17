@@ -81,7 +81,7 @@
 //! here the documentation stops building rather than going quietly wrong.
 
 // A public item with no documentation is an unfinished promise: this crate is
-// what the engine commits to keeping working, so `test.ps1`'s clippy gate
+// what the engine commits to keeping working, so `cargo xtask test`'s clippy gate
 // (`-D warnings`) turns any gap here into a build failure.
 #![warn(missing_docs)]
 

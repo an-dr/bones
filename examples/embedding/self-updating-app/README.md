@@ -15,13 +15,13 @@ An update never touches the running process. It unpacks a new version folder bes
 
 ## What the example does
 
-`build.ps1` builds the app twice, at 1.0.0 and 1.1.0. It installs 1.0.0, and publishes 1.1.0 as a zip with a manifest pointing at it — so there is something real to update to, which is the part a single-version example cannot show.
+`cargo xtask example self-updating-app` builds the app twice, at 1.0.0 and 1.1.0. It installs 1.0.0, and publishes 1.1.0 as a zip with a manifest pointing at it — so there is something real to update to, which is the part a single-version example cannot show.
 
 ```sh
-pwsh examples/embedding/self-updating-app/build.ps1
+cargo xtask example self-updating-app
 ```
 
-Then, with the install directory the build script prints:
+Then, with the install directory the command prints:
 
 ```sh
 $env:DEMO_APP_INSTALL_DIR = '.../dist/app'   # PowerShell
@@ -56,7 +56,7 @@ The upgrade module spells no application into itself. The application composes i
 
 Both binaries are built with matching executable names. The launcher uses its own directory as the installation root and reads no configuration file.
 
-`build.ps1` also sets these as real environment variables. Cargo merges `[env]` from every ancestor directory, so a clone sitting inside another cargo project would otherwise inherit that project's values for the same keys — which is a trap worth knowing about if your own app lives inside a larger tree.
+The xtask build also sets these as real environment variables. Cargo merges `[env]` from every ancestor directory, so a clone sitting inside another cargo project would otherwise inherit that project's values for the same keys — which is a trap worth knowing about if your own app lives inside a larger tree.
 
 ## Things worth copying
 

@@ -31,10 +31,10 @@ The native module answers questions a sandboxed extension cannot answer for itse
 ## Run it
 
 ```sh
-pwsh build.ps1
+cargo xtask example custom-engine
 ```
 
-Builds all three, plus the `hello-demo` example extension, into `dist/`. Run `dist/custom-engine(.exe)`. Requires a C toolchain and CMake — the engine links SDL3, built from source. If cmake cannot find a generator and Ninja is installed, set `CMAKE_GENERATOR=Ninja`; [scripts/native-build-env.ps1](../../../scripts/native-build-env.ps1) does exactly this and is what `dist.ps1` and `test.ps1` use.
+Builds all three, plus the `hello-demo` example extension, into `dist/`. Run `dist/custom-engine(.exe)`. Requires a C toolchain and CMake — the engine links SDL3, built from source. The xtask build checks for both and configures the compiler and cmake generator for you (see [building.md](../../../docs/contributing/building.md)).
 
 The log shows `host-probe` asking the native module for each fact, and a widget panel shows two of them. `hello_demo` runs beside it untouched — an ordinary extension and a custom one in one process, against one engine.
 
@@ -59,7 +59,7 @@ Two properties of the engine make one crate serve both sides of the sandbox, and
 
 A guest written in another language would implement the same two types from that document. Nothing here is Rust-only except the convenience of sharing a crate.
 
-Treat your vocabulary as the contract it is. Once an extension ships against it, changing the bytes breaks that extension exactly as an ABI change would — which is why [messages/src/tests.rs](messages/src/tests.rs) round-trips every variant, and why [test.ps1](../../../test.ps1) runs it.
+Treat your vocabulary as the contract it is. Once an extension ships against it, changing the bytes breaks that extension exactly as an ABI change would — which is why [messages/src/tests.rs](messages/src/tests.rs) round-trips every variant, and why `cargo xtask test` runs it.
 
 ## Request/reply, not publish
 

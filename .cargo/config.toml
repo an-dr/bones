@@ -1,0 +1,4 @@
+# `cargo xtask <command>` runs the repository's build automation (xtask/),
+# so the toolchain that builds the engine is the only thing its scripts need.
+[alias]
+xtask = "run --quiet --package xtask --"
