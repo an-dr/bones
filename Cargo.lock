@@ -444,7 +444,7 @@ dependencies = [
 
 [[package]]
 name = "bones"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "bones-kernel",
  "serde",
@@ -453,7 +453,7 @@ dependencies = [
 
 [[package]]
 name = "bones-kernel"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "bones-kernel-infra",
  "bones-kernel-launch",
@@ -475,7 +475,7 @@ dependencies = [
 
 [[package]]
 name = "bones-kernel-infra"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "bones-messages",
  "pubsub-bus",
@@ -486,7 +486,7 @@ dependencies = [
 
 [[package]]
 name = "bones-kernel-launch"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "dirs",
  "tempfile",
@@ -494,7 +494,7 @@ dependencies = [
 
 [[package]]
 name = "bones-kernel-watch"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "notify",
  "tempfile",
@@ -502,7 +502,7 @@ dependencies = [
 
 [[package]]
 name = "bones-launcher"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "bones-versioning",
  "tempfile",
@@ -515,7 +515,7 @@ version = "1.2.0"
 
 [[package]]
 name = "bones-module-audio"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "bones-kernel-infra",
  "bones-messages",
@@ -524,7 +524,7 @@ dependencies = [
 
 [[package]]
 name = "bones-module-desktop"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "bones-kernel-infra",
  "bones-messages",
@@ -535,7 +535,7 @@ dependencies = [
 
 [[package]]
 name = "bones-module-devtools"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "bones-kernel-infra",
  "bones-messages",
@@ -544,7 +544,7 @@ dependencies = [
 
 [[package]]
 name = "bones-module-game-core"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "bones-kernel-infra",
  "bones-messages",
@@ -556,7 +556,7 @@ dependencies = [
 
 [[package]]
 name = "bones-module-os"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "arboard",
  "base64",
@@ -571,7 +571,7 @@ dependencies = [
 
 [[package]]
 name = "bones-module-renderer"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "ab_glyph",
  "bones-kernel-infra",
@@ -583,7 +583,7 @@ dependencies = [
 
 [[package]]
 name = "bones-module-single-instance"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "bones-kernel-infra",
  "bones-messages",
@@ -594,7 +594,7 @@ dependencies = [
 
 [[package]]
 name = "bones-module-ui"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "bones-kernel-infra",
  "bones-messages",
@@ -604,7 +604,7 @@ dependencies = [
 
 [[package]]
 name = "bones-module-upgrade"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "base64",
  "bones-kernel-infra",
@@ -621,7 +621,7 @@ dependencies = [
 
 [[package]]
 name = "bones-module-web"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "bones-kernel-infra",
  "bones-messages",
@@ -635,7 +635,7 @@ dependencies = [
 
 [[package]]
 name = "bones-versioning"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "semver",
 ]
@@ -6174,7 +6174,7 @@ checksum = "ea6fc2961e4ef194dcbfe56bb845534d0dc8098940c7e5c012a258bfec6701bd"
 
 [[package]]
 name = "xtask"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "serde_json",
  "sha2",

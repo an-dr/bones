@@ -38,7 +38,7 @@ cargo run -p bones
 
 ```toml
 [dependencies]
-bones-kernel = { git = "https://github.com/an-dr/bones", tag = "v2.0.0" }
+bones-kernel = { git = "https://github.com/an-dr/bones", tag = "v2.1.0" }
 ```
 
 **As an extension author in Rust**, on the ABI line rather than the engine line:

@@ -7,9 +7,9 @@ Two independent version lines (ADR-029), so each entry says which one it belongs
 
 An ABI entry concerns every extension in existence, in any language. An engine entry concerns only projects that link the library.
 
-## Unreleased
+## engine 2.1.0
 
-Repository tooling only; neither version line moves.
+A new way to build the repository; the engine's API and the extension ABI are unchanged, and `bones:extension` stays at 1.0.0.
 
 - **The build is `cargo xtask`.** `test.ps1`, `dist.ps1`, `scripts/native-build-env.ps1`, and every example's `build.ps1` are replaced by `cargo xtask test`, `cargo xtask dist`, and `cargo xtask example <name>`. PowerShell is no longer a prerequisite; the Rust toolchain that builds the engine runs its automation.
 - **Prerequisites are checked, never installed.** Every command stops at the first missing tool with where to get it, and `cargo xtask doctor` reports them all at once.
