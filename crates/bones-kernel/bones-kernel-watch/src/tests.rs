@@ -101,7 +101,10 @@ fn a_burst_of_a_thousand_writes_is_a_handful_of_changes() {
 
     let seen = drain(&changes);
     assert!(!seen.is_empty());
-    assert!(seen.len() <= 5, "{} changes for one burst", seen.len());
+    // Coalescing, not a fixed count: a change settles once the folder has
+    // been quiet, so a stall mid-burst on a busy machine (a CI runner) can
+    // split it. Twenty writes or more per change still proves batching.
+    assert!(seen.len() <= 50, "{} changes for one burst", seen.len());
     let paths: usize = seen.iter().map(|change| change.paths.len()).sum();
     assert!(paths >= 1000, "only {paths} paths reported");
 }

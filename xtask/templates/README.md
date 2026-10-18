@@ -5,6 +5,10 @@ The bones engine, for {os}-{arch}.
 Kernel version {version}; extension ABI bones:extension@{abi}. The two move
 independently -- see docs/adr/ADR-029 in the repository.
 
+Web panels (wry): {web}. A build without them refuses to start with
+`web = true` in bones.toml; on Linux, a build with them needs webkit2gtk 4.1
+and GTK 3 installed.
+
 ## Run it
 
     ./{exe}

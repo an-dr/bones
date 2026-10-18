@@ -492,12 +492,23 @@ fn audio_demo_loads_plays_music_and_reacts_to_a_key_press_through_a_real_audio_m
     let sink = RecordingSink::new();
     let logger = Logger::new(Arc::new(sink.clone()));
 
-    let BuiltKernel { runner, .. } = Kernel::new()
+    let built = Kernel::new()
         .extensions_dir(AUDIO_DEMO_DIR)
         .logger(logger)
         .module(bones_module_audio::Audio::new())
-        .build()
-        .expect("build examples/extensions/audio-demo first: cargo xtask example audio-demo");
+        .build();
+    // A headless machine (CI runners among them) has no output device, so
+    // there is nothing to play through: report the skip rather than fail.
+    let BuiltKernel { runner, .. } = match built {
+        Ok(built) => built,
+        Err(err) if is_no_audio_device(&format!("{err:?}")) => {
+            eprintln!("skipped: this machine has no audio output device ({err:?})");
+            return;
+        }
+        Err(err) => {
+            panic!("{err:?} -- if the fixture is missing, run cargo xtask example audio-demo first")
+        }
+    };
 
     runner.step(1.0 / 60.0);
 
@@ -897,7 +908,11 @@ sdl_test! { fn dashboard_and_metrics_exchange_push_pull_and_page_ipc() {
         .build()
         .unwrap();
 
-    for _ in 0..120 {
+    // A deadline, not an iteration count: a cold WebView2 on a CI runner can
+    // take seconds to load the page, and the loop exits as soon as both
+    // acknowledgements arrive.
+    let deadline = std::time::Instant::now() + Duration::from_secs(30);
+    while std::time::Instant::now() < deadline {
         engine
             .platform
             .as_mut()
@@ -1393,4 +1408,16 @@ fn a_changed_wasm_file_is_hot_reloaded_in_place() {
         events.contains(&(Event::Reloaded, "level".to_string())),
         "expected a Reloaded lifecycle event, got {events:?}"
     );
+}
+
+/// Whether an audio start-up error means the machine has no usable output
+/// device: cpal words it differently per platform, so headless Windows and
+/// Linux runners each produce one of these.
+fn is_no_audio_device(error: &str) -> bool {
+    [
+        "Cannot find the default audio output device",
+        "The requested device is no longer available",
+    ]
+    .iter()
+    .any(|phrase| error.contains(phrase))
 }

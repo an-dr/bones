@@ -1,0 +1,149 @@
+# Every gate `cargo xtask test` enforces, on every platform bones claims, plus
+# the commit attribution check -- on every push to any branch and every pull
+# request. The workflow only calls xtask: the logic lives there, so a local
+# run and a CI run are the same command.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  commits:
+    name: Commit attribution
+    runs-on: ubuntu-24.04
+    steps:
+      # Submodules too: cargo loads the whole workspace, vendor/pubsub-bus
+      # included, before it can build xtask.
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+      # The commits this event adds. A pull request: its own. A branch push:
+      # everything the branch adds over main, which survives force-pushes. A
+      # push to main: the new commits, or the head alone when "before" is
+      # absent or no longer in history.
+      - name: No commit credits an AI tool as an author
+        shell: bash
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ -n "$PR_BASE" ]; then
+            cargo xtask check-commits "$PR_BASE..$PR_HEAD"
+          elif [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            cargo xtask check-commits "origin/main..$GITHUB_SHA"
+          elif git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            cargo xtask check-commits "$BEFORE..$GITHUB_SHA"
+          else
+            cargo xtask check-commits -1 "$GITHUB_SHA"
+          fi
+  test:
+    name: Test (${{ matrix.name }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: windows-x64, runner: windows-latest }
+          - { name: windows-arm64, runner: windows-11-arm }
+          - { name: linux-x64, runner: ubuntu-24.04 }
+          - { name: linux-arm64, runner: ubuntu-24.04-arm }
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip2
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: test
+      # The package list lives in xtask (cargo xtask linux-packages), so CI
+      # and a developer's machine install the same thing.
+      - name: Linux packages
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb $(cargo xtask linux-packages)
+      - name: Prerequisites
+        run: cargo xtask doctor
+      # The SDL tests open real windows, so Linux needs a display: xvfb-run
+      # provides a virtual one.
+      - name: Gates and tests
+        if: runner.os == 'Windows'
+        run: cargo xtask test
+      - name: Gates and tests
+        if: runner.os == 'Linux'
+        run: xvfb-run -a cargo xtask test
+
+  # The release archives, built on every push so packaging is exercised as
+  # often as the tests; on main they are the downloadable artifacts. Windows
+  # ships web panels always (WebView2 is part of the OS). Linux ships both
+  # variants, because a web build will not start without webkit2gtk and GTK.
+  build:
+    name: Build (${{ matrix.name }})
+    needs: test
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: windows-x64-web, runner: windows-latest, features: web }
+          - { name: windows-arm64-web, runner: windows-11-arm, features: web }
+          - { name: linux-x64, runner: ubuntu-24.04, features: "" }
+          - { name: linux-x64-web, runner: ubuntu-24.04, features: web }
+          - { name: linux-arm64, runner: ubuntu-24.04-arm, features: "" }
+          - { name: linux-arm64-web, runner: ubuntu-24.04-arm, features: web }
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: build-${{ matrix.features }}
+      - name: Linux packages
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $(cargo xtask linux-packages)
+      - name: Release archive
+        shell: bash
+        run: |
+          if [ -n "${{ matrix.features }}" ]; then
+            cargo xtask dist --features "${{ matrix.features }}"
+          else
+            cargo xtask dist
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bones-${{ matrix.name }}
+          path: |
+            bones-*.zip
+            bones-*.zip.sha256
+          if-no-files-found: error
+
+  # A v* tag publishes its archives as a GitHub Release. The tag is the
+  # release decision; CI only assembles what that commit already built.
+  release:
+    name: GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: bones-*
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            bones-*.zip
+            bones-*.zip.sha256
+          fail_on_unmatched_files: true

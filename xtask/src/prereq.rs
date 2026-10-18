@@ -26,7 +26,45 @@ pub enum Check {
     CCompiler,
     /// CMake itself, which drives SDL3's build.
     CMake,
+    /// The Debian/Ubuntu development packages a Linux build links against.
+    /// Passes elsewhere, and on distributions without `dpkg-query`, where
+    /// the names in [`LINUX_PACKAGES`] are only a guide.
+    LinuxPackages,
 }
+
+/// What a Linux build links against, as Debian/Ubuntu package names: SDL3's
+/// video, input, and audio backends, kira's ALSA output, the GTK and
+/// webkit2gtk behind wry web panels and file dialogs, and OpenSSL for the
+/// upgrade module's downloads. The single list behind `doctor`, CI, and
+/// `cargo xtask linux-packages`.
+pub const LINUX_PACKAGES: [&str; 26] = [
+    "pkg-config",
+    "libasound2-dev",
+    "libpulse-dev",
+    "libx11-dev",
+    "libxext-dev",
+    "libxrandr-dev",
+    "libxcursor-dev",
+    "libxfixes-dev",
+    "libxi-dev",
+    "libxss-dev",
+    "libxtst-dev",
+    "libxkbcommon-dev",
+    "libwayland-dev",
+    "wayland-protocols",
+    "libdecor-0-dev",
+    "libegl1-mesa-dev",
+    "libgl1-mesa-dev",
+    "libgles2-mesa-dev",
+    "libdrm-dev",
+    "libgbm-dev",
+    "libdbus-1-dev",
+    "libudev-dev",
+    "libibus-1.0-dev",
+    "libgtk-3-dev",
+    "libwebkit2gtk-4.1-dev",
+    "libssl-dev",
+];
 
 // Private to this file: the report a failed Check renders, never named
 // outside it, so it shares Check's file (docs/code-style.md's exception).
@@ -49,7 +87,7 @@ impl fmt::Display for Missing {
 
 impl Check {
     /// Every check, in the order `doctor` reports them.
-    pub const ALL: [Check; 6] = [
+    pub const ALL: [Check; 7] = [
         Check::Rustup,
         Check::RustTarget("wasm32-wasip2"),
         Check::CargoComponent {
@@ -62,6 +100,7 @@ impl Check {
         },
         Check::CCompiler,
         Check::CMake,
+        Check::LinuxPackages,
     ];
 
     fn label(self) -> String {
@@ -71,6 +110,7 @@ impl Check {
             Check::CargoComponent { subcommand, .. } => format!("cargo {subcommand}"),
             Check::CCompiler => "C compiler".to_string(),
             Check::CMake => "CMake".to_string(),
+            Check::LinuxPackages => "Linux development packages".to_string(),
         }
     }
 
@@ -87,6 +127,7 @@ impl Check {
             }
             Check::CCompiler => C_COMPILERS.iter().any(|compiler| is_on_path(compiler)),
             Check::CMake => is_on_path("cmake"),
+            Check::LinuxPackages => missing_linux_packages().is_empty(),
         };
         if present {
             return Ok(());
@@ -129,6 +170,11 @@ impl Check {
                         .to_string()
                 },
             },
+            Check::LinuxPackages => Missing {
+                what: format!("{} ({})", self.label(), missing_linux_packages().join(" ")),
+                why: "linking SDL3, audio, and the web panels on Linux",
+                install: "sudo apt-get install $(cargo xtask linux-packages)".to_string(),
+            },
         })
     }
 }
@@ -164,4 +210,19 @@ pub fn run_doctor() -> Result {
         }
         n => Err(format!("{n} prerequisite(s) missing; see above")),
     }
+}
+
+/// The entries of [`LINUX_PACKAGES`] `dpkg-query` reports as not installed;
+/// empty off Linux or where `dpkg-query` is absent.
+fn missing_linux_packages() -> Vec<&'static str> {
+    if !cfg!(target_os = "linux") || !is_on_path("dpkg-query") {
+        return Vec::new();
+    }
+    LINUX_PACKAGES
+        .into_iter()
+        .filter(|package| {
+            read_output(Command::new("dpkg-query").args(["-W", "-f=${Status}", package]))
+                .is_none_or(|status| !status.contains("install ok installed"))
+        })
+        .collect()
 }

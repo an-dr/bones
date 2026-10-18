@@ -3,8 +3,8 @@
 //! clone to a release-green tree.
 //!
 //! This is where formatting, lints, and the optional-feature suite are
-//! enforced. There is no CI (docs/roadmap.md tracks adding it), so a gate
-//! that lives only in a reviewer's habits is a gate that does not exist.
+//! enforced, locally and in CI (.github/workflows/ci.yml): a gate that lives
+//! only in a reviewer's habits is a gate that does not exist.
 
 use std::path::Path;
 

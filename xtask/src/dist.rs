@@ -23,12 +23,10 @@ use crate::Result;
 const SAMPLE_CONFIG: &str = include_str!("../templates/bones.toml");
 const RELEASE_README: &str = include_str!("../templates/README.md");
 
+const USAGE: &str = "usage: cargo xtask dist [--no-archive] [--features <list>]";
+
 pub fn run(args: &[String]) -> Result {
-    let archive = match args {
-        [] => true,
-        [flag] if flag == "--no-archive" => false,
-        _ => return Err("usage: cargo xtask dist [--no-archive]".to_string()),
-    };
+    let options = Options::parse(args)?;
     prereq::require(&[Check::CCompiler, Check::CMake])?;
 
     let root = repo_root();
@@ -38,14 +36,18 @@ pub fn run(args: &[String]) -> Result {
     // it is only valid for the OS and architecture it was built on -- naming
     // it accordingly is what stops the wrong one being shipped.
     let (os, arch) = (platform_os(), platform_arch());
-    let bundle_name = format!("bones-{version}-{os}-{arch}");
+    // A web build links the platform webview, which changes what the user's
+    // machine must provide, so the archive name says so.
+    let web_suffix = if options.has_web() { "-web" } else { "" };
+    let bundle_name = format!("bones-{version}-{os}-{arch}{web_suffix}");
     let exe = exe_name("bones");
     let dist = root.join("dist");
 
-    run_step(
-        "Building app",
-        &mut cargo(&root, &["build", "-p", "bones", "--release"]),
-    )?;
+    let mut build = vec!["build", "-p", "bones", "--release"];
+    if let Some(features) = &options.features {
+        build.extend(["--features", features]);
+    }
+    run_step("Building app", &mut cargo(&root, &build))?;
 
     recreate_dir(&dist)?;
     // extensions/ ships empty: it is where a user drops their own .wasm files.
@@ -66,7 +68,7 @@ pub fn run(args: &[String]) -> Result {
     copy_file(&root.join("LICENSE"), &dist.join("LICENSE"))?;
     write_file(
         &dist.join("THIRD-PARTY-NOTICES.txt"),
-        &third_party_notices(&root, &version, os, arch)?,
+        &third_party_notices(&root, &version, os, arch, options.features.as_deref())?,
     )?;
 
     println!("==> Writing the sample configuration and release README...");
@@ -78,7 +80,15 @@ pub fn run(args: &[String]) -> Result {
             .replace("{os}", os)
             .replace("{arch}", arch)
             .replace("{abi}", &abi)
-            .replace("{exe}", &exe),
+            .replace("{exe}", &exe)
+            .replace(
+                "{web}",
+                if options.has_web() {
+                    "included"
+                } else {
+                    "not included"
+                },
+            ),
     )?;
 
     println!();
@@ -88,7 +98,7 @@ pub fn run(args: &[String]) -> Result {
         dist.join("extensions").display()
     );
     println!("Extension ABI: dist/wit/extension.wit (bones:extension@{abi})");
-    if archive {
+    if options.archive {
         write_release_archive(&root, &dist, &bundle_name)?;
     }
     Ok(())
@@ -119,8 +129,29 @@ fn write_release_archive(root: &Path, dist: &Path, bundle_name: &str) -> Result 
 /// Generated rather than maintained by hand: the engine links its whole
 /// dependency tree statically, so the list changes whenever a dependency
 /// does. cargo metadata is the source because it needs no extra tool.
-fn third_party_notices(root: &Path, version: &str, os: &str, arch: &str) -> Result<String> {
-    let metadata = cargo_metadata(root, &["--filter-platform", &host_triple()?])?;
+fn third_party_notices(
+    root: &Path,
+    version: &str,
+    os: &str,
+    arch: &str,
+    features: Option<&str>,
+) -> Result<String> {
+    // Resolved with the features the executable was built with: cargo
+    // metadata leaves out optional dependencies a feature does not enable,
+    // so without them a web build's notices would omit wry.
+    let triple = host_triple()?;
+    let features = features.map(|list| {
+        list.split([',', ' '])
+            .filter(|feature| !feature.is_empty())
+            .map(|feature| format!("bones/{feature}"))
+            .collect::<Vec<_>>()
+            .join(",")
+    });
+    let mut args = vec!["--filter-platform", triple.as_str()];
+    if let Some(features) = &features {
+        args.extend(["--features", features.as_str()]);
+    }
+    let metadata = cargo_metadata(root, &args)?;
     let mut dependencies: Vec<_> = packages(&metadata)
         .filter(|package| !package["source"].is_null())
         .collect();
@@ -181,5 +212,42 @@ fn platform_arch() -> &'static str {
         "x86_64" => "x64",
         "aarch64" => "arm64",
         other => other,
+    }
+}
+
+// Private to this file: dist's parsed command line, never named outside it
+// (docs/code-style.md's exception).
+/// What `cargo xtask dist` was asked for.
+struct Options {
+    /// Whether to zip dist/ into a release archive.
+    archive: bool,
+    /// The `bones` package features to build with, passed to cargo as given.
+    features: Option<String>,
+}
+
+impl Options {
+    fn parse(args: &[String]) -> Result<Options> {
+        let mut options = Options {
+            archive: true,
+            features: None,
+        };
+        let mut args = args.iter();
+        while let Some(arg) = args.next() {
+            match arg.as_str() {
+                "--no-archive" => options.archive = false,
+                "--features" => {
+                    let list = args.next().ok_or_else(|| USAGE.to_string())?;
+                    options.features = Some(list.clone());
+                }
+                _ => return Err(USAGE.to_string()),
+            }
+        }
+        Ok(options)
+    }
+
+    fn has_web(&self) -> bool {
+        self.features
+            .as_deref()
+            .is_some_and(|list| list.split([',', ' ']).any(|feature| feature == "web"))
     }
 }

@@ -11,6 +11,9 @@ use zip::{CompressionMethod, ZipWriter};
 
 use crate::Result;
 
+#[cfg(test)]
+mod tests;
+
 /// Zips the contents of `source` into `archive`, each entry under `prefix`
 /// (empty for none).
 pub fn write_zip(source: &Path, prefix: &str, archive: &Path) -> Result {
@@ -39,7 +42,7 @@ fn add_dir(zip: &mut ZipWriter<File>, dir: &Path, prefix: &str) -> io::Result<()
                 .map_err(io::Error::other)?;
             add_dir(zip, &entry.path(), &path)?;
         } else {
-            zip.start_file(path.as_str(), options)
+            zip.start_file(path.as_str(), file_options(options, &entry.path())?)
                 .map_err(io::Error::other)?;
             zip.write_all(&fs::read(entry.path())?)?;
         }
@@ -55,4 +58,21 @@ pub fn sha256_hex(path: &Path) -> Result<String> {
         .iter()
         .map(|byte| format!("{byte:02x}"))
         .collect())
+}
+
+/// `options` carrying the file's Unix permissions where the platform has
+/// them, so an executable unpacks executable on Linux. Off Unix, zip's
+/// defaults apply (archives built there run on Windows).
+fn file_options(options: SimpleFileOptions, path: &Path) -> io::Result<SimpleFileOptions> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = fs::metadata(path)?.permissions().mode();
+        Ok(options.unix_permissions(mode))
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+        Ok(options)
+    }
 }

@@ -7,6 +7,7 @@
 //! install hints rather than installing anything.
 
 mod archive;
+mod commits;
 mod dist;
 mod example;
 mod files;
@@ -26,17 +27,25 @@ const USAGE: &str = "\
 usage: cargo xtask <command>
 
 commands:
-  doctor   check every prerequisite and say how to install what is missing
-  dist     build the engine into dist/ and a release archive (--no-archive: dist/ only)
-  example  build one example into its own dist/ (no name: list them)
-  test     build fixtures, run every gate and the whole test matrix";
+  check-commits   fail if a commit in a git log range credits an AI tool as an author
+  doctor          check every prerequisite and say how to install what is missing
+  dist            build the engine into dist/ and a release archive
+                  (--no-archive: dist/ only; --features web: with web panels)
+  example         build one example into its own dist/ (no name: list them)
+  linux-packages  print the Debian/Ubuntu packages a Linux build needs
+  test            build fixtures, run every gate and the whole test matrix";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let result = match args.first().map(String::as_str) {
+        Some("check-commits") => commits::run(&args[1..]),
         Some("doctor") => prereq::run_doctor(),
         Some("dist") => dist::run(&args[1..]),
         Some("example") => example::run(&args[1..]),
+        Some("linux-packages") => {
+            println!("{}", prereq::LINUX_PACKAGES.join(" "));
+            Ok(())
+        }
         Some("test") => test::run(),
         _ => {
             eprintln!("{USAGE}");

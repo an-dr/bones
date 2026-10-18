@@ -35,6 +35,35 @@ Start with [hello-demo](extensions/hello-demo/README.md): the smallest complete 
 
 `custom-engine` is three crates rather than one, and that is the lesson rather than an accident: the vocabulary has to compile for the native host *and* for `wasm32-wasip2`, so it cannot live in either the binary or the guest. `self-updating-app` is two binaries from one package for a related reason — they must agree on an identity read at compile time.
 
+## Your own extension project
+
+An example here builds against the SDK by path. Your own project lives outside this repository, so it depends on the ABI tag instead:
+
+```toml
+[package]
+name = "my-extension"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+bones-wasm-sdk = { git = "https://github.com/an-dr/bones", tag = "abi-v1.0.0" }
+```
+
+Build it with `cargo build --target wasm32-wasip2 --release` (after `rustup target add wasm32-wasip2` once), and copy `target/wasm32-wasip2/release/my_extension.wasm` into the `extensions/` folder of a [release archive](../README.md#release-archives). The file's stem is the extension's bus name, so choose one no native module uses.
+
+Then copy from the example closest to what you are building:
+
+| You are building | Start from |
+| --- | --- |
+| Anything — the smallest complete extension | [hello-demo](extensions/hello-demo/README.md) |
+| A game | [sprite-demo](extensions/sprite-demo/README.md), then [game-core-demo](extensions/game-core-demo/README.md) |
+| A tool with native widgets | [notes-demo](extensions/notes-demo/README.md) |
+| An app with an HTML interface | [dashboard-demo](extensions/dashboard-demo/README.md) — needs a `-web` archive |
+| Something that remembers state | [persistence-demo](extensions/persistence-demo/README.md) |
+
 ## Why every name ends in -demo
 
 An extension's bus endpoint name is the stem of its built `.wasm` file, and that namespace is shared with the native modules: `audio`, `game-core`, and `persistence` are already taken. The suffix keeps an example from colliding with the very module it demonstrates. It is not decoration, so do not drop it when adding one.

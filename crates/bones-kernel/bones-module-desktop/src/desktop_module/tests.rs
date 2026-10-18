@@ -18,6 +18,8 @@ struct Scratch {
 }
 
 impl Scratch {
+    // `name` only distinguishes the Windows registry key.
+    #[cfg_attr(not(windows), allow(unused_variables))]
     fn new(name: &str) -> Self {
         Self {
             dir: tempfile::tempdir().unwrap(),

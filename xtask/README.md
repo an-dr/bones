@@ -2,6 +2,7 @@
 
 The repository's build automation, run as `cargo xtask <command>` through the alias in [.cargo/config.toml](../.cargo/config.toml). It replaces the PowerShell scripts the repository used to carry, so the Rust toolchain that builds the engine is the only thing the build needs.
 
+- `check-commits <git-log-args>` fails when a commit in the range credits an AI tool as an author; CI runs it on every push and pull request.
 - `doctor` checks every prerequisite and reports what is missing with where to install it.
 - `test` builds the extension fixtures and runs every gate and the whole test matrix.
 - `dist` builds the engine into `dist/` and a checksummed release archive; `--no-archive` stops after `dist/`.
@@ -12,7 +13,7 @@ Each command checks its prerequisites before doing any work and stops at the fir
 - `prereq.rs` — the checks and their install hints.
 - `native.rs` — the compiler and cmake generator setup SDL3's source build needs.
 - `process.rs` — running cargo and probing `PATH`.
-- `dist.rs`, `example.rs`, `test.rs` — one file per command; `example.rs` holds the example table.
+- `commits.rs`, `dist.rs`, `example.rs`, `test.rs` — one file per command; `example.rs` holds the example table.
 - `metadata.rs` — versions and facts read from cargo and `wit/`, never repeated.
 - `archive.rs`, `files.rs` — zip, checksum, and copy steps the packaging commands share.
 - `templates/` — the sample `bones.toml` and release README that `dist` ships.

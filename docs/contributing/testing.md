@@ -1,6 +1,6 @@
 # Testing
 
-`cargo xtask test` is the whole suite, and it must be green before a pull request. There is no CI ([roadmap.md](../roadmap.md) tracks adding it), so this command is where every gate is actually enforced — nothing else checks these.
+`cargo xtask test` is the whole suite, and it must be green before a pull request. [CI](../../.github/workflows/ci.yml) runs the same command on Windows x64 and ARM64 and on Linux x64 and ARM64 for every push and every pull request, so a gate lives here or nowhere. On Linux it runs under `xvfb-run`, because the SDL tests open real windows and need a display.
 
 ## What the command runs
 

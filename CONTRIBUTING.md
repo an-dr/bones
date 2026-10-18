@@ -8,7 +8,7 @@ Thanks for looking. Open an issue before starting anything large — [docs/roadm
 - [docs/contributing/testing.md](docs/contributing/testing.md) — what `cargo xtask test` gates, and the SDL main-thread trap that will bite you if you skip it.
 - [docs/contributing/releasing.md](docs/contributing/releasing.md) — cutting a release on either version line.
 
-`cargo xtask test` must be green before you open a pull request. There is no CI, so it is the only thing that checks.
+`cargo xtask test` must be green before you open a pull request. [CI](.github/workflows/ci.yml) runs it again on Windows and Linux, x64 and ARM64, together with `cargo xtask check-commits`, which rejects any commit that credits an AI tool as an author: the person committing is the author.
 
 ## Understanding the project
 

@@ -14,19 +14,21 @@ The engine runs on Android as a standalone APK: arm64-v8a, API level 26 and up, 
 
 Completion artifact: `cargo xtask android` producing an APK from a clean clone on a machine with the prerequisites, on which `hello-demo` and `sprite-demo` run on an arm64 device.
 
-## Continuous integration and supply-chain checks
+## Supply-chain checks and the rest of the platform matrix
 
-There is no tracked CI. `cargo xtask test` runs formatting, clippy with warnings denied, both feature sets, and the documentation build, which is why the gates exist at all — but it only runs where someone runs it, and today that is one Windows ARM64 machine. Everything the README calls best-effort is best-effort for exactly this reason.
+[CI](../.github/workflows/ci.yml) runs `cargo xtask test` on Windows and Linux, x64 and ARM64, and builds the release archives there. Three gaps remain, and they are separable:
 
-Three things are missing, and they are separable. **CI** running the existing gates on a declared platform matrix, which needs the Linux and macOS questions answered first — the wry web-panel tests are gated to Windows and have never run elsewhere. **A dependency advisory and licence scan**, which matters more than usual here because the engine links its whole tree statically and ships generated third-party notices. **An MSRV policy**, or an explicit, documented decision that the policy is current-stable-only; today there is neither.
+- **A dependency advisory and licence scan.** It matters more than usual here because the engine links its whole dependency tree statically and ships generated third-party notices.
+- **An MSRV policy**, or an explicit, documented decision that the policy is current-stable-only. Today there is neither.
+- **Web panels on Linux, and macOS.** The wry web-panel tests are gated to Windows, so the Linux `-web` archives are built but their panels have never been exercised by a test. macOS has no runner at all.
 
-Completion artifact: a CI configuration running `cargo xtask test` plus an advisory scan on every platform the README claims support for, and a `rust-version` in `[workspace.package]` or a documented policy that CI enforces.
+Completion artifact: CI running an advisory and licence scan on every push, the wry tests running on Linux, and a `rust-version` in `[workspace.package]` or a documented policy that CI enforces.
 
 ## Reproducible release archives
 
 `cargo xtask dist` writes a SHA256 beside each archive, which verifies a download but not a build: zip entries carry modification times, so two runs over identical inputs produce different hashes. A consumer cannot check that the archive they downloaded is the one this repository's source produces.
 
-Completion artifact: two runs of the release job over the same commit producing byte-identical archives, and the checksum published from source rather than from the upload.
+Completion artifact: two runs of the CI build job over the same commit producing byte-identical archives, and the checksum published from source rather than from the upload.
 
 ## API documentation on the ABI-line crates
 

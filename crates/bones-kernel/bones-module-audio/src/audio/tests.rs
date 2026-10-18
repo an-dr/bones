@@ -1,16 +1,62 @@
 use super::*;
 use bones_kernel_infra::bus::ServiceRegistry;
 use bones_messages::{EncodeMessage, Message};
+use std::sync::{Mutex, MutexGuard, OnceLock, PoisonError};
+
+/// One test at a time touches the audio device. libtest runs tests in
+/// parallel, and on a machine without a device concurrent failing opens
+/// crash the Windows backend (an access violation, not an error).
+static DEVICE: Mutex<()> = Mutex::new(());
+
+/// Set once a test finds no output device, so the rest skip without
+/// opening it again.
+static NO_DEVICE: OnceLock<()> = OnceLock::new();
+
+fn lock_device() -> MutexGuard<'static, ()> {
+    DEVICE.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// Runs `init`, or returns `None` when the machine has no audio output
+/// device -- a headless CI runner, for one -- after reporting the skip. Any
+/// other failure still fails the test.
+fn init_or_skip(audio: &mut Audio, ctx: &mut ModuleContext) -> Option<()> {
+    if NO_DEVICE.get().is_some() {
+        eprintln!("skipped: this machine has no audio output device");
+        return None;
+    }
+    match audio.init(ctx) {
+        Ok(()) => Some(()),
+        Err(err) if is_no_audio_device(&err) => {
+            eprintln!("skipped: this machine has no audio output device ({err})");
+            let _ = NO_DEVICE.set(());
+            None
+        }
+        Err(err) => panic!("a real audio device should open on this machine: {err}"),
+    }
+}
+
+/// Whether an `init` error means the machine has no usable output device:
+/// cpal words it differently per platform, so headless Windows and Linux
+/// runners each produce one of these.
+fn is_no_audio_device(error: &str) -> bool {
+    [
+        "Cannot find the default audio output device",
+        "The requested device is no longer available",
+    ]
+    .iter()
+    .any(|phrase| error.contains(phrase))
+}
 
 #[test]
 fn init_opens_a_real_audio_device_and_subscribes_audio_topics() {
+    let _device = lock_device();
     let mut registry = ServiceRegistry::new();
     let mut ctx = ModuleContext::new(&mut registry);
     let mut audio = Audio::new();
 
-    audio
-        .init(&mut ctx)
-        .expect("a real audio device should open on this machine");
+    if init_or_skip(&mut audio, &mut ctx).is_none() {
+        return;
+    }
 
     assert_eq!(ctx.into_subscriptions(), vec!["audio/*"]);
     assert!(audio.manager.is_some());
@@ -48,14 +94,12 @@ fn tiny_wav() -> Vec<u8> {
     wav
 }
 
-fn ready_audio() -> Audio {
+fn ready_audio() -> Option<Audio> {
     let mut registry = ServiceRegistry::new();
     let mut ctx = ModuleContext::new(&mut registry);
     let mut audio = Audio::new();
-    audio
-        .init(&mut ctx)
-        .expect("a real audio device should open on this machine");
-    audio
+    init_or_skip(&mut audio, &mut ctx)?;
+    Some(audio)
 }
 
 fn envelope(topic: &str, payload: Vec<u8>) -> Envelope {
@@ -69,7 +113,10 @@ fn envelope(topic: &str, payload: Vec<u8>) -> Envelope {
 
 #[test]
 fn load_sound_decodes_a_real_wav_into_the_cache() {
-    let mut audio = ready_audio();
+    let _device = lock_device();
+    let Some(mut audio) = ready_audio() else {
+        return;
+    };
     let load = bones_messages::audio::LoadSound {
         id: 1,
         bytes: &tiny_wav(),
@@ -84,7 +131,10 @@ fn load_sound_decodes_a_real_wav_into_the_cache() {
 
 #[test]
 fn play_music_retains_a_playing_handle_and_stop_music_clears_it() {
-    let mut audio = ready_audio();
+    let _device = lock_device();
+    let Some(mut audio) = ready_audio() else {
+        return;
+    };
     let load = bones_messages::audio::LoadSound {
         id: 1,
         bytes: &tiny_wav(),
@@ -118,7 +168,10 @@ fn play_music_retains_a_playing_handle_and_stop_music_clears_it() {
 
 #[test]
 fn play_sound_and_set_music_volume_for_an_unloaded_or_absent_id_do_not_panic() {
-    let mut audio = ready_audio();
+    let _device = lock_device();
+    let Some(mut audio) = ready_audio() else {
+        return;
+    };
     // No LoadSound first — an extension racing its own load/play order,
     // or a bogus id, must not crash the render loop.
     let play = bones_messages::audio::PlaySound {
@@ -141,7 +194,10 @@ fn play_sound_and_set_music_volume_for_an_unloaded_or_absent_id_do_not_panic() {
 
 #[test]
 fn malformed_and_unknown_payloads_are_silently_ignored() {
-    let mut audio = ready_audio();
+    let _device = lock_device();
+    let Some(mut audio) = ready_audio() else {
+        return;
+    };
     audio.handle(&envelope("audio/play-sound", vec![1, 2, 3]));
     audio.handle(&envelope("audio/does-not-exist", vec![]));
     // Reaching here without panicking is the assertion.
