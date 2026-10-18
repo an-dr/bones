@@ -16,6 +16,7 @@ mod native;
 mod prereq;
 mod process;
 mod test;
+mod vectors;
 
 use std::process::ExitCode;
 
@@ -33,7 +34,8 @@ commands:
                   (--no-archive: dist/ only; --features web: with web panels)
   example         build one example into its own dist/ (no name: list them)
   linux-packages  print the Debian/Ubuntu packages a Linux build needs
-  test            build fixtures, run every gate and the whole test matrix";
+  test            build fixtures, run every gate and the whole test matrix
+  vectors         regenerate wit/vectors/vectors.txt from the bones-messages codec";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -47,6 +49,7 @@ fn main() -> ExitCode {
             Ok(())
         }
         Some("test") => test::run(),
+        Some("vectors") => vectors::run(&args[1..]),
         _ => {
             eprintln!("{USAGE}");
             return ExitCode::from(2);

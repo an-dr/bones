@@ -1,6 +1,6 @@
 use super::*;
-use crate::logging::RecordingSink;
-use std::sync::atomic::AtomicBool;
+use bones_kernel_infra::exit::ExitRequest;
+use bones_kernel_infra::logging::RecordingSink;
 use std::sync::{Arc, Mutex};
 
 // Built by `cargo xtask test`, or alone by `cargo xtask example hello-demo`.
@@ -23,9 +23,9 @@ fn load_hello(bus: Bus, logger: Logger) -> Host {
         bus,
         Registry::new(),
         logger,
-        Arc::new(AtomicBool::new(false)),
+        ExitRequest::new(),
         DisplayInfo::default(),
-        EndpointBudget::new(crate::bus::BudgetLimits::default()),
+        EndpointBudget::new(bones_kernel_infra::bus::BudgetLimits::default()),
         ExtensionTimeouts::default(),
     )
     .expect("build examples/extensions/hello-demo first: cargo xtask example hello-demo")
@@ -40,14 +40,14 @@ fn test_state(name: &str, registry: Registry) -> State {
         wasi: wasmtime_wasi::WasiCtxBuilder::new().build(),
         table: wasmtime_wasi::ResourceTable::new(),
         requested_topics: Vec::new(),
-        budget: EndpointBudget::new(crate::bus::BudgetLimits::default()),
-        exit_requested: Arc::new(AtomicBool::new(false)),
+        budget: EndpointBudget::new(bones_kernel_infra::bus::BudgetLimits::default()),
+        exit_requested: ExitRequest::new(),
         display_info: DisplayInfo::default(),
     }
 }
 
 struct EchoRespond;
-impl crate::bus::Respond for EchoRespond {
+impl bones_kernel_infra::bus::Respond for EchoRespond {
     fn respond(&self, sender: &str, payload: &[u8]) -> Option<Vec<u8>> {
         Some([sender.as_bytes(), payload].concat())
     }
@@ -78,11 +78,11 @@ fn send_to_an_unknown_endpoint_maps_to_the_wit_error() {
 fn request_exit_sets_the_shared_flag() {
     let mut state = test_state("caller", Registry::new());
     let exit_requested = state.exit_requested.clone();
-    assert!(!exit_requested.load(std::sync::atomic::Ordering::Relaxed));
+    assert!(!exit_requested.is_requested());
 
     state.request_exit();
 
-    assert!(exit_requested.load(std::sync::atomic::Ordering::Relaxed));
+    assert!(exit_requested.is_requested());
 }
 
 #[test]
@@ -253,9 +253,9 @@ fn a_call_that_never_returns_traps_and_faults_instead_of_hanging_forever() {
         Bus::new(),
         Registry::new(),
         Logger::new(Arc::new(sink.clone())),
-        Arc::new(AtomicBool::new(false)),
+        ExitRequest::new(),
         DisplayInfo::default(),
-        EndpointBudget::new(crate::bus::BudgetLimits::default()),
+        EndpointBudget::new(bones_kernel_infra::bus::BudgetLimits::default()),
         ExtensionTimeouts::default(),
     )
     .expect("build examples/extensions/runaway-demo first: cargo xtask example runaway-demo");
@@ -286,9 +286,9 @@ fn a_faulted_host_ignores_further_deliveries_instead_of_hanging_again() {
         Bus::new(),
         Registry::new(),
         Logger::default(),
-        Arc::new(AtomicBool::new(false)),
+        ExitRequest::new(),
         DisplayInfo::default(),
-        EndpointBudget::new(crate::bus::BudgetLimits::default()),
+        EndpointBudget::new(bones_kernel_infra::bus::BudgetLimits::default()),
         ExtensionTimeouts::default(),
     )
     .expect("build examples/extensions/runaway-demo first: cargo xtask example runaway-demo");

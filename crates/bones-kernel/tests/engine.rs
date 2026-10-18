@@ -2,6 +2,11 @@
 //! extensions and (for some) a real SDL window. Slower and fixture-
 //! dependent, unlike `cargo test -p runner --lib`'s fast, fixture-free
 //! unit tests — kept in their own binary for that reason.
+//!
+//! Needs the `wasm` feature: nearly every test here loads an extension.
+//! `cargo xtask test` runs this file in its all-features pass.
+
+#![cfg(feature = "wasm")]
 
 use std::panic::AssertUnwindSafe;
 use std::sync::mpsc::{self, Sender};
@@ -11,6 +16,14 @@ use std::time::Duration;
 use bones_kernel::bus::{Envelope, Handler, Module, ModuleContext};
 use bones_kernel::logging::{Logger, RecordingSink};
 use bones_kernel::{BuiltKernel, Kernel};
+
+/// The extension host's per-frame supervision, which `BuiltKernel::step`
+/// runs around every tick: for tests that drive `Runner::step` themselves.
+fn supervise(modules: &[Arc<Mutex<Box<dyn Module>>>]) {
+    for module in modules {
+        module.lock().unwrap().after_tick();
+    }
+}
 use bones_messages::extension_control::{Load, Reload, Unload};
 use bones_messages::lifecycle::{Event, LifecycleEvent};
 use bones_messages::{DecodeMessage, EncodeMessage, Message};
@@ -51,10 +64,12 @@ fn sdl_jobs() -> &'static Sender<Box<dyn FnOnce() + Send>> {
 
 /// Runs one test body on [`sdl_jobs`]'s thread and waits for it.
 ///
-/// A panic inside the body is caught and re-raised here, on the calling
+/// A panic inside the body is caught and raised again here, on the calling
 /// test's own thread, so an ordinary failed assertion is reported as that
 /// test failing — rather than killing the shared thread and leaving every
-/// later SDL test blocked on a channel nobody reads.
+/// later SDL test blocked on a channel nobody reads. It is raised with
+/// `panic!` and its original message: `resume_unwind` skips the panic hook,
+/// and libtest would then report the failure without saying what failed.
 fn on_the_sdl_thread<T: Send + 'static>(body: impl FnOnce() -> T + Send + 'static) -> T {
     let (done, wait) = mpsc::channel();
     sdl_jobs()
@@ -65,7 +80,14 @@ fn on_the_sdl_thread<T: Send + 'static>(body: impl FnOnce() -> T + Send + 'stati
         .expect("the SDL thread outlives every test");
     match wait.recv().expect("the SDL thread reports an outcome") {
         Ok(value) => value,
-        Err(panic) => std::panic::resume_unwind(panic),
+        Err(panic) => {
+            let message = panic
+                .downcast_ref::<String>()
+                .map(String::as_str)
+                .or_else(|| panic.downcast_ref::<&str>().copied())
+                .unwrap_or("the test body panicked with a non-string payload");
+            panic!("{message}")
+        }
     }
 }
 
@@ -172,7 +194,8 @@ fn shutdown_all_calls_cleanup_unregisters_and_publishes_stopped() {
     let sink = RecordingSink::new();
     let BuiltKernel {
         runner,
-        mut supervisor,
+        registry,
+        modules,
         ..
     } = Kernel::new()
         .extensions_dir(HELLO_DIR)
@@ -188,13 +211,15 @@ fn shutdown_all_calls_cleanup_unregisters_and_publishes_stopped() {
         });
     endpoint.subscribe(LifecycleEvent::TOPIC);
     assert!(
-        supervisor.registry.call("test", "hello_demo", &[]).is_ok(),
+        registry.call("test", "hello_demo", &[]).is_ok(),
         "hello_demo must be running before the shutdown sequence"
     );
 
-    supervisor.shutdown_all();
+    for module in &modules {
+        module.lock().unwrap().begin_shutdown();
+    }
     assert!(
-        supervisor.registry.call("test", "hello_demo", &[]).is_err(),
+        registry.call("test", "hello_demo", &[]).is_err(),
         "a stopped extension must no longer accept direct sends"
     );
     runner.bus().dispatch();
@@ -290,7 +315,8 @@ fn startup_allow_list_and_runtime_commands_control_activation() {
     let sink = RecordingSink::new();
     let BuiltKernel {
         runner,
-        mut supervisor,
+        registry,
+        modules,
         ..
     } = Kernel::new()
         .extensions_dir(&dir)
@@ -299,8 +325,8 @@ fn startup_allow_list_and_runtime_commands_control_activation() {
         .logger(Logger::new(Arc::new(sink.clone())))
         .build()
         .unwrap();
-    assert!(supervisor.registry.call("test", "menu", &[]).is_ok());
-    assert!(supervisor.registry.call("test", "later", &[]).is_err());
+    assert!(registry.call("test", "menu", &[]).is_ok());
+    assert!(registry.call("test", "later", &[]).is_err());
 
     runner.bus().publish(Envelope {
         topic: Load::TOPIC.to_string(),
@@ -309,8 +335,8 @@ fn startup_allow_list_and_runtime_commands_control_activation() {
         payload: Load { extension: "later" }.encode(),
     });
     runner.step(1.0 / 60.0);
-    supervisor.check();
-    assert!(supervisor.registry.call("test", "later", &[]).is_err());
+    supervise(&modules);
+    assert!(registry.call("test", "later", &[]).is_err());
     assert!(sink.records().iter().any(|(_, _, message)| {
         message.contains("rejected runtime extension command from 'rogue'")
     }));
@@ -322,7 +348,7 @@ fn startup_allow_list_and_runtime_commands_control_activation() {
         payload: vec![0xff],
     });
     runner.step(1.0 / 60.0);
-    supervisor.check();
+    supervise(&modules);
     assert!(sink.records().iter().any(|(_, _, message)| {
         message.contains("could not decode extension command from 'menu'")
     }));
@@ -334,8 +360,8 @@ fn startup_allow_list_and_runtime_commands_control_activation() {
         payload: Load { extension: "later" }.encode(),
     });
     runner.step(1.0 / 60.0);
-    supervisor.check();
-    assert!(supervisor.registry.call("test", "later", &[]).is_ok());
+    supervise(&modules);
+    assert!(registry.call("test", "later", &[]).is_ok());
 
     std::fs::write(dir.join("levels/later.wasm"), b"not a component").unwrap();
     runner.bus().publish(Envelope {
@@ -345,9 +371,9 @@ fn startup_allow_list_and_runtime_commands_control_activation() {
         payload: Reload { extension: "later" }.encode(),
     });
     runner.step(1.0 / 60.0);
-    supervisor.check();
+    supervise(&modules);
     assert!(
-        supervisor.registry.call("test", "later", &[]).is_ok(),
+        registry.call("test", "later", &[]).is_ok(),
         "a failed commanded reload must keep the current instance running"
     );
     assert!(sink.records().iter().any(|(_, _, message)| {
@@ -361,10 +387,10 @@ fn startup_allow_list_and_runtime_commands_control_activation() {
         payload: Unload { extension: "later" }.encode(),
     });
     runner.step(1.0 / 60.0);
-    supervisor.check();
-    assert!(supervisor.registry.call("test", "later", &[]).is_err());
+    supervise(&modules);
+    assert!(registry.call("test", "later", &[]).is_err());
 
-    drop(supervisor);
+    drop(modules);
     std::fs::remove_dir_all(dir).ok();
 }
 
@@ -727,7 +753,8 @@ fn a_runaway_extension_is_quarantined_while_the_engine_keeps_running() {
 
     let BuiltKernel {
         runner,
-        mut supervisor,
+        registry,
+        modules,
         ..
     } = Kernel::new()
         .extensions_dir(&dir)
@@ -744,13 +771,13 @@ fn a_runaway_extension_is_quarantined_while_the_engine_keeps_running() {
     // runaway extension would stall one frame before the supervisor
     // catches it.
     runner.step(1.0 / 60.0);
-    supervisor.check();
+    supervise(&modules);
 
     // A quarantined extension must be unreachable by direct send too, not
     // just off the bus -- otherwise Registry::call succeeds with a silent
     // empty reply instead of the error messaging.md promises.
     assert_eq!(
-        supervisor.registry.call("test", "runaway_demo", b"hi"),
+        registry.call("test", "runaway_demo", b"hi"),
         Err(bones_kernel::bus::SendError::UnknownEndpoint),
         "a quarantined extension must be unreachable via direct send"
     );
@@ -812,7 +839,7 @@ sdl_test! { fn web_and_renderer_share_a_real_window_and_register_the_web_endpoin
         });
     endpoint.subscribe(PanelOpened::TOPIC);
 
-    let reply = engine.supervisor.registry.call(
+    let reply = engine.registry.call(
         "dashboard",
         "web",
         &Command::Open(OpenPanel {
@@ -847,7 +874,7 @@ sdl_test! { fn a_headless_engine_can_repeatedly_attach_and_close_wry_presentatio
     for cycle in 0..2 {
         let mut presentation = WryPresentation::open(
             engine.runner.bus().clone(),
-            engine.supervisor.registry.clone(),
+            engine.registry.clone(),
             Logger::default(),
             format!("lazy web {cycle}"),
             160,
@@ -855,9 +882,9 @@ sdl_test! { fn a_headless_engine_can_repeatedly_attach_and_close_wry_presentatio
         )
         .unwrap();
         assert!(presentation.is_open());
-        assert!(engine.supervisor.registry.contains(ENDPOINT));
+        assert!(engine.registry.contains(ENDPOINT));
 
-        let reply = engine.supervisor.registry.call(
+        let reply = engine.registry.call(
             "dashboard",
             ENDPOINT,
             &Command::Open(OpenPanel {
@@ -872,7 +899,7 @@ sdl_test! { fn a_headless_engine_can_repeatedly_attach_and_close_wry_presentatio
 
         presentation.close();
         assert!(!presentation.is_open());
-        assert!(!engine.supervisor.registry.contains(ENDPOINT));
+        assert!(!engine.registry.contains(ENDPOINT));
         assert!(engine.is_headless());
     }
 
@@ -919,7 +946,7 @@ sdl_test! { fn dashboard_and_metrics_exchange_push_pull_and_page_ipc() {
             .unwrap()
             .poll_events(engine.runner.bus(), "platform");
         engine.runner.step(0.1);
-        engine.supervisor.check();
+        supervise(&engine.modules);
         for module in &engine.modules {
             module.lock().unwrap().render();
         }
@@ -979,7 +1006,8 @@ fn a_flooding_extension_is_faulted_without_starving_its_peer() {
     let sink = RecordingSink::new();
     let BuiltKernel {
         runner,
-        mut supervisor,
+        registry,
+        modules,
         ..
     } = Kernel::new()
         .extensions_dir(&dir)
@@ -992,18 +1020,18 @@ fn a_flooding_extension_is_faulted_without_starving_its_peer() {
         .unwrap();
 
     runner.step(1.0 / 60.0);
-    supervisor.check();
+    supervise(&modules);
     runner.step(1.0 / 60.0);
-    supervisor.check();
+    supervise(&modules);
 
     std::fs::remove_dir_all(&dir).ok();
 
     assert_eq!(
-        supervisor.registry.call("test", "flood_demo", &[]),
+        registry.call("test", "flood_demo", &[]),
         Err(bones_kernel::bus::SendError::UnknownEndpoint)
     );
     assert!(
-        supervisor.registry.call("test", "hello", &[]).is_ok(),
+        registry.call("test", "hello", &[]).is_ok(),
         "the healthy peer must remain reachable"
     );
     let records = sink.records();
@@ -1027,7 +1055,8 @@ fn exceeding_the_publish_allowance_quarantines_with_drop_counters() {
     let sink = RecordingSink::new();
     let BuiltKernel {
         runner,
-        mut supervisor,
+        registry,
+        modules,
         ..
     } = Kernel::new()
         .extensions_dir(HELLO_DIR)
@@ -1046,10 +1075,10 @@ fn exceeding_the_publish_allowance_quarantines_with_drop_counters() {
         payload: Vec::new(),
     });
     runner.bus().dispatch();
-    supervisor.check();
+    supervise(&modules);
 
     assert_eq!(
-        supervisor.registry.call("test", "hello_demo", &[]),
+        registry.call("test", "hello_demo", &[]),
         Err(bones_kernel::bus::SendError::UnknownEndpoint)
     );
     assert!(sink.records().iter().any(|(_, _, message)| {
@@ -1064,7 +1093,8 @@ fn exceeding_the_inbound_allowance_quarantines_with_drop_counters() {
     let sink = RecordingSink::new();
     let BuiltKernel {
         runner,
-        mut supervisor,
+        registry,
+        modules,
         ..
     } = Kernel::new()
         .extensions_dir(HELLO_DIR)
@@ -1085,10 +1115,10 @@ fn exceeding_the_inbound_allowance_quarantines_with_drop_counters() {
     }
 
     runner.bus().dispatch();
-    supervisor.check();
+    supervise(&modules);
 
     assert_eq!(
-        supervisor.registry.call("test", "hello_demo", &[]),
+        registry.call("test", "hello_demo", &[]),
         Err(bones_kernel::bus::SendError::UnknownEndpoint)
     );
     assert!(sink.records().iter().any(|(_, _, message)| {
@@ -1312,10 +1342,9 @@ fn an_overlay_that_declines_lets_the_click_fall_through_to_input() {
 #[test]
 fn a_custom_module_answers_a_direct_send_through_the_call_registry() {
     let module = RecordingModule::default();
-    let BuiltKernel { supervisor, .. } = Kernel::new().module(module.clone()).build().unwrap();
+    let BuiltKernel { registry, .. } = Kernel::new().module(module.clone()).build().unwrap();
 
-    let reply = supervisor
-        .registry
+    let reply = registry
         .call("caller", "recording", b"abc")
         .expect("recording is registered");
 
@@ -1341,7 +1370,8 @@ fn a_changed_wasm_file_is_hot_reloaded_in_place() {
 
     let BuiltKernel {
         runner,
-        mut supervisor,
+        registry: _,
+        modules,
         ..
     } = Kernel::new()
         .extensions_dir(&dir)
@@ -1366,7 +1396,7 @@ fn a_changed_wasm_file_is_hot_reloaded_in_place() {
         .unwrap();
     drop(file);
 
-    supervisor.check();
+    supervise(&modules);
     runner.step(1.0 / 60.0);
 
     std::fs::remove_dir_all(&dir).ok();

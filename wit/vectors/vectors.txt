@@ -1,5 +1,5 @@
 # bones core message wire format -- conformance vectors
-# version 1.0.0, matching bones:extension@1.0.0 and wit/wire-format.md
+# ABI line 1.2.0, the version of bones-messages that generated this file
 #
 # Generated from bones-messages. Do not edit by hand: crates/bones-messages/
 # tests/conformance.rs fails when this file and the encoder disagree.

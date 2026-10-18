@@ -11,11 +11,10 @@ Component names below are logical. The crates implementing them all carry a `bon
 | Component | Responsibility | Depends on |
 | --- | --- | --- |
 | bus | Topics, direct request/reply, delivery semantics, the `Module` contract and typed service registry (ADR-017), queue budgets and drop counters | logging |
-| wasm-extensions | Everything about a WASM extension's existence over time (ADR-020): loading/dispatch/watchdog (`host`), state-transition events (`lifecycle`), and save/load of its own state (`persistence`, unconditional — see the ADR for why it isn't in the optional module set below) | bus, contract, logging |
-| contract | The WIT package — the extension-facing API definition | — |
+| persistence | Save/load of any endpoint's own state, and reads inside an optionally granted directory (`files`); unconditional, so native modules and extensions alike can rely on it (ADR-020, ADR-040) | bus, logging |
 | platform | SDL window, tray, input sources, timing, event pump; headless mode; provides `window-surface` and `window-control` | logging |
-| runner | Frame-phase loop skeleton, extension discovery and supervision — module-agnostic, so it sits in the kernel infrastructure (ADR-031) | bus, wasm-extensions, logging |
-| kernel | The public surface plus the composition root: the builder API (`.module(...)` injection, and the `.renderer()`/`.ui()` sugar over it), and the one crate an embedder depends on | runner, bus, logging, messages; optional renderer/ui/audio/game-core/web/os/instance/desktop/upgrade/devtools/launch/watch |
+| runner | Frame-phase loop skeleton — module-agnostic, so it sits in the kernel infrastructure (ADR-031); calls the module frame and shutdown hooks without naming any module (ADR-040) | bus, logging |
+| kernel | The public surface plus the composition root: the builder API (`.module(...)` injection, and the `.renderer()`/`.ui()` sugar over it), and the one crate an embedder depends on | runner, bus, logging, messages; optional wasm/renderer/ui/audio/game-core/web/os/instance/desktop/upgrade/devtools/launch/watch |
 | logging | Structured sink and per-extension tagging | — |
 
 ## Native modules (first-party)
@@ -24,6 +23,7 @@ All feature-flagged and individually optional; embedders may add their own.
 
 | Module | Responsibility | Uses (kernel infrastructure + services) |
 | --- | --- | --- |
+| wasm | The extension host (ADR-040): loads `.wasm` components against the WIT contract, gives each its own bus endpoint, and owns the watchdog, quarantine, hot reload, runtime activation, and `core/lifecycle` events (ADR-007, ADR-020) | bus; `registry` service; contract (`wit/`) |
 | renderer | Executes gfx batches, presents; provides `draw-target` | bus; `window-surface` service |
 | ui | egui integration: widget specs → draw data, events back | bus; `draw-target` service |
 | audio | Plays sound effects and music via `audio/*`, backed by `kira` | bus |
@@ -100,11 +100,11 @@ graph TD
     App["bones (engine executable)"] --> Facade["bones-kernel (public surface)"]
     Facade --> Runner["runner (builder)"]
     Runner --> Bus["bus"]
-    Runner --> WasmExtensions["wasm-extensions"]
+    Runner --> Persistence["persistence"]
     Runner --> Platform["platform"]
-    WasmExtensions --> Bus
-    WasmExtensions --> Contract["contract (WIT)"]
+    Persistence --> Bus
     subgraph Modules["native modules (optional, consumer-injectable)"]
+        Wasm["wasm (extension host)"]
         Renderer["renderer"]
         UI["ui"]
         Audio["audio"]
@@ -124,6 +124,8 @@ graph TD
     Launcher["bones-launcher"] --> Versioning
     Facade --> Launch
     Facade --> Watch
+    Wasm --> Bus
+    Wasm --> Contract["contract (WIT)"]
     Renderer --> Bus
     UI --> Bus
     Audio --> Bus
@@ -144,9 +146,9 @@ graph TD
 
 - Solid arrows are crate dependencies; dashed arrows are **services** (typed values in the registry `bus::Module` defines, listed in design/ modules.md) — the consumer depends on `bus`, not on the provider's crate.
 - Anything not drawn is a design violation (e.g. bus depending on host, platform depending on renderer, module depending on another module's crate). There are no exceptions: since [ADR-031](../adr/ADR-031-native-modules-reach-each-other-only-through-services.md) no native module names another's crate, and `renderer`/`ui` reach the composition through the same `.module(...)` path an embedder uses.
-- **bus and contract know nothing about presentation** — messaging must stay usable in a headless build.
+- **bus and contract know nothing about presentation** — messaging must stay usable in a headless build. Only the `wasm` module depends on the contract, so a kernel without it carries no WASM runtime (ADR-040).
 - **logging is a universal leaf**: anyone may depend on it (edges omitted above for readability); it depends on nothing.
-- **Every module in the optional, consumer-composed set is optional**; the kernel infrastructure must build and run with zero of them registered (headless configuration). `wasm-extensions::persistence` is `Module`-shaped but kernel-infrastructure-tier, not a member of that set — see ADR-020.
+- **Every module in the optional, consumer-composed set is optional**; the kernel infrastructure must build and run with zero of them registered (headless configuration). `persistence` is `Module`-shaped but kernel-infrastructure-tier, not a member of that set — see ADR-020.
 - **Kernel libraries depend on no bones crate**, and nothing but the kernel crate depends on them. `bones-launcher` depends only on `bones-versioning`, which contains pure version semantics and depends on no bones crate (ADR-039).
 - **Nothing depends on app**, and app has no access embedders lack. This is now a graph constraint rather than a convention: `bones` depends on `bones-kernel` and nothing else among these crates.
 - Extensions depend only on the **ABI** — `wit/` and the message vocabulary, reached through `bones-wasm-sdk` in Rust — never on core internals.
@@ -157,7 +159,8 @@ graph TD
 bones/
 ├── crates/
 │   ├── bones-kernel/                  # the public surface embedders depend on; holds the composition root — the builder (ADR-030, ADR-031)
-│   │   ├── bones-kernel-infra/        #  bus, logging, contract, platform, wasm-extensions, runner: always-present and module-agnostic
+│   │   ├── bones-kernel-infra/        #  bus, logging, platform, persistence, runner: always-present and module-agnostic
+│   │   ├── bones-module-wasm/         #  the opt-in extension host: wasmtime, the WIT host side, supervision (ADR-040)
 │   │   ├── bones-module-renderer/     #  first-party native modules, each its own crate (ADR-030)
 │   │   ├── bones-module-ui/           #
 │   │   ├── bones-module-audio/        #
@@ -175,7 +178,7 @@ bones/
 │   ├── bones-launcher/                #  selects and starts an installed application
 │   ├── bones-versioning/              #  pure version semantics
 │   └── bones-wasm-sdk/                #  the Rust extension SDK, incl. the optional game_ui
-├── wit/                       # contract: the WIT package
+├── wit/                       # the ABI: the WIT contract (used by the wasm module) and the wire format of every bus message
 ├── vendor/                    # tracked upstream dependencies (submodules)
 │   └── pubsub-bus/            #  the bus's underlying pub/sub primitive
 └── examples/                  # runnable examples, incl. embedding-demo (see its README)

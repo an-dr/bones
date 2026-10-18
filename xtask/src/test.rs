@@ -10,7 +10,7 @@ use std::path::Path;
 
 use crate::metadata::{cargo_metadata, packages};
 use crate::prereq::{self, Check};
-use crate::process::{cargo, repo_root, run_step};
+use crate::process::{cargo, read_output, repo_root, run_step};
 use crate::Result;
 
 /// Excluded from the root workspace (see its Cargo.toml) because they must
@@ -111,6 +111,7 @@ pub fn run() -> Result {
         "Running workspace tests (all features)",
         &mut cargo(&root, &["test", "--workspace", "--all-features"]),
     )?;
+    check_kernel_without_wasm(&root)?;
     // --all-features so the SDK's optional game-ui module is covered too.
     run_in_standalone_crates(&root, "Running tests", &["test", "--all-features"])?;
 
@@ -146,4 +147,31 @@ fn workspace_members(root: &Path) -> Result<Vec<String>> {
         .filter_map(|package| package["name"].as_str().map(str::to_string))
         .collect();
     Ok(members)
+}
+
+/// Extensions are opt-in (ADR-040), and only a build without them proves it.
+///
+/// The workspace runs above always unify `wasm` on, because the `bones`
+/// executable enables it, so they cannot catch a kernel that has quietly
+/// started to need the extension host. This tests `bones-kernel` alone, with
+/// its own default features, and checks that wasmtime is not in its tree.
+fn check_kernel_without_wasm(root: &Path) -> Result {
+    run_step(
+        "Testing bones-kernel without the wasm feature",
+        &mut cargo(root, &["test", "-p", "bones-kernel"]),
+    )?;
+    println!("==> Checking that bones-kernel links no WASM runtime without it...");
+    let tree = read_output(&mut cargo(
+        root,
+        &["tree", "-p", "bones-kernel", "--edges", "normal"],
+    ))
+    .ok_or("cargo tree -p bones-kernel failed")?;
+    if tree.lines().any(|line| line.contains("wasmtime ")) {
+        return Err(
+            "bones-kernel depends on wasmtime without the wasm feature; \
+             only bones-module-wasm may (ADR-040)"
+                .to_string(),
+        );
+    }
+    Ok(())
 }

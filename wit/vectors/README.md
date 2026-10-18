@@ -35,7 +35,7 @@ Generated from `bones-messages`, the same code the engine itself encodes with, a
 Regenerating is deliberate, because an encoding change is an ABI break (ADR-029):
 
 ```sh
-BONES_WRITE_VECTORS=1 cargo test --test conformance
+cargo xtask vectors
 ```
 
-Run from `crates/bones-messages`. Read the resulting diff; it is the list of things you just broke for every extension in existence.
+Run it from anywhere in the repository. Read the resulting diff; it is the list of things you just broke for every extension in existence.

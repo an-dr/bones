@@ -5,14 +5,14 @@
 
 mod shared_host;
 
+use bones_kernel_infra::exit::ExitRequest;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
-use crate::bus::{BudgetLimits, Bus, Endpoint, EndpointBudget, Registry};
-use crate::logging::Logger;
-use crate::wasm_extensions::host::{DisplayInfo, ExtensionTimeouts, Host};
+use crate::host::{DisplayInfo, ExtensionTimeouts, Host};
+use bones_kernel_infra::bus::{BudgetLimits, Bus, Endpoint, EndpointBudget, Registry};
+use bones_kernel_infra::logging::Logger;
 
 pub use shared_host::SharedHost;
 
@@ -35,7 +35,7 @@ pub fn attach_extension(
     logger: &Logger,
     path: &Path,
     name: &str,
-    exit_requested: &Arc<AtomicBool>,
+    exit_requested: &ExitRequest,
     display_info: &DisplayInfo,
     budget_limits: BudgetLimits,
     timeouts: ExtensionTimeouts,

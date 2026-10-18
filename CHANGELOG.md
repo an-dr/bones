@@ -7,6 +7,26 @@ Two independent version lines (ADR-029), so each entry says which one it belongs
 
 An ABI entry concerns every extension in existence, in any language. An engine entry concerns only projects that link the library.
 
+## engine 3.0.0
+
+Extensions become optional. The extension host leaves the kernel infrastructure for its own opt-in module, so an application with no extensions links no WASM runtime (ADR-040). The bus stays in the kernel and stays universal: an extension still reaches every module, and every module reaches it.
+
+The ABI line does not move: it stays at 1.2.0, `bones:extension` stays at 1.0.0, and nothing in `wit/` changed, so every existing extension loads unmodified. The shipped `bones` executable hosts extensions exactly as before.
+
+### Breaking: extensions need the `wasm` feature
+
+- **Enable `wasm` to keep extensions.** `bones-kernel = { ..., features = ["wasm"] }`. Without it, `extensions_dir`, `catalog_extension`, `startup_extension`, `extension_controller`, `extension_budget`, and the extension timeouts do not exist, and no extension loads.
+- **`BuiltKernel.supervisor` is gone.** Use `BuiltKernel.registry` for direct calls (`registry.call(...)`, `registry.contains(...)`), and `BuiltKernel::step(dt)` instead of `runner.step(dt)` plus `supervisor.check()`, so the extension host's reloads and quarantine still run.
+- **`bones_kernel::Supervisor` is gone.** The host is `bones_kernel::wasm::Wasm`, which the builder's extension methods register for you.
+- **`BuiltKernel.exit_requested` is an `ExitRequest`.** Read it with `is_requested()`; any module can set it through the `exit-request` service.
+- **`bones_kernel::Error` is `anyhow::Error`.** It was wasmtime's re-export of the same type, so code that only uses `bones_kernel::Result` is unaffected.
+
+### Added
+
+- **Module hooks `before_tick`, `after_tick`, and `begin_shutdown`.** The kernel names no module any more; the extension host uses these, and any module may.
+- **The `exit-request` and `display-info` services** (`bones_kernel::exit`, `bones_kernel::display`).
+- **`cargo xtask test` checks that `bones-kernel` builds and tests without `wasm`,** with no wasmtime in its dependency tree.
+
 ## engine 2.1.0
 
 A new way to build the repository; the engine's API and the extension ABI are unchanged, and `bones:extension` stays at 1.0.0.

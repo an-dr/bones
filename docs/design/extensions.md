@@ -1,8 +1,19 @@
 # Extensions and the extension host
 
-Detailed design of the extension model: the contract, the state machine, and what a fault or reload actually does. What an extension *is* and why it is sandboxed is in [architecture/overview.md](../architecture/overview.md).
+Detailed design of the extension model: the contract, the state machine, and what a fault or reload actually does. The extension host is the opt-in `wasm` module ([ADR-040](../adr/ADR-040-the-wasm-extension-host-is-an-opt-in-module.md)): everything below applies only to an engine built with it, which includes the shipped `bones` executable. What an extension *is* and why it is sandboxed is in [architecture/overview.md](../architecture/overview.md).
 
-Decisions: [ADR-001](../adr/ADR-001-wasm-component-model.md) (Component Model ABI), [ADR-004](../adr/ADR-004-event-driven-execution.md) (event-driven execution), [ADR-007](../adr/ADR-007-watchdog-quarantine.md) (watchdog and quarantine).
+Decisions: [ADR-001](../adr/ADR-001-wasm-component-model.md) (Component Model ABI), [ADR-004](../adr/ADR-004-event-driven-execution.md) (event-driven execution), [ADR-007](../adr/ADR-007-watchdog-quarantine.md) (watchdog and quarantine), [ADR-040](../adr/ADR-040-the-wasm-extension-host-is-an-opt-in-module.md) (the host is an opt-in module).
+
+## Extension or native module
+
+Both join the same bus and reach every other part through it, so the choice is about cost and trust, not reach:
+
+| Choose | When |
+| --- | --- |
+| An extension | Product logic you want sandboxed, hot-reloadable, and replaceable; third-party plugins; code in a language other than Rust |
+| A native module | Infrastructure called often or on hot paths; OS or device access; a native library such as a C logging or codec library; anything that needs direct function calls or files outside a granted directory |
+
+An extension is reached only by messages: a call is encoded, queued, and delivered at the next dispatch, and flow-control budgets fault an extension that floods the bus. That is the price of the sandbox, and it is the wrong price for a library an application calls in a loop.
 
 ## What an extension is
 

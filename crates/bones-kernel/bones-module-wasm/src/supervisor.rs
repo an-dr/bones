@@ -5,19 +5,19 @@
 mod owned_command;
 mod tracked_extension;
 
+use bones_kernel_infra::exit::ExitRequest;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use crate::bus::{BudgetLimits, Bus, Registry};
-use crate::logging::Logger;
-use crate::wasm_extensions::host::{DisplayInfo, ExtensionTimeouts};
-use crate::wasm_extensions::lifecycle;
-use crate::wasm_extensions::lifecycle::Event;
+use crate::host::{DisplayInfo, ExtensionTimeouts};
+use crate::lifecycle;
+use crate::lifecycle::Event;
+use bones_kernel_infra::bus::{BudgetLimits, Bus, Registry};
+use bones_kernel_infra::logging::Logger;
 
-use crate::wasm_extensions::loading::{attach_extension, read_file_mtime, ENGINE_SENDER};
+use crate::loading::{attach_extension, read_file_mtime, ENGINE_SENDER};
 
 pub use owned_command::OwnedCommand;
 pub use tracked_extension::TrackedExtension;
@@ -45,7 +45,7 @@ pub struct Supervisor {
     catalog: HashMap<String, PathBuf>,
     commands: Arc<Mutex<Vec<OwnedCommand>>>,
     last_mtime_sweep: Option<Instant>,
-    exit_requested: Arc<AtomicBool>,
+    exit_requested: ExitRequest,
     display_info: DisplayInfo,
     budget_limits: BudgetLimits,
     /// Hot reload re-runs `instantiate` + `init`, so it needs the same
@@ -63,7 +63,7 @@ impl Supervisor {
         tracked: Vec<TrackedExtension>,
         catalog: HashMap<String, PathBuf>,
         commands: Arc<Mutex<Vec<OwnedCommand>>>,
-        exit_requested: Arc<AtomicBool>,
+        exit_requested: ExitRequest,
         display_info: DisplayInfo,
         budget_limits: BudgetLimits,
         timeouts: ExtensionTimeouts,

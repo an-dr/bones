@@ -36,12 +36,16 @@ The kernel infrastructure's **runner** owns the loop skeleton. Modules hook name
 | Phase | Kernel infrastructure work | Typical module hooks |
 | --- | --- | --- |
 | `input` | Platform pumps events → bus messages | every module's `filter_event`, topmost first, first claim wins |
+| `before tick` | — | `before_tick`: the wasm module applies hot reloads and runtime commands, so the coming tick runs against the new code |
 | `dispatch` | Bus delivers to subscribers | ui consumes `ui/*` specs (`Handler::handle`) |
 | `tick` | `on-tick(dt)` to tick subscribers | game-core simulation (`Handler::handle` on `core/tick`) |
+| `after tick` | — | `after_tick`: the wasm module quarantines an extension that faulted during this tick, this frame rather than the next |
 | `render` | — | renderer composites gfx batches, then ui draws above them |
 | `present` | — | renderer presents the frame |
 
 Registration order is what layers the frame: `render` runs over every module before `present` runs over any, so the renderer has composited before ui draws, and nothing flips a buffer until both are done. A headless build (no presentation modules) simply has empty phases.
+
+Shutdown has one more hook. On a close request the runner dispatches it, then calls every module's `begin_shutdown` and dispatches again, then every module's `shutdown`. `begin_shutdown` is where a module stops what other modules may still need to hear from: the wasm module calls each extension's own `shutdown` there, so the messages those calls publish reach modules that have not shut down yet. The runner names no module in any of this ([ADR-040](../adr/ADR-040-the-wasm-extension-host-is-an-opt-in-module.md)).
 
 The `input` phase walks that same order backward (ADR-031). Later registration means drawn above, so it has to mean offered input first — the two directions are one statement about layering read from opposite ends, and an embedder sets both by choosing where in the composition a module goes.
 
@@ -89,4 +93,4 @@ bones::Kernel::new()
 The intended pattern is bones as a **git subrepo** (submodule) with path dependencies, or a cargo git dependency — both build from source in one build graph, so module injection is static dispatch with zero ABI machinery. Consequences the embedder owns:
 
 - **Pinning is the stability model**: the parent pins a bones commit and upgrades deliberately; no semver promise before 1.0 (ADR-011).
-- The parent's toolchain and feature unification govern bones' build; the kernel infrastructure brings wasmtime as an inherent dependency.
+- The parent's toolchain and feature unification govern bones' build. wasmtime comes only with the `wasm` feature, which hosts extensions; an application that needs none leaves it off (ADR-040).

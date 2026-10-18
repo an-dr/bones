@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
-use crate::bus::{Envelope, Handler, Respond};
-use crate::wasm_extensions::host::Host;
+use crate::host::Host;
+use bones_kernel_infra::bus::{Envelope, Handler, Respond};
 
 /// One extension `Host`, shared between its `Bus` registration (pub/sub
 /// delivery), its `Registry` registration (direct send, ADR-010), and the

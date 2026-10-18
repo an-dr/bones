@@ -18,7 +18,7 @@ Most readers want the [architecture chapter](../architecture/index.md) instead. 
 | [008](ADR-008-layered-input-focus.md) | Layered input focus, top layer consumes | active — refined by [031](ADR-031-native-modules-reach-each-other-only-through-services.md) |
 | [009](ADR-009-delivery-semantics.md) | Bus delivery: per-sender FIFO, at-most-once | active |
 | [010](ADR-010-synchronous-send.md) | Synchronous send: request/reply completes within the call | active |
-| [011](ADR-011-native-core-modules.md) | Native core modules: kernel plus consumer-composed modules | active |
+| [011](ADR-011-native-core-modules.md) | Native core modules: kernel plus consumer-composed modules | active — extension hosting moved to a module by [040](ADR-040-the-wasm-extension-host-is-an-opt-in-module.md) |
 | [012](ADR-012-injected-logging-sink.md) | Logging via an injected sink trait | active |
 | [013](ADR-013-bus-on-pubsub-bus.md) | Bus built on pubsub-bus, persistent adapter and deferred dispatch | active — **corrected by [015](ADR-015-deferred-dispatch-remains-mandatory.md)** |
 | [014](ADR-014-headless-runner-skeleton.md) | Headless runner skeleton: step-driven, injected bus, virtual clock | active |
@@ -47,6 +47,7 @@ Most readers want the [architecture chapter](../architecture/index.md) instead. 
 | [037](ADR-037-the-update-flow-is-functions-and-its-bus-module-owns-the-download.md) | The update flow is functions, and its bus module owns the download | standalone flow superseded by 039 |
 | [038](ADR-038-the-assembled-system-is-the-kernel-built-on-kernel-infrastructure.md) | The assembled system is the kernel, built on the kernel infrastructure | active |
 | [039](ADR-039-versioning-is-pure-the-launcher-launches-and-the-upgrade-module-owns-installation.md) | Pure versioning, a launch-only launcher, and module-owned upgrading | active |
+| [040](ADR-040-the-wasm-extension-host-is-an-opt-in-module.md) | The WASM extension host is an opt-in module | active — supersedes extension hosting in [011](ADR-011-native-core-modules.md) |
 
 ## The two reversals
 

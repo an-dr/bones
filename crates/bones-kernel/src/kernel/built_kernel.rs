@@ -1,19 +1,23 @@
-use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 
 use bones_kernel_infra::bus::{Envelope, Module};
+use bones_kernel_infra::exit::ExitRequest;
 use bones_messages::window::CloseRequested;
 use bones_messages::{EncodeMessage, Message};
 
+use bones_kernel_infra::bus::Registry;
 use bones_kernel_infra::runner::Runner;
-use bones_kernel_infra::wasm_extensions::loading::ENGINE_SENDER;
-use bones_kernel_infra::wasm_extensions::supervisor::Supervisor;
+
+/// The sender the kernel stamps on what it publishes itself, such as the
+/// close request on an exit it decided. Guests see it as the sender.
+pub(super) const ENGINE_SENDER: &str = "engine";
 
 /// Everything `Kernel::build` wires up: the step-driven `Runner`, the
 /// platform window (if `.window(...)` was set), every native module —
 /// `.renderer()`'s and `.ui()`'s included, since those are sugar over
-/// `.module(...)` — and the `Supervisor` sweeping loaded extensions for
-/// faults and file changes.
+/// `.module(...)` — and the call registry they all answer on. Extensions,
+/// when the `wasm` feature is on, are hosted by one of those modules
+/// (ADR-040).
 ///
 /// Modules are held as `dyn Module` rather than as typed fields. An
 /// embedder drives them through the frame-phase methods below; nothing
@@ -40,13 +44,14 @@ pub struct BuiltKernel {
     /// a later module draws above an earlier one, and input walks it backward
     /// so the topmost is offered an event first (ADR-031).
     pub modules: Vec<Arc<Mutex<Box<dyn Module>>>>,
-    /// Watches loaded extensions for faults, quarantine, and file changes
-    /// (ADR-007, ADR-024). Call `check()` once per frame; `run` does it twice,
-    /// before and after `step`.
-    pub supervisor: Supervisor,
-    /// Set by any loaded extension's `request-exit` host-api call; `run`'s
-    /// loop breaks once true, the same as `Platform::quit_requested()`.
-    pub exit_requested: Arc<AtomicBool>,
+    /// Every endpoint that answers a direct `send` (ADR-010), by name:
+    /// modules, and extensions while they are loaded. Call one with
+    /// `registry.call(sender, name, payload)`.
+    pub registry: Registry,
+    /// Set by any loaded extension's `request-exit` host-api call, or by any
+    /// module through the `exit-request` service; `run`'s loop breaks once it
+    /// is set, the same as `Platform::quit_requested()`.
+    pub exit_requested: ExitRequest,
     pub(super) shutdown_started: bool,
 }
 
@@ -61,6 +66,16 @@ impl BuiltKernel {
         {
             true
         }
+    }
+
+    /// One frame's logic: every module's `before_tick`, the runner's
+    /// `step(dt)`, then every module's `after_tick`.
+    ///
+    /// `run` calls this once per iteration. A caller driving its own loop
+    /// calls it instead of `Runner::step`, so modules that hook either side
+    /// of the tick — the extension host among them — still run.
+    pub fn step(&mut self, dt: f32) {
+        step_frame(&self.runner, &self.modules, dt);
     }
 
     /// Runs the `render` then `present` phases over every module, in
@@ -83,7 +98,7 @@ impl BuiltKernel {
             return;
         }
         self.shutdown_started = true;
-        run_shutdown(&self.runner, &mut self.supervisor, &self.modules, sender);
+        run_shutdown(&self.runner, &self.modules, sender);
     }
 }
 
@@ -103,12 +118,19 @@ pub(super) fn run_frame_phases(modules: &[Arc<Mutex<Box<dyn Module>>>]) {
     }
 }
 
-pub(super) fn run_shutdown(
-    runner: &Runner,
-    supervisor: &mut Supervisor,
-    modules: &[Arc<Mutex<Box<dyn Module>>>],
-    sender: &str,
-) {
+/// `before_tick`, the tick itself, and `after_tick`, over every module in
+/// registration order.
+pub(super) fn step_frame(runner: &Runner, modules: &[Arc<Mutex<Box<dyn Module>>>], dt: f32) {
+    for module in modules {
+        module.lock().unwrap().before_tick();
+    }
+    runner.step(dt);
+    for module in modules {
+        module.lock().unwrap().after_tick();
+    }
+}
+
+pub(super) fn run_shutdown(runner: &Runner, modules: &[Arc<Mutex<Box<dyn Module>>>], sender: &str) {
     runner.begin_frame();
     runner.bus().publish(Envelope {
         topic: CloseRequested::TOPIC.to_string(),
@@ -117,9 +139,9 @@ pub(super) fn run_shutdown(
         payload: CloseRequested.encode(),
     });
     runner.bus().dispatch();
-    supervisor.check();
-
-    supervisor.shutdown_all();
+    for module in modules {
+        module.lock().unwrap().begin_shutdown();
+    }
     runner.bus().dispatch();
     for module in modules {
         module.lock().unwrap().shutdown();

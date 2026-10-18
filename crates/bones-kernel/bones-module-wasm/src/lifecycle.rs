@@ -2,7 +2,7 @@
 //! (messaging.md, design/extensions.md), so tooling and other extensions
 //! can observe loads, faults, and reloads.
 
-use crate::bus::{Bus, Envelope};
+use bones_kernel_infra::bus::{Bus, Envelope};
 use bones_messages::lifecycle::LifecycleEvent;
 use bones_messages::{EncodeMessage, Message};
 

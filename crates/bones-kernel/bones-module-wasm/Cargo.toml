@@ -1,0 +1,13 @@
+[package]
+name = "bones-module-wasm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+bones-kernel-infra = { path = "../bones-kernel-infra", default-features = false }
+bones-messages = { path = "../../bones-messages" }
+wasmtime = { version = "47.0.0", features = ["component-model"] }
+wasmtime-wasi = "47.0.0"

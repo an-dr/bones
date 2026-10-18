@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 use std::time::SystemTime;
 
-use crate::bus::{Endpoint, EndpointBudget};
+use bones_kernel_infra::bus::{Endpoint, EndpointBudget};
 
-use crate::wasm_extensions::loading::SharedHost;
+use crate::loading::SharedHost;
 
 pub struct TrackedExtension {
     pub name: String,

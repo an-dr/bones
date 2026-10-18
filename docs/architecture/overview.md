@@ -1,6 +1,6 @@
 # System overview
 
-bones is a small native core that owns the machine — window, tray, input, audio, rendering, and a message bus — with product behaviour supplied as WASM extensions in any language. The core presents; extensions describe what to present. That one boundary is what makes an extension sandboxed, hot-reloadable, and language-agnostic.
+bones is a small native core that owns the machine — window, tray, input, audio, rendering, and a message bus — composed with native modules and, optionally, WASM extensions in any language. The core presents; modules and extensions describe what to present. Where extensions are used, that boundary is what makes them sandboxed, hot-reloadable, and language-agnostic.
 
 ## Three kinds of part
 
@@ -14,11 +14,11 @@ Everything in a running engine is one of three things, and the difference is abo
 | Hot-reloadable | no | no | yes |
 | Reaches the OS | yes | yes | never |
 
-The **kernel infrastructure** is what cannot be removed: the bus, extension hosting, the WIT contract, the platform layer, logging, and the frame loop. It names no module and runs with none registered — that is what makes a headless build possible ([ADR-011](../adr/ADR-011-native-core-modules.md), [ADR-014](../adr/ADR-014-headless-runner-skeleton.md)).
+The **kernel infrastructure** is what cannot be removed: the bus, the platform layer, logging, persistence, and the frame loop. It names no module and runs with none registered — that is what makes a headless build possible ([ADR-011](../adr/ADR-011-native-core-modules.md), [ADR-014](../adr/ADR-014-headless-runner-skeleton.md)).
 
 **Native modules** are optional and composed by whoever builds the binary. A module owns a native resource — a GPU surface, an egui context, a webview, an audio device — or runs a simulation the engine steps each frame. Modules reach each other only through typed services, never by naming each other's crates ([ADR-031](../adr/ADR-031-native-modules-reach-each-other-only-through-services.md)).
 
-**Extensions** are WASM components the engine loads at runtime. An extension cannot touch the OS, cannot render, and cannot link a native library; it publishes messages and the engine acts. Everything it is allowed to do is in the contract ([ADR-001](../adr/ADR-001-wasm-component-model.md)).
+**Extensions** are WASM components the engine loads at runtime, through the opt-in `wasm` module that owns the WIT contract's host side ([ADR-040](../adr/ADR-040-the-wasm-extension-host-is-an-opt-in-module.md)). Without that module there are no extensions, and everything else works unchanged. An extension cannot touch the OS, cannot render, and cannot link a native library; it publishes messages and the engine acts. Everything it is allowed to do is in the contract ([ADR-001](../adr/ADR-001-wasm-component-model.md)).
 
 On the bus these three are indistinguishable. A module and an extension both register a name, both receive messages, both may answer a direct request. Whether `game-core` is native or WASM is a build decision no other part can observe — which is why a capability can move between tiers without a protocol change.
 
@@ -26,7 +26,6 @@ On the bus these three are indistinguishable. A module and an extension both reg
 graph TD
     subgraph Kernel infrastructure["Kernel infrastructure — always present"]
         Bus["Message bus"]
-        Host["Extension host (wasmtime)"]
         Platform["Platform (SDL)<br/>window · tray · input"]
         Runner["Runner — frame loop"]
         Log["Logging"]
@@ -40,6 +39,7 @@ graph TD
         GameCore["game-core"]
         OS["os"]
         App["instance · desktop<br/>upgrader · devtools"]
+        Host["wasm — extension host (wasmtime)"]
     end
 
     subgraph Ext["Extensions — WASM, any language"]

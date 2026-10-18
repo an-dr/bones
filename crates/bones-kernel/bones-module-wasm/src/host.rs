@@ -7,18 +7,19 @@
 
 mod extension_timeouts;
 
+use bones_kernel_infra::exit::ExitRequest;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use std::time::Duration;
 
 pub use extension_timeouts::ExtensionTimeouts;
 
-use crate::bus::{Bus, EndpointBudget, Envelope, Handler, Registry};
 use crate::contract::bones::extension::host_api::{
     DisplayMode, Host as HostApiImports, Level, SendError,
 };
 use crate::contract::Extension;
-use crate::logging::Logger;
+use bones_kernel_infra::bus::{Bus, EndpointBudget, Envelope, Handler, Registry};
+use bones_kernel_infra::logging::Logger;
 use bones_messages::tick::Tick;
 use bones_messages::{DecodeMessage, Message};
 use wasmtime::component::{Component, HasSelf, Linker};
@@ -28,17 +29,17 @@ use wasmtime::{Config, Engine, Store};
 /// epoch counter every loaded extension's calls are budgeted against.
 pub const EPOCH_TICK_INTERVAL: Duration = Duration::from_millis(5);
 
-fn map_send_error(err: crate::bus::SendError) -> SendError {
+fn map_send_error(err: bones_kernel_infra::bus::SendError) -> SendError {
     match err {
-        crate::bus::SendError::UnknownEndpoint => SendError::UnknownEndpoint,
-        crate::bus::SendError::Cycle => SendError::Cycle,
-        // TODO: the WIT contract has no timeout case yet; `crate::bus::SendError`
+        bones_kernel_infra::bus::SendError::UnknownEndpoint => SendError::UnknownEndpoint,
+        bones_kernel_infra::bus::SendError::Cycle => SendError::Cycle,
+        // TODO: the WIT contract has no timeout case yet; `bones_kernel_infra::bus::SendError`
         // grew one ahead of it. `unreachable!` rather than silently mapping
         // to a wrong variant — bus.rs's own doc comment says dispatch is
         // single-threaded, so nothing constructs this today; the panic is
         // the signal to add a real WIT case the day something does.
-        crate::bus::SendError::Timeout => {
-            unreachable!("crate::bus::SendError::Timeout is not constructed yet")
+        bones_kernel_infra::bus::SendError::Timeout => {
+            unreachable!("bones_kernel_infra::bus::SendError::Timeout is not constructed yet")
         }
     }
 }
@@ -62,17 +63,7 @@ pub fn new_engine() -> wasmtime::Result<Engine> {
     Ok(engine)
 }
 
-/// Display capability info queried once by `crate::platform::Platform` (before any
-/// window hand-off) and threaded into every `Host::load` call — small,
-/// read-only, static for the process's lifetime, so a plain owned copy per
-/// `Host` is simpler than `exit_requested`'s shared-mutable-flag `Arc`.
-/// Bundled into one struct rather than two more `Host::load` parameters, to
-/// stay clear of `clippy::too_many_arguments`.
-#[derive(Debug, Clone, Default)]
-pub struct DisplayInfo {
-    pub modes: Vec<(u32, u32)>,
-    pub native: Option<(u32, u32)>,
-}
+pub use bones_kernel_infra::display::DisplayInfo;
 
 /// Reuses compiled code across runs, keyed by the component's own bytes.
 ///
@@ -124,7 +115,7 @@ struct State {
     /// Shared with whoever runs the engine's own loop (`the kernel's `Kernel::run``)
     /// — set here, read there. Not `Host`'s to act on: closing the app is
     /// the run loop's job, this only signals the request.
-    exit_requested: Arc<AtomicBool>,
+    exit_requested: ExitRequest,
     display_info: DisplayInfo,
 }
 
@@ -162,7 +153,7 @@ impl HostApiImports for State {
     }
 
     fn request_exit(&mut self) {
-        self.exit_requested.store(true, Ordering::Relaxed);
+        self.exit_requested.request();
     }
 
     fn list_display_modes(&mut self) -> Vec<DisplayMode> {
@@ -229,7 +220,7 @@ impl Host {
         bus: Bus,
         registry: Registry,
         logger: Logger,
-        exit_requested: Arc<AtomicBool>,
+        exit_requested: ExitRequest,
         display_info: DisplayInfo,
         budget: EndpointBudget,
         timeouts: ExtensionTimeouts,
@@ -316,7 +307,7 @@ impl Host {
     }
 
     /// Answers a direct `send` targeting this extension (ADR-010,
-    /// `crate::bus::Respond`): calls `on-message` with an empty topic — direct
+    /// `bones_kernel_infra::bus::Respond`): calls `on-message` with an empty topic — direct
     /// messages have none (messaging.md) — and returns its reply. Same
     /// timeout/fault handling as `Handler::handle`: a no-op once faulted,
     /// and a hang here faults the extension the same way a hang in

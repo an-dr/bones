@@ -2,7 +2,7 @@
 
 # bones
 
-**A small native engine core. Everything else is a WASM extension, in any language.**
+**A small native application core with a universal message bus — and optional sandboxed WASM extensions, in any language.**
 
 [![CI](https://github.com/an-dr/bones/actions/workflows/ci.yml/badge.svg)](https://github.com/an-dr/bones/actions/workflows/ci.yml) [![engine](https://img.shields.io/github/v/tag/an-dr/bones?filter=v*&label=engine&color=2f6f5e)](CHANGELOG.md) [![ABI](https://img.shields.io/github/v/tag/an-dr/bones?filter=abi-v*&label=ABI&color=4a6fa5)](wit/README.md) [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE) [![AI Level 3](https://ai-level.dev/badge/standard/3.svg)](https://ai-level.dev/level-3)
 
@@ -12,13 +12,13 @@
 
 ---
 
-The core owns windows, the tray icon, input (SDL), audio, logging, and a message bus. All product behavior lives in WASM extensions.
+The core owns windows, the tray icon, input (SDL), logging, and a message bus. Everything else is composed onto that bus: native modules in Rust — rendering, UI, audio, web panels, your own — and, when you turn them on, WASM extensions.
 
-Extensions talk to the core and to each other over that one bus. They never touch the OS and never render directly: they publish draw commands, widget specs, or web-panel JSON, and the engine presents. That boundary is what makes an extension **hot-reloadable**, **sandboxed**, and **language-agnostic**.
+Every part talks to every other over that one bus, and none can tell whether the other is native or WASM. Extensions are optional. When used, they never touch the OS and never render directly: they publish draw commands, widget specs, or web-panel JSON, and the engine presents. That boundary is what makes an extension **hot-reloadable**, **sandboxed**, and **language-agnostic**.
 
 ```mermaid
 flowchart LR
-  subgraph guests["WASM extensions — any language"]
+  subgraph guests["WASM extensions — optional, any language"]
     game["your game"]
     tool["your tool"]
     gui["your GUI"]
@@ -27,9 +27,10 @@ flowchart LR
   subgraph core["bones engine — native"]
     present["renderer · egui · wry panels"]
     io["input · audio · persistence"]
+    mine["your native modules"]
   end
   game & tool & gui <--> bus
-  bus <--> present & io
+  bus <--> present & io & mine
 ```
 
 The kernel infrastructure, renderer, egui UI, audio, game-core, optional web panels, hot reload, orderly shutdown, extension flow-control budgets, and custom native-module injection all work today.
@@ -38,7 +39,7 @@ The kernel infrastructure, renderer, egui UI, audio, game-core, optional web pan
 
 ## How to use bones
 
-Three ways in, from least to most code of your own. Most projects want the first.
+Three ways in, from least to most code of your own. The first needs no Rust at all; the other two are for applications that own their binary, with or without extensions.
 
 ### 1. Write extensions for the released engine
 
@@ -52,18 +53,19 @@ You ship the engine binary unchanged and write your product — a game, a tool, 
 
 ### 2. Embed the engine in your own binary
 
-Your application owns `main` and builds the engine with the `Kernel` builder — choosing the window, the modules, and the extensions directory in code rather than in `bones.toml`. Extensions still carry the product logic; your binary decides what runs. This is how [commits](https://github.com/an-dr/commits) and the other projects below use bones.
+Your application owns `main` and builds the engine with the `Kernel` builder — choosing the window and the modules in code rather than in `bones.toml`. Product logic can live in native modules, in extensions, or both. This is how [commits](https://github.com/an-dr/commits) and the other projects below use bones.
 
 ```toml
 [dependencies]
-bones-kernel = { git = "https://github.com/an-dr/bones", tag = "v2.1.0" }
+# Drop "wasm" for a purely native application: no extensions, and no WASM runtime in the build.
+bones-kernel = { git = "https://github.com/an-dr/bones", tag = "v3.0.0", features = ["wasm"] }
 ```
 
 Distributed by git tag, not crates.io; [docs/architecture/structure.md](docs/architecture/structure.md#how-each-one-is-obtained) says what a tag promises. Opt-in modules cover what a desktop application needs around the engine: single instance, self-update, desktop registration, OS access.
 
 ### 3. Extend the engine with native modules
 
-When an extension needs a capability the sandbox cannot reach — a device, a native library, an OS service — write a native module in Rust and inject it with `.module(...)`. It joins the same bus, can define its own message vocabulary, and stays invisible to extensions except through the messages it answers. [custom-engine](examples/embedding/custom-engine/README.md) is the worked example.
+When you need a capability the sandbox cannot reach — a device, a native library, an OS service — or code your application calls on a hot path, write a native module in Rust and inject it with `.module(...)`. It joins the same bus and can define its own message vocabulary, which extensions then reach like any other. [docs/design/extensions.md](docs/design/extensions.md#extension-or-native-module) says when to choose a module over an extension. [custom-engine](examples/embedding/custom-engine/README.md) is the worked example.
 
 ## Release archives
 
@@ -95,7 +97,7 @@ An extension author in Rust pins the ABI line, not the engine line:
 
 ```toml
 [dependencies]
-bones-wasm-sdk = { git = "https://github.com/an-dr/bones", tag = "abi-v1.0.0" }
+bones-wasm-sdk = { git = "https://github.com/an-dr/bones", tag = "abi-v1.2.0" }
 ```
 
 See [CHANGELOG.md](CHANGELOG.md) for what has moved.

@@ -10,8 +10,9 @@ It first checks the prerequisites (see [building.md](building.md#checking-prereq
 2. Checks formatting **per package** — not `cargo fmt --all`, which would also rewrite the vendored `pubsub-bus` submodule.
 3. Runs `cargo clippy --workspace --all-targets --all-features -- -D warnings`.
 4. Runs the tests **twice**, with default features and with `--all-features`. Only the second compiles and exercises the optional wry web panels.
-5. Runs the same checks for `bones-messages`, `bones-wasm-sdk`, and the custom-engine message crate, which the root workspace excludes so they can build for `wasm32-wasip2`.
-6. Builds the documentation with warnings denied.
+5. Tests `bones-kernel` **on its own, without the `wasm` feature**, and fails if wasmtime is in its dependency tree. The workspace runs always have extensions on, because the `bones` executable enables them, so only this proves extensions stay optional (ADR-040).
+6. Runs the same checks for `bones-messages`, `bones-wasm-sdk`, and the custom-engine message crate, which the root workspace excludes so they can build for `wasm32-wasip2`.
+7. Builds the documentation with warnings denied.
 
 The list of fixtures and standalone crates lives in [xtask/src/test.rs](../../xtask/src/test.rs).
 

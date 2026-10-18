@@ -6,7 +6,9 @@ That distinction is enforced by the dependency graph rather than by convention. 
 
 ## Public shape
 
-- Root — `Kernel`, `BuiltKernel`, `Runner`, `Supervisor`, `read_tick_dt`, and the `Error`/`Result` pair the fallible calls return.
+- Root — `Kernel`, `BuiltKernel`, `Runner`, `read_tick_dt`, and the `Error`/`Result` pair the fallible calls return.
+- `wasm` (with `wasm`) — `Wasm`, the extension host module, and `ExtensionTimeouts`. The builder's extension methods register it for you (ADR-040).
+- `exit`, `display` — `ExitRequest` and `DisplayInfo`, the `exit-request` and `display-info` services.
 - `bus` — `Module`, `ModuleContext`, `Handler`, `Envelope`, the service registry, the budget types, and (with `presentation`) `PlatformEvent` plus `offer_event`.
 - `platform` (with `presentation`) — `Platform`, and `WindowSurface` for the `window-surface` service.
 - `draw_target` (with `presentation`) — `DrawTarget`, `DrawTargetService`, `UiMesh`, `UiVertex`.

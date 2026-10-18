@@ -1,6 +1,6 @@
 # bones core message wire format
 
-**Version 1.0.0**, matching `bones:extension@1.0.0` in [extension.wit](extension.wit). This document and that file are the two halves of the extension ABI: `extension.wit` defines the calls, this defines the bytes those calls carry on core-owned topics.
+This document and [extension.wit](extension.wit) are the two halves of the extension ABI: `extension.wit` defines the calls, this defines the bytes those calls carry on core-owned topics. It describes the ABI line of the `abi-v*` tag or release archive you took it from; `bones-messages` carries the same version number.
 
 Written so an extension author in any language can produce and consume core messages without reading Rust. The Rust implementation lives in `bones-messages`; where the two ever disagree, the [conformance vectors](vectors/README.md) decide, because both this document and that crate are checked against them.
 

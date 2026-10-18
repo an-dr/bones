@@ -59,6 +59,7 @@ fn build_rejects_an_invalid_rate_before_wiring_anything() {
     );
 }
 
+#[cfg(feature = "wasm")]
 #[test]
 fn extension_budget_defaults_and_overrides_are_explicit() {
     assert_eq!(Kernel::new().extension_budget, BudgetLimits::default());
@@ -72,6 +73,7 @@ fn extension_budget_defaults_and_overrides_are_explicit() {
     );
 }
 
+#[cfg(feature = "wasm")]
 #[test]
 fn extension_timeouts_default_and_override_one_at_a_time() {
     assert_eq!(
@@ -97,6 +99,7 @@ fn extension_timeouts_default_and_override_one_at_a_time() {
     assert_eq!(only_call.extension_timeouts.call, call);
 }
 
+#[cfg(feature = "wasm")]
 #[test]
 fn explicit_catalog_entries_preserve_embedder_identity_and_path() {
     let path = PathBuf::from("validated/session-counter.wasm");

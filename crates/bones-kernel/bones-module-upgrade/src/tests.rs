@@ -8,7 +8,7 @@ use base64::Engine;
 use bones_kernel_infra::bus::{
     Bus, Envelope, Handler, Module, ModuleContext, ModuleRegistration, Registry, ServiceRegistry,
 };
-use bones_kernel_infra::wasm_extensions::persistence::Persistence;
+use bones_kernel_infra::persistence::Persistence;
 use bones_messages::persistence::Save;
 use bones_messages::upgrader::{Action, Outcome, Request, Result as UpgraderResult};
 use bones_messages::{DecodeMessage, EncodeMessage, Message};

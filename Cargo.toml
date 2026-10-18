@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/bones-kernel", "crates/bones-kernel/bones-kernel-infra", "crates/bones-kernel/bones-module-renderer", "crates/bones-kernel/bones-module-ui", "crates/bones-kernel/bones-module-audio", "crates/bones-kernel/bones-module-game-core", "crates/bones-kernel/bones-module-web", "crates/bones-kernel/bones-module-os", "crates/bones-kernel/bones-module-single-instance", "crates/bones-kernel/bones-module-desktop", "crates/bones-kernel/bones-module-upgrade", "crates/bones-kernel/bones-module-devtools", "crates/bones", "crates/bones-versioning", "crates/bones-launcher", "crates/bones-kernel/bones-kernel-launch", "crates/bones-kernel/bones-kernel-watch", "xtask"]
+members = ["crates/bones-kernel", "crates/bones-kernel/bones-kernel-infra", "crates/bones-kernel/bones-module-renderer", "crates/bones-kernel/bones-module-ui", "crates/bones-kernel/bones-module-audio", "crates/bones-kernel/bones-module-game-core", "crates/bones-kernel/bones-module-web", "crates/bones-kernel/bones-module-os", "crates/bones-kernel/bones-module-single-instance", "crates/bones-kernel/bones-module-desktop", "crates/bones-kernel/bones-module-upgrade", "crates/bones-kernel/bones-module-devtools", "crates/bones-kernel/bones-module-wasm", "crates/bones", "crates/bones-versioning", "crates/bones-launcher", "crates/bones-kernel/bones-kernel-launch", "crates/bones-kernel/bones-kernel-watch", "xtask"]
 # bones-messages and bones-wasm-sdk must also compile for wasm32-wasip2 guests,
 # so they carry their own workspaces. vendor/pubsub-bus is a submodule: cargo
 # would otherwise adopt it as a member because a member depends on it by path,
@@ -32,7 +32,7 @@ opt-level = 2
 debug = false
 
 [workspace.package]
-version = "2.1.0"
+version = "3.0.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/an-dr/bones"

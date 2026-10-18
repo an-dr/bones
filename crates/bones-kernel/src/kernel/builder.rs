@@ -9,30 +9,26 @@
 //! that names concrete `bones-module-*` types.
 
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+
 use std::time::Duration;
 
-use bones_kernel_infra::bus::{BudgetLimits, Module, Registry, ServiceRegistry};
+#[cfg(feature = "wasm")]
+use bones_kernel_infra::bus::BudgetLimits;
+use bones_kernel_infra::bus::{Module, Registry, ServiceRegistry};
+use bones_kernel_infra::display::DisplayInfo;
+use bones_kernel_infra::files::{self, Files};
 use bones_kernel_infra::logging::Logger;
-use bones_kernel_infra::wasm_extensions::files::{self, Files};
-use bones_kernel_infra::wasm_extensions::host::{DisplayInfo, ExtensionTimeouts};
-use bones_kernel_infra::wasm_extensions::lifecycle;
-use bones_kernel_infra::wasm_extensions::lifecycle::Event;
-use bones_kernel_infra::wasm_extensions::persistence::Persistence;
+use bones_kernel_infra::persistence::Persistence;
 #[cfg(feature = "presentation")]
 use bones_module_renderer::Renderer;
 #[cfg(feature = "presentation")]
 use bones_module_ui::Ui;
+#[cfg(feature = "wasm")]
+use bones_module_wasm::host::ExtensionTimeouts;
 
 use bones_kernel_infra::runner::Runner;
-use bones_kernel_infra::wasm_extensions::loading::{
-    attach_extension, derive_extension_name, find_wasm_files, read_file_mtime, ENGINE_SENDER,
-};
-use bones_kernel_infra::wasm_extensions::supervisor::Supervisor;
-use bones_kernel_infra::wasm_extensions::supervisor::TrackedExtension;
 
-use super::built_kernel::{run_frame_phases, run_shutdown, BuiltKernel};
+use super::built_kernel::{run_frame_phases, run_shutdown, step_frame, BuiltKernel, ENGINE_SENDER};
 use super::register_module::register_module;
 
 const DEFAULT_TICK_HZ: f64 = 60.0;
@@ -93,9 +89,13 @@ fn exe_dir() -> Option<PathBuf> {
 ///   engine ships — `.renderer()` and `.ui()` are sugar over it, so an
 ///   injected module has no less access than a built-in one.
 pub struct Kernel {
+    #[cfg(feature = "wasm")]
     extensions_dir: Option<PathBuf>,
+    #[cfg(feature = "wasm")]
     catalog_extensions: Vec<(String, PathBuf)>,
+    #[cfg(feature = "wasm")]
     startup_extensions: Vec<String>,
+    #[cfg(feature = "wasm")]
     extension_controller: Option<String>,
     logger: Logger,
     tick_hz: f64,
@@ -117,7 +117,9 @@ pub struct Kernel {
     saves_dir: PathBuf,
     persistence_read_only: bool,
     files_root: Option<PathBuf>,
+    #[cfg(feature = "wasm")]
     extension_budget: BudgetLimits,
+    #[cfg(feature = "wasm")]
     extension_timeouts: ExtensionTimeouts,
 }
 
@@ -130,9 +132,13 @@ impl Kernel {
     /// written down at the call site.
     pub fn new() -> Self {
         Self {
+            #[cfg(feature = "wasm")]
             extensions_dir: None,
+            #[cfg(feature = "wasm")]
             catalog_extensions: Vec::new(),
+            #[cfg(feature = "wasm")]
             startup_extensions: Vec::new(),
+            #[cfg(feature = "wasm")]
             extension_controller: None,
             logger: Logger::default(),
             tick_hz: DEFAULT_TICK_HZ,
@@ -154,11 +160,14 @@ impl Kernel {
             saves_dir: PathBuf::from("states"),
             persistence_read_only: false,
             files_root: None,
+            #[cfg(feature = "wasm")]
             extension_budget: BudgetLimits::default(),
+            #[cfg(feature = "wasm")]
             extension_timeouts: ExtensionTimeouts::default(),
         }
     }
 
+    #[cfg(feature = "wasm")]
     /// Where `.wasm` extensions are discovered (`build`'s own doc comment).
     /// A relative path resolves against the running executable's own
     /// directory, not the process's cwd (`resolve_relative_to_exe`) -- the
@@ -169,6 +178,7 @@ impl Kernel {
         self
     }
 
+    #[cfg(feature = "wasm")]
     /// Adds one explicitly named component to the extension catalog.
     ///
     /// This complements directory discovery for embedders whose validated
@@ -178,6 +188,7 @@ impl Kernel {
         self
     }
 
+    #[cfg(feature = "wasm")]
     /// Restricts initial activation to the named catalog entries.
     ///
     /// With no names configured, every discovered extension loads as before.
@@ -186,6 +197,7 @@ impl Kernel {
         self
     }
 
+    #[cfg(feature = "wasm")]
     /// Authorizes one host-stamped extension sender to issue runtime
     /// load/unload/reload commands. Unset means runtime control is disabled.
     pub fn extension_controller(mut self, name: impl Into<String>) -> Self {
@@ -357,7 +369,7 @@ impl Kernel {
     }
 
     /// Grants extensions read access to one directory through the `files`
-    /// endpoint (`bones_kernel_infra::wasm_extensions::files`). A relative path resolves against
+    /// endpoint (`bones_kernel_infra::files`). A relative path resolves against
     /// the running executable's own directory, the same convention
     /// `saves_dir` uses.
     ///
@@ -369,12 +381,14 @@ impl Kernel {
         self
     }
 
+    #[cfg(feature = "wasm")]
     /// Sets the per-frame allowances shared by every WASM extension.
     pub fn extension_budget(mut self, limits: BudgetLimits) -> Self {
         self.extension_budget = limits;
         self
     }
 
+    #[cfg(feature = "wasm")]
     /// Sets how long `instantiate` + `init` may take per extension, for the
     /// initial load and for every hot reload after it.
     ///
@@ -391,6 +405,7 @@ impl Kernel {
         self
     }
 
+    #[cfg(feature = "wasm")]
     /// Sets how long any single guest call may take -- `on-message`,
     /// `on-tick`, or answering a direct `send`.
     ///
@@ -429,8 +444,7 @@ impl Kernel {
         let ui_enabled = self.ui_enabled;
         let bus = bones_kernel_infra::bus::Bus::new();
         let registry = Registry::new();
-        let wasm_engine = bones_kernel_infra::wasm_extensions::host::new_engine()?;
-        let exit_requested = Arc::new(AtomicBool::new(false));
+        let exit_requested = bones_kernel_infra::exit::ExitRequest::new();
 
         #[cfg(feature = "presentation")]
         let min_window_size = self.min_window_size.take();
@@ -500,6 +514,15 @@ impl Kernel {
         services
             .provide(registry.clone())
             .expect("no other service registers as Registry");
+        // `exit-request` and `display-info`: what the extension host reads from
+        // the kernel, offered as services so any module can read them the same
+        // way (ADR-040).
+        services
+            .provide(exit_requested.clone())
+            .expect("no other service registers as ExitRequest");
+        services
+            .provide(display_info.clone())
+            .expect("no other service registers as DisplayInfo");
 
         #[cfg(feature = "web")]
         let web_module: Option<Box<dyn Module>> = if self.web_enabled {
@@ -632,143 +655,34 @@ impl Kernel {
             .map_err(crate::Error::msg)?;
         }
 
-        let mut tracked = Vec::new();
-        let mut catalog = std::collections::HashMap::new();
-        let mut catalog_entries = Vec::new();
-
-        if let Some(dir) = &self.extensions_dir {
-            let dir = resolve_relative_to_exe(dir.clone());
-            for path in find_wasm_files(&dir) {
-                catalog_entries.push((derive_extension_name(&path), path));
+        // Registered last, after persistence and files: an extension's own
+        // `init` may `send` any module synchronously (ADR-010), and that only
+        // reaches it once it is registered. Its endpoint, `extension-manager`,
+        // is where runtime commands arrive (ADR-040). Registered only when
+        // the composition configures extensions, so an engine built with the
+        // feature but asking for none carries no idle endpoint.
+        #[cfg(feature = "wasm")]
+        if self.extensions_dir.is_some()
+            || !self.catalog_extensions.is_empty()
+            || !self.startup_extensions.is_empty()
+            || self.extension_controller.is_some()
+        {
+            let mut wasm = bones_module_wasm::Wasm::new(self.logger.clone())
+                .startup_extensions(self.startup_extensions.drain(..))
+                .budget(self.extension_budget)
+                .timeouts(self.extension_timeouts);
+            if let Some(dir) = &self.extensions_dir {
+                wasm = wasm.extensions_dir(resolve_relative_to_exe(dir.clone()));
             }
+            for (name, path) in self.catalog_extensions.drain(..) {
+                wasm = wasm.catalog_extension(name, resolve_relative_to_exe(path));
+            }
+            if let Some(controller) = self.extension_controller.take() {
+                wasm = wasm.controller(controller);
+            }
+            register_module(&bus, &registry, &mut services, &mut modules, Box::new(wasm))
+                .map_err(crate::Error::msg)?;
         }
-        catalog_entries.extend(
-            self.catalog_extensions
-                .drain(..)
-                .map(|(name, path)| (name, resolve_relative_to_exe(path))),
-        );
-        for (name, path) in catalog_entries {
-            if catalog.contains_key(&name) {
-                self.logger.error(
-                    "engine",
-                    &format!(
-                        "skipping {}: an extension named '{name}' is already cataloged",
-                        path.display()
-                    ),
-                );
-                continue;
-            }
-            catalog.insert(name.clone(), path.clone());
-            if !self.startup_extensions.is_empty() && !self.startup_extensions.contains(&name) {
-                continue;
-            }
-            match attach_extension(
-                &wasm_engine,
-                &bus,
-                &registry,
-                &self.logger,
-                &path,
-                &name,
-                &exit_requested,
-                &display_info,
-                self.extension_budget,
-                self.extension_timeouts,
-            ) {
-                Ok((ep, shared, budget, topics)) => {
-                    self.logger.info(
-                        "engine",
-                        &format!(
-                            "loaded '{name}' from {} (subscribed: {topics:?})",
-                            path.display()
-                        ),
-                    );
-                    lifecycle::publish(&bus, ENGINE_SENDER, &name, Event::Loaded);
-                    tracked.push(TrackedExtension {
-                        name,
-                        mtime: read_file_mtime(&path),
-                        path,
-                        endpoint: ep,
-                        shared,
-                        budget,
-                        quarantined: false,
-                    });
-                }
-                Err(err) => {
-                    self.logger.error(
-                        "engine",
-                        &format!("failed to load {}: {err}", path.display()),
-                    );
-                    lifecycle::publish(&bus, ENGINE_SENDER, &name, Event::Faulted);
-                }
-            }
-        }
-        for name in &self.startup_extensions {
-            if !catalog.contains_key(name) {
-                self.logger.error(
-                    "engine",
-                    &format!("startup extension '{name}' is not in the catalog"),
-                );
-            }
-        }
-
-        let commands = Arc::new(Mutex::new(Vec::new()));
-        let command_sink = commands.clone();
-        let controller = self.extension_controller.clone();
-        let control_logger = self.logger.clone();
-        let control = bus.register(
-            "extension-manager",
-            move |envelope: &bones_kernel_infra::bus::Envelope| {
-                if controller.as_deref() != Some(envelope.sender.as_str()) {
-                    control_logger.error(
-                        "engine",
-                        &format!(
-                            "rejected runtime extension command from '{}' on '{}'",
-                            envelope.sender, envelope.topic
-                        ),
-                    );
-                    return;
-                }
-                match bones_messages::extension_control::Command::decode(
-                    &envelope.topic,
-                    &envelope.payload,
-                ) {
-                    Ok(Some(command)) => command_sink.lock().unwrap().push(
-                        bones_kernel_infra::wasm_extensions::supervisor::OwnedCommand::from(
-                            command,
-                        ),
-                    ),
-                    Ok(None) => control_logger.warn(
-                        "engine",
-                        &format!(
-                            "ignored unknown extension command topic '{}'",
-                            envelope.topic
-                        ),
-                    ),
-                    Err(err) => control_logger.warn(
-                        "engine",
-                        &format!(
-                            "could not decode extension command from '{}' on '{}': {err}",
-                            envelope.sender, envelope.topic
-                        ),
-                    ),
-                }
-            },
-        );
-        control.subscribe("core/extensions/*");
-
-        let supervisor = Supervisor::new(
-            wasm_engine,
-            bus.clone(),
-            registry,
-            self.logger.clone(),
-            tracked,
-            catalog,
-            commands,
-            exit_requested.clone(),
-            display_info,
-            self.extension_budget,
-            self.extension_timeouts,
-        );
 
         #[cfg(feature = "presentation")]
         if let Some(platform) = &mut platform {
@@ -780,7 +694,7 @@ impl Kernel {
             #[cfg(feature = "presentation")]
             platform,
             modules,
-            supervisor,
+            registry,
             exit_requested,
             shutdown_started: false,
         })
@@ -788,11 +702,9 @@ impl Kernel {
 
     /// Runs at `tick_hz`, real wall-clock timing, until the window is
     /// closed (or forever, if `.window(...)` was never set) — a thin
-    /// wrapper around `Runner::step` (ADR-014). `Supervisor::check` runs
-    /// both before and after `step`: before, so a swapped-in extension's
-    /// first tick already runs against the new code; after, so a fault
-    /// from that same tick is quarantined this iteration rather than the
-    /// next one.
+    /// wrapper around `Runner::step` (ADR-014) that also runs every module's
+    /// `before_tick` and `after_tick` around it, which is where the extension
+    /// host applies reloads and quarantines faults (ADR-040).
     pub fn run(self) -> crate::Result<()> {
         let period = tick_period(self.tick_hz)?;
         let BuiltKernel {
@@ -800,7 +712,7 @@ impl Kernel {
             #[cfg(feature = "presentation")]
             mut platform,
             modules,
-            mut supervisor,
+            registry: _,
             exit_requested,
             shutdown_started: _,
         } = self.build()?;
@@ -822,18 +734,15 @@ impl Kernel {
                     break "platform";
                 }
             }
-            if exit_requested.load(Ordering::Relaxed) {
+            if exit_requested.is_requested() {
                 break ENGINE_SENDER;
             }
-
-            supervisor.check();
 
             let now = std::time::Instant::now();
             let dt = (now - last).as_secs_f32();
             last = now;
 
-            runner.step(dt);
-            supervisor.check();
+            step_frame(&runner, &modules, dt);
 
             // render then present, both over every module in registration
             // order (design/modules.md). The renderer composites its
@@ -848,7 +757,7 @@ impl Kernel {
             }
         };
 
-        run_shutdown(&runner, &mut supervisor, &modules, shutdown_sender);
+        run_shutdown(&runner, &modules, shutdown_sender);
         Ok(())
     }
 }

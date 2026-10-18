@@ -20,6 +20,7 @@ cargo xtask test            # fixtures, gates, and every test
 cargo xtask example <name>  # build one example into its own dist/ and say how to run it
 cargo xtask check-commits <range>  # reject commits that credit an AI tool as an author
 cargo xtask linux-packages     # the Debian/Ubuntu packages a Linux build needs
+cargo xtask vectors            # regenerate the wire format's conformance vectors (an ABI change)
 ```
 
 `cargo xtask dist --features web` builds the variant with wry web panels and names its archive `-web`. `cargo xtask dist --no-archive` stops after `dist/`, which is the inner loop for running the engine you just built. `cargo xtask example` with no name lists the examples.

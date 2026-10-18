@@ -10,7 +10,7 @@
 //! Regenerate after an intentional encoding change:
 //!
 //! ```text
-//! BONES_WRITE_VECTORS=1 cargo test --test conformance
+//! cargo xtask vectors
 //! ```
 //!
 //! That is a deliberate act. An encoding change is an ABI break
@@ -669,7 +669,10 @@ fn vectors() -> Vec<Vector> {
 fn render(vectors: &[Vector]) -> String {
     let mut out = String::new();
     out.push_str("# bones core message wire format -- conformance vectors\n");
-    out.push_str("# version 1.0.0, matching bones:extension@1.0.0 and wit/wire-format.md\n");
+    out.push_str(&format!(
+        "# ABI line {}, the version of bones-messages that generated this file\n",
+        env!("CARGO_PKG_VERSION")
+    ));
     out.push_str("#\n");
     out.push_str("# Generated from bones-messages. Do not edit by hand: crates/bones-messages/\n");
     out.push_str("# tests/conformance.rs fails when this file and the encoder disagree.\n");
@@ -706,7 +709,7 @@ fn the_shipped_vectors_match_what_this_crate_encodes() {
 
     let committed = std::fs::read_to_string(&path).unwrap_or_else(|err| {
         panic!(
-            "cannot read {}: {err}. Generate it with BONES_WRITE_VECTORS=1 cargo test --test conformance",
+            "cannot read {}: {err}. Generate it with `cargo xtask vectors`",
             path.display()
         )
     });
@@ -719,7 +722,7 @@ fn the_shipped_vectors_match_what_this_crate_encodes() {
             rendered,
             "wit/vectors/vectors.txt line {} disagrees with this crate's encoding. \
              If the encoding changed on purpose, that is an ABI break: regenerate with \
-             BONES_WRITE_VECTORS=1 cargo test --test conformance and bump the ABI version.",
+             `cargo xtask vectors` and bump the ABI version.",
             line + 1
         );
     }

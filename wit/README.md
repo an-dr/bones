@@ -1,6 +1,9 @@
 # wit
 
-The extension ABI — the one contract between the native core and every WASM extension, in any language (ADR-001). It has two halves, and an author outside Rust needs both.
+The extension ABI — the one contract between the native core and every WASM extension, in any language (ADR-001). It has two halves, and an author outside Rust needs both. They are not equally WASM-specific:
+
+- `extension.wit` matters only to an engine built with the opt-in `wasm` module, which hosts extensions ([ADR-040](../docs/adr/ADR-040-the-wasm-extension-host-is-an-opt-in-module.md)).
+- `wire-format.md` is the format of every message on the bus. Native modules exchange exactly these bytes too; an extension is just one more party that has to produce them without sharing the Rust codec.
 
 [`extension.wit`](extension.wit) declares **the calls**:
 
@@ -9,11 +12,11 @@ The extension ABI — the one contract between the native core and every WASM ex
 
 [`wire-format.md`](wire-format.md) declares **the bytes those calls carry** on core-owned topics: the primitive encodings, the framing rules, and one section per topic, with machine-readable [conformance vectors](vectors/README.md) beside it.
 
-The split is not arbitrary. WIT can describe a `list<u8>` payload but not what is inside it, so a `publish` signature alone tells a guest author nothing about how to build a `gfx/draw-sprite`. Both files carry the same `1.0.0` and move together.
+The split is not arbitrary. WIT can describe a `list<u8>` payload but not what is inside it, so a `publish` signature alone tells a guest author nothing about how to build a `gfx/draw-sprite`. The two halves version differently. `extension.wit`'s package version, `bones:extension@<version>`, moves only when the calls change, because wasmtime matches it exactly and a bump breaks every extension. The ABI line — the `abi-v*` tag, and the version of `bones-messages` and `bones-wasm-sdk` — moves whenever either half changes, including a new topic in `wire-format.md`.
 
 ## What belongs here
 
-Only the contract. No implementation and no generated code: the host side is generated from `extension.wit` by wasmtime's `bindgen!` inside [`bones-kernel-infra`](../crates/bones-kernel/bones-kernel-infra/README.md), and the guest side by `wit_bindgen::generate!` in [`bones-wasm-sdk`](../crates/bones-wasm-sdk/README.md).
+Only the contract. No implementation and no generated code: the host side is generated from `extension.wit` by wasmtime's `bindgen!` inside [`bones-module-wasm`](../crates/bones-kernel/bones-module-wasm/README.md), and the guest side by `wit_bindgen::generate!` in [`bones-wasm-sdk`](../crates/bones-wasm-sdk/README.md).
 
 Those two crates are the only places in the repository that name this directory. Extensions do not: a Rust extension depends on `bones-wasm-sdk`, which carries the package and generates the bindings for it.
 

@@ -4,14 +4,11 @@
 //! Build the extension first: cargo xtask example hello-demo
 //! Then: cargo run -p bones-kernel-infra --example hello_extension
 
-use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
-
 use bones_kernel_infra::bus::{BudgetLimits, Bus, EndpointBudget, Envelope, Registry};
 use bones_kernel_infra::logging::Logger;
-use bones_kernel_infra::wasm_extensions::host::{DisplayInfo, Host};
 use bones_messages::tick::Tick;
 use bones_messages::{EncodeMessage, Message};
+use bones_module_wasm::host::{DisplayInfo, Host};
 
 const HELLO_WASM: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -30,7 +27,7 @@ fn tick_once(bus: &Bus, dt: f32) {
 }
 
 fn main() -> wasmtime::Result<()> {
-    let engine = bones_kernel_infra::wasm_extensions::host::new_engine()?;
+    let engine = bones_module_wasm::host::new_engine()?;
     let bus = Bus::new();
 
     let mut hello = Host::load(
@@ -40,10 +37,10 @@ fn main() -> wasmtime::Result<()> {
         bus.clone(),
         Registry::new(),
         Logger::default(),
-        Arc::new(AtomicBool::new(false)),
+        bones_kernel_infra::exit::ExitRequest::new(),
         DisplayInfo::default(),
         EndpointBudget::new(BudgetLimits::default()),
-        bones_kernel_infra::wasm_extensions::host::ExtensionTimeouts::default(),
+        bones_module_wasm::host::ExtensionTimeouts::default(),
     )?;
     let topics = hello.requested_topics();
     let ep = bus.register("hello", hello);

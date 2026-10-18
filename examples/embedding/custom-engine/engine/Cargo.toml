@@ -11,5 +11,5 @@ publish = false
 # sandbox. Nothing here reaches into bones-kernel-infra or a bones-module-* crate,
 # because an embedder cannot.
 [dependencies]
-bones-kernel = { path = "../../../../crates/bones-kernel" }
+bones-kernel = { path = "../../../../crates/bones-kernel", features = ["wasm"] }
 host-facts-messages = { path = "../messages" }

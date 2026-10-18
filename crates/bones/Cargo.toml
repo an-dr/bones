@@ -11,6 +11,7 @@ default = []
 web = ["bones-kernel/web"]
 
 [dependencies]
-bones-kernel = { path = "../bones-kernel" }
+# The shipped executable hosts extensions: that is its whole job (ADR-040).
+bones-kernel = { path = "../bones-kernel", features = ["wasm"] }
 serde = { version = "1.0.228", features = ["derive"] }
 toml = "1.1.2"

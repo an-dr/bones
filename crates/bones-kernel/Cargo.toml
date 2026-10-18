@@ -27,11 +27,14 @@ devtools = ["dep:bones-module-devtools"]
 # nothing a guest may reach starts programs or watches folders.
 launch = ["dep:bones-kernel-launch"]
 watch = ["dep:bones-kernel-watch"]
+# Off by default (ADR-040): the extension host and the WASM runtime it brings.
+# An application with no extensions leaves it off and links no wasmtime.
+wasm = ["dep:bones-module-wasm"]
 
 [dependencies]
 bones-kernel-infra = { path = "./bones-kernel-infra", default-features = false }
 bones-messages = { path = "../bones-messages" }
-wasmtime = { version = "47.0.0", features = ["component-model"] }
+anyhow = "1"
 bones-module-renderer = { path = "./bones-module-renderer", optional = true }
 bones-module-ui = { path = "./bones-module-ui", optional = true }
 bones-module-web = { path = "./bones-module-web", features = ["wry-backend"], optional = true }
@@ -42,6 +45,7 @@ bones-module-single-instance = { path = "./bones-module-single-instance", option
 bones-module-desktop = { path = "./bones-module-desktop", optional = true }
 bones-module-upgrade = { path = "./bones-module-upgrade", optional = true }
 bones-module-devtools = { path = "./bones-module-devtools", optional = true }
+bones-module-wasm = { path = "./bones-module-wasm", optional = true }
 # Plain libraries reached through this crate's own re-exports, so an
 # application depends on bones-kernel alone.
 bones-kernel-launch = { path = "./bones-kernel-launch", optional = true }

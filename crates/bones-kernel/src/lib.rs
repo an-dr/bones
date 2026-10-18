@@ -97,17 +97,27 @@ pub use kernel::{BuiltKernel, Kernel};
 /// instantiate — arrives as one of these, carrying a chain of causes rather
 /// than an enum of variants the facade would have to keep in step with every
 /// layer beneath it.
-pub use wasmtime::Error;
+pub use anyhow::Error;
 
 /// The result type the engine's fallible calls return, so an embedder can
 /// write `fn start() -> bones_kernel::Result<()>` without naming [`Error`].
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
-/// Lifecycle, from the kernel infrastructure: the frame loop and the extension supervisor
-/// are module-agnostic, so they live in `bones-kernel-infra` and are surfaced
-/// here rather than defined here.
+/// Lifecycle, from the kernel infrastructure: the frame loop is module-agnostic,
+/// so it lives in `bones-kernel-infra` and is surfaced here rather than
+/// defined here.
 pub use bones_kernel_infra::runner::{read_tick_dt, Runner};
-pub use bones_kernel_infra::wasm_extensions::supervisor::Supervisor;
+
+/// The extension host (ADR-040), present with the `wasm` feature.
+///
+/// The builder's extension methods — `extensions_dir`, `startup_extension`,
+/// `extension_controller`, and the budgets — register it for you. Name it
+/// directly only to compose it by hand with `.module(...)`.
+#[cfg(feature = "wasm")]
+pub mod wasm {
+    pub use bones_module_wasm::host::ExtensionTimeouts;
+    pub use bones_module_wasm::Wasm;
+}
 
 /// The message bus, and the traits a native module implements to join it.
 pub mod bus {
@@ -195,6 +205,19 @@ pub mod platform {
 /// without owning it. A custom module reads it with `get_service`.
 pub mod window_control {
     pub use bones_kernel_infra::window_control::WindowControl;
+}
+
+/// The `exit-request` service (ADR-040): ask the kernel to begin orderly
+/// shutdown from any module. [`BuiltKernel::exit_requested`](crate::BuiltKernel)
+/// is the same flag.
+pub mod exit {
+    pub use bones_kernel_infra::exit::ExitRequest;
+}
+
+/// The `display-info` service (ADR-040): the display's fullscreen modes and
+/// desktop resolution, queried once before any window hand-off.
+pub mod display {
+    pub use bones_kernel_infra::display::DisplayInfo;
 }
 
 /// Single instance per user (ADR-035): claim the application's `app_uid` in `main`, before the

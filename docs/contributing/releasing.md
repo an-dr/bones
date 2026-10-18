@@ -3,7 +3,7 @@
 The two version lines are released independently ([ADR-029](../adr/ADR-029-the-two-version-lines-are-the-two-public-surfaces.md)), so the first step decides which of them this release is.
 
 1. **Decide which line moves.** The engine line is `[workspace.package]`'s `version` in the root `Cargo.toml`. The ABI line is `bones:extension@` in [wit/extension.wit](../../wit/extension.wit), plus the explicit `version` in `bones-messages` and `bones-wasm-sdk`. They move independently — never bump one to match the other.
-2. **If the ABI moved, regenerate the conformance vectors** — `BONES_WRITE_VECTORS=1 cargo test --test conformance` from `crates/bones-messages` — and read the diff. It is the list of things you just broke.
+2. **If the ABI moved, regenerate the conformance vectors** — `cargo xtask vectors` — and read the diff. It is the list of things you just broke.
 3. **Run `cargo xtask test`.** All gates, both feature sets, green. CI runs it too, on every platform, but a red CI on a release commit is a release you have to redo.
 4. **Update [CHANGELOG.md](../../CHANGELOG.md)** and commit.
 5. **Tag and push the tag** — `v<version>` for the engine line, `abi-v<version>` for the ABI line.

@@ -4,15 +4,28 @@ Add future work here only when it has a demonstrable completion artifact; comple
 
 ## Android
 
-The engine runs on Android as a standalone APK: arm64-v8a, API level 26 and up, with its extensions bundled inside the package. Embedding the engine in a host Android app, other ABIs, and Play Store signing are out of scope for the first version.
+bones runs on Android as a library inside an application's own APK: arm64-v8a, API level 26 and up. There is no Android release of the `bones` executable. An Android user installs apps rather than dropping files into a folder, and since extensions are optional ([ADR-040](adr/ADR-040-the-wasm-extension-host-is-an-opt-in-module.md)), the binary-plus-extensions model is not one the engine has to offer there. Other ABIs and Play Store signing are out of scope for the first version.
 
-- **Packaging.** SDL3 ships Android support — a Java `SDLActivity` plus a native `SDL_main` — and the engine already sits on SDL3, so the APK is SDL's activity loading the engine as `libmain.so`. A new `bones-android` crate is that library: the same `Kernel` builder as the desktop `bones` binary, with an `SDL_main` entry point instead of `main`. The desktop composition does not change.
-- **Extensions.** Bundled under the APK's `assets/extensions/` and unpacked to app-internal storage at startup, so the kernel's existing `extensions_dir` loading picks them up unchanged. Saves go to SDL's per-app preference path.
-- **Modules.** Only what works on Android out of the box: renderer, input, egui UI, kira audio, game-core, and persistence. wry web panels stay desktop-only — wry needs its own Android activity and cannot share SDL's. Tray, self-update, single-instance, desktop registration, and the OS module are desktop concepts.
+- **Packaging.** SDL3 ships Android support — a Java `SDLActivity` plus a native `SDL_main` — and the engine already sits on SDL3, so an application's APK is SDL's activity loading the application as `libmain.so`. A `bones-android` crate provides the `SDL_main` glue around the same `Kernel` builder an embedder uses on the desktop.
+- **Modules.** Only what works on Android out of the box: renderer, input, egui UI, kira audio, game-core, and persistence. wry web panels stay desktop-only — wry needs its own Android activity and cannot share SDL's. Tray, self-update, single-instance, desktop registration, and the OS module are desktop concepts. The `wasm` module is the application's choice, as on the desktop.
 - **Portability work first.** The kernel and the enabled modules must compile for `aarch64-linux-android`, which means gating the desktop-only dependencies (single-instance, the file watcher, desktop paths) behind `cfg`.
-- **Build.** `cargo xtask android` builds `libmain.so` with `cargo-ndk`, stages the example extensions into an `android/` Gradle project, and produces a debug APK, optionally installing it over `adb`. Its prerequisite checks cover JDK 17, the Android SDK (platform 35 and build-tools), the NDK, the `aarch64-linux-android` Rust target, `cargo-ndk`, and `adb`, each failing with where to install it; nothing is installed automatically.
+- **Build.** `cargo xtask android` builds `libmain.so` with `cargo-ndk` and produces a debug APK from an example's Gradle project, optionally installing it over `adb`. Its prerequisite checks cover JDK 17, the Android SDK (platform 35 and build-tools), the NDK, the `aarch64-linux-android` Rust target, `cargo-ndk`, and `adb`, each failing with where to install it; nothing is installed automatically.
 
-Completion artifact: `cargo xtask android` producing an APK from a clean clone on a machine with the prerequisites, on which `hello-demo` and `sprite-demo` run on an arm64 device.
+Completion artifact: `cargo xtask android` producing an APK of a native example application from a clean clone on a machine with the prerequisites, running on an arm64 device.
+
+## An Android example that manages its extensions
+
+Once the library runs on Android, an example APK showing an application that hosts extensions there: it enables the `wasm` module, bundles extensions in its assets or lets the user add them, and gives the user a screen to enable, disable, and reload them. It is an example of what an application builds on the existing runtime activation (startup allow-list, `core/extensions/load`, `unload`, `reload`, and `core/lifecycle`), not an extension manager inside the engine.
+
+Completion artifact: the example APK on an arm64 device, adding an extension at runtime and toggling it from its own screen.
+
+## Per-extension topic permissions
+
+Every extension may publish to and subscribe to any topic: the sandbox limits what an extension can reach in the OS, not what it may say on the bus. That is right for an application's own extensions and too generous for third-party plugins, where an application may want "this plugin may not use `os/*`".
+
+Because the bus is universal, permissions belong in the `wasm` module, as a filter on each extension's endpoint, declared by the application at composition time. No change to the bus or the ABI is needed.
+
+Completion artifact: a test in which an extension denied a topic prefix has its publish to that prefix rejected and logged, while an extension without the restriction still reaches it.
 
 ## Supply-chain checks and the rest of the platform matrix
 

@@ -26,7 +26,7 @@ fn a_single_instance_engine_publishes_each_later_launch() {
         panic!("the app_uid should have been free");
     };
     let engine = Kernel::new().single_instance(primary).build().unwrap();
-    assert!(engine.supervisor.registry.contains("instance"));
+    assert!(engine.registry.contains("instance"));
     let launched = Arc::new(Mutex::new(Vec::new()));
     let sink = Arc::clone(&launched);
     let spy = engine
@@ -63,7 +63,7 @@ fn the_devtools_channel_exists_only_when_its_variable_names_a_port() {
         .devtools_from_env("BONES_ENGINE_TEST_DEVTOOLS_UNSET")
         .build()
         .unwrap();
-    assert!(!unset.supervisor.registry.contains("devtools"));
+    assert!(!unset.registry.contains("devtools"));
 
     let port = std::net::TcpListener::bind("127.0.0.1:0")
         .unwrap()
@@ -75,7 +75,7 @@ fn the_devtools_channel_exists_only_when_its_variable_names_a_port() {
         .devtools_from_env("BONES_ENGINE_TEST_DEVTOOLS_PORT")
         .build()
         .unwrap();
-    assert!(set.supervisor.registry.contains("devtools"));
+    assert!(set.registry.contains("devtools"));
     set.shutdown();
 }
 
@@ -98,7 +98,7 @@ fn desktop_registers_its_endpoint() {
         .build()
         .unwrap();
 
-    assert!(engine.supervisor.registry.contains("desktop"));
+    assert!(engine.registry.contains("desktop"));
 }
 
 #[cfg(feature = "upgrade")]
@@ -121,5 +121,5 @@ fn upgrader_registers_its_endpoint() {
         .build()
         .unwrap();
 
-    assert!(engine.supervisor.registry.contains("upgrader"));
+    assert!(engine.registry.contains("upgrader"));
 }

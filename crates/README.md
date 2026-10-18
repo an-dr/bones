@@ -10,7 +10,7 @@ Every crate in the repository. Folder name matches crate name throughout, so a p
 
 | Crate | Responsibility |
 | --- | --- |
-| [bones-kernel-infra](bones-kernel/bones-kernel-infra/README.md) | Bus, logging, host-side WIT bindings, platform (SDL), the frame loop, and WASM extension loading and supervision — everything native modules depend *on*, plus everything that runs without naming one (ADR-030, ADR-031) |
+| [bones-kernel-infra](bones-kernel/bones-kernel-infra/README.md) | Bus, logging, platform (SDL), persistence, and the frame loop — everything native modules depend *on*, plus everything that runs without naming one (ADR-030, ADR-031) |
 
 The kernel infrastructure must build and run with no native modules registered at all.
 
@@ -30,6 +30,7 @@ Nested beside `bones-kernel-infra`, not inside it: each is its own crate, so a d
 | [bones-module-desktop](bones-kernel/bones-module-desktop/README.md) | Desktop registration: called directly from an installer, or over `desktop/*` for one application the composition fixes |
 | [bones-module-upgrade](bones-kernel/bones-module-upgrade/README.md) | Self-update over `upgrader/*`, with its own HTTPS download |
 | [bones-module-devtools](bones-kernel/bones-module-devtools/README.md) | An opt-in, loopback-only channel that posts page messages and records the bus |
+| [bones-module-wasm](bones-kernel/bones-module-wasm/README.md) | The opt-in extension host: loads `.wasm` components, gives each a bus endpoint, and owns quarantine, hot reload, and runtime activation (ADR-040) |
 
 ### Kernel libraries — plain Rust, no bus
 

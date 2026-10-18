@@ -39,6 +39,21 @@ pub trait Module: Handler {
         false
     }
 
+    /// Called once per frame before `core/tick` is published and dispatched.
+    ///
+    /// For work the coming tick must already see — the extension host swaps
+    /// in a rebuilt extension here, so its first tick runs the new code.
+    /// Default is a no-op.
+    fn before_tick(&mut self) {}
+
+    /// Called once per frame after the tick's messages are dispatched and
+    /// before `render`.
+    ///
+    /// For reacting to what that dispatch did — the extension host
+    /// quarantines an extension that faulted during this tick here, this
+    /// frame rather than the next. Default is a no-op.
+    fn after_tick(&mut self) {}
+
     /// `render` phase: draw work that doesn't need to happen exactly at
     /// present time. Most modules don't need this; default is a no-op.
     fn render(&mut self) {}
@@ -46,7 +61,17 @@ pub trait Module: Handler {
     /// `present` phase: flip buffers / finalize the frame.
     fn present(&mut self) {}
 
-    /// Called once after extensions stop during orderly application shutdown.
+    /// First step of orderly shutdown, after the close request is dispatched
+    /// and before any module's `shutdown`.
+    ///
+    /// For stopping what other modules may still need to hear from: whatever
+    /// this publishes is dispatched while every module is still running. The
+    /// extension host calls each extension's own `shutdown` here. Default is
+    /// a no-op.
+    fn begin_shutdown(&mut self) {}
+
+    /// Called once during orderly shutdown, after every module's
+    /// `begin_shutdown` has run and its messages have been dispatched.
     fn shutdown(&mut self) {}
 
     /// Answers a direct `send` (ADR-010) addressed to this module by name.

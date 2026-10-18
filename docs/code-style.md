@@ -9,7 +9,7 @@ Each `struct`/`enum`, its impls, and any private helpers that exist only to serv
 **Exception, stated inline**: two types stay in one file only when one is a private implementation detail of the other — never constructed or named outside that file, no independent identity of its own. State the reason as a comment above the private type. Real examples in this codebase:
 
 ```rust
-// crates/bones-kernel/bones-kernel-infra/src/wasm_extensions/host.rs
+// crates/bones-kernel/bones-module-wasm/src/host.rs
 // `State` and `Host` stay in one file rather than splitting further: `State`
 // is purely `Host`'s internal store data (implements the WIT imports and
 // `WasiView` only for `Host`'s own use), never meaningful on its own.
