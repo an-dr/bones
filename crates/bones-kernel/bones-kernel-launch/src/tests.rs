@@ -42,6 +42,20 @@ fn a_bare_name_on_windows_also_matches_its_pathext_extensions() {
 }
 
 #[test]
+#[cfg(windows)]
+fn a_bare_name_on_windows_prefers_its_pathext_shim_over_an_extensionless_file() {
+    let dir = tempfile::tempdir().unwrap();
+    // VS Code's bin folder: a shell script `code` beside `code.cmd`.
+    std::fs::write(dir.path().join("tool"), b"#!/bin/sh").unwrap();
+    let shim = dir.path().join("tool.cmd");
+    std::fs::write(&shim, b"@echo off").unwrap();
+
+    let found = resolve(&dir.path().join("tool").to_string_lossy());
+
+    assert_eq!(found, Some(shim));
+}
+
+#[test]
 fn a_leading_tilde_is_the_home_folder() {
     let home = dirs::home_dir().unwrap();
     let marker = format!("bones-kernel-launch-tilde-{}", std::process::id());

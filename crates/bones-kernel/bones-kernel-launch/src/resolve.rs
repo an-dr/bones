@@ -6,8 +6,10 @@ use std::path::{Path, PathBuf};
 /// - A path with more than one component, or an absolute one, is taken as
 ///   given.
 /// - A bare name is searched on `PATH`.
-/// - On Windows each candidate is also tried with every `PATHEXT` extension,
-///   so `code` finds `code.cmd`.
+/// - On Windows a name without an extension is tried with every `PATHEXT`
+///   extension before it is tried as given, the way `cmd` does, so `code`
+///   finds `code.cmd` rather than the extensionless shell script VS Code
+///   ships next to it, which Windows cannot start.
 ///
 /// Public so an application can tell whether a tool is installed before
 /// offering it.
@@ -23,7 +25,7 @@ pub fn resolve(program: &str) -> Option<PathBuf> {
         Some(rest) => dirs::home_dir()?.join(rest),
         None => PathBuf::from(program),
     };
-    let extensions = executable_extensions();
+    let extensions = executable_extensions(&expanded);
     let with_extension = |base: &Path| -> Option<PathBuf> {
         extensions
             .iter()
@@ -37,14 +39,19 @@ pub fn resolve(program: &str) -> Option<PathBuf> {
         .find_map(|dir| with_extension(&dir.join(&expanded)))
 }
 
-/// The name as given first, then each `PATHEXT` extension on Windows.
-pub(crate) fn executable_extensions() -> Vec<String> {
-    if !cfg!(windows) {
+/// The suffixes to try on `program`: only the name as given outside Windows
+/// or when it already has an extension; otherwise each `PATHEXT` extension
+/// first and the bare name last.
+pub(crate) fn executable_extensions(program: &Path) -> Vec<String> {
+    if !cfg!(windows) || program.extension().is_some() {
         return vec![String::new()];
     }
     let pathext = std::env::var("PATHEXT").unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".into());
-    std::iter::once(String::new())
-        .chain(pathext.split(';').map(str::to_lowercase))
+    pathext
+        .split(';')
+        .filter(|ext| !ext.is_empty())
+        .map(str::to_lowercase)
+        .chain(std::iter::once(String::new()))
         .collect()
 }
 
