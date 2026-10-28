@@ -7,6 +7,12 @@ Two independent version lines (ADR-029), so each entry says which one it belongs
 
 An ABI entry concerns every extension in existence, in any language. An engine entry concerns only projects that link the library.
 
+## engine 3.0.1
+
+### Fixed
+
+- **A bare program name on Windows finds its `PATHEXT` match first.** `bones_kernel_launch::resolve("code")` returned VS Code's extensionless shell script `bin\code` instead of `code.cmd`, and starting it failed with "not a valid Win32 application". A name without an extension now tries each `PATHEXT` extension before the name as given, the way `cmd` does.
+
 ## engine 3.0.0
 
 Extensions become optional. The extension host leaves the kernel infrastructure for its own opt-in module, so an application with no extensions links no WASM runtime (ADR-040). The bus stays in the kernel and stays universal: an extension still reaches every module, and every module reaches it.
