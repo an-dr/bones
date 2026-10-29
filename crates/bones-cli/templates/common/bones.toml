@@ -1,0 +1,9 @@
+# The engine configuration for {{name}}. `bones-cli dev` starts the engine
+# with BONES_CONFIG pointing here, so paths resolve against this directory.
+
+extensions_dir = ".bones/extensions"
+saves_dir = ".bones/states"
+window_title = "{{name}}"
+window_width = 800
+window_height = 600
+{{kind_config}}

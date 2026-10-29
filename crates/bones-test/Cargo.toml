@@ -1,0 +1,29 @@
+[package]
+name = "bones-test"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+readme = "README.md"
+description = "Test a built bones extension on a headless kernel: send input, step frames, and check what it published."
+
+[features]
+default = []
+# Lets a test compose the game-core simulation through App::with_kernel.
+game-core = ["bones-kernel/game-core"]
+# App::rendered and App::screenshot: the real renderer in an offscreen
+# window. Builds SDL, as the engine does.
+render = ["bones-kernel/presentation", "dep:png", "dep:sdl3"]
+
+[dependencies]
+# Builds extensions and finds their .wasm (ADR-043).
+bones-build = { path = "../bones-build" }
+# Headless: no presentation, so no SDL, no window, and no display needed.
+bones-kernel = { path = "../bones-kernel", default-features = false, features = ["wasm"] }
+bones-messages = { path = "../bones-messages" }
+# Decodes a screenshot so a test can read its pixels.
+png = { version = "0.18", optional = true }
+# Only for test-mode: test threads take turns running SDL, and sdl3 would
+# otherwise accept only the first of them. bones-kernel's own tests do the same.
+sdl3 = { version = "0.18.4", features = ["test-mode"], optional = true }

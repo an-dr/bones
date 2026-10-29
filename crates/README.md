@@ -47,6 +47,18 @@ Nested beside `bones-kernel-infra`, not inside it: each is its own crate, so a d
 
 [bones](bones/README.md) is the shipped engine executable and the default composition. It has **no access an embedder lacks** — enforced by the dependency graph, not by convention, since it depends on `bones-kernel` and nothing else here. [examples/embedding/custom-engine](../examples/embedding/custom-engine/README.md) writes the same one dependency.
 
+## Developer tools
+
+[bones-cli](bones-cli/README.md) is the console program that ships beside `bones` in every release archive (ADR-043): `new` writes a product project, `doctor` checks the machine, `build` and `dev` build and hot-reload the extension against the engine, and `mcp` serves the devtools channel to an AI agent. It depends on `bones-messages` only, never on the kernel.
+
+## Building an extension
+
+[bones-build](bones-build/README.md) builds an extension crate for `wasm32-wasip2` and finds its `.wasm` in cargo's output. `cargo xtask`, `bones-cli`, and `bones-test` all use it, so the build is implemented once (ADR-043). It depends on no bones crate.
+
+## Testing an extension
+
+[bones-test](bones-test/README.md) runs one built extension on a headless kernel for a product's own tests: it sends input, steps frames at a fixed rate, and returns what the extension published, including its draw commands as text. It depends on `bones-kernel` and `bones-messages` only.
+
 ## The shared contract
 
 [bones-messages](bones-messages/README.md) is the one crate both the host and WASM guest code depend on — typed core messages and their payload codecs (tick, input, gfx, ui, audio, web, lifecycle, extension control). It is excluded from the root workspace because it must also compile for `wasm32-wasip2` guests, so it cannot pull in wasmtime, SDL, or anything else host-only; `cargo xtask test` runs its tests in a separate pass for the same reason. It cannot be folded into the guest SDK below without inverting the dependency graph — the host links it directly, and a package that runs `wit_bindgen::generate!` cannot sit underneath the engine.

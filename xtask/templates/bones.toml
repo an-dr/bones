@@ -26,3 +26,13 @@ persistence_read_only = false
 # Per-frame allowances per extension. Exceeding either quarantines it.
 extension_max_inbound = 1024
 extension_max_publishes = 1024
+
+# Wall-clock budgets per extension. Raise the load timeout for a component that
+# carries its own language runtime, such as a JavaScript one.
+extension_load_timeout_ms = 1000
+extension_call_timeout_ms = 50
+
+# Topics and endpoints a named extension may not use, for a plugin you did
+# not write. Keys are extension names; entries are exact or end in *.
+# [deny]
+# untrusted_plugin = ["os/*", "files"]

@@ -1,0 +1,16 @@
+[package]
+name = "bones-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+readme = "README.md"
+description = "Developer tools for products built on bones: new projects, doctor, build, the hot-reload dev loop, and an MCP server."
+
+[dependencies]
+# Builds extensions and finds their .wasm (ADR-043).
+bones-build = { path = "../bones-build" }
+# The public ABI surface only (ADR-043): never the kernel.
+bones-messages = { path = "../bones-messages" }
+serde_json = "1.0"

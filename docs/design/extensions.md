@@ -65,9 +65,30 @@ Every transition is published on `core/lifecycle`, so tooling and other extensio
 
 The embedder may authorize one host-stamped extension sender as the runtime controller. Its typed `core/extensions/load`, `unload`, or `reload` commands are applied after bus dispatch; commands from every other sender are rejected and logged. State changes appear on `core/lifecycle`. A reload attaches its replacement before shutting down the current instance; a failed replacement is logged and leaves the current instance running. Unload calls `shutdown`, preserves messages the hook published for later dispatch, then releases the bus endpoint, direct-send registration, and component instance.
 
+## Permissions
+
+The embedder may deny an extension, by name, a list of topics and endpoints (ADR-042). Each entry is an exact name (`files`) or a prefix ending in `*` (`os/*`), the same syntax as a subscription.
+
+| The extension calls | On a denied target |
+| --- | --- |
+| `publish` | the message is dropped |
+| `subscribe` | the subscription is ignored, including a pattern that could match a denied topic (`*`, `os/*`, `os/result`) |
+| `send` | the call fails with `unknown-endpoint` |
+
+The extension is not told why. The host logs a warning once per extension and target, naming both. A deny-list survives hot reload and runtime loading, because it belongs to the name, not to the loaded instance. An extension with no deny-list may use every topic and endpoint.
+
 ## Faults and quarantine
 
 Per ADR-007: exceeding the per-call time budget, exhausting queue/publish budgets, or trapping moves the extension to Faulted — instance dropped, subscriptions released, lifecycle event published. Reload is explicit, never an automatic retry loop.
+
+The log line that reports a quarantine names its cause and how to change it: the budget that was exceeded, its per-frame limit, how many messages were dropped, and the setting that raises the limit. A trap or timeout is logged where it happens, with the call that faulted.
+
+## Diagnostics
+
+The extension host reports the mistakes an extension can make without faulting, each once per extension and topic so a mistake repeated every frame produces one line:
+
+- **A malformed core payload.** A payload published on a core topic that does not decode is reported with the failure and the topic's section of `wit/wire-format.md`; it is still delivered.
+- **A publish nobody hears.** When no endpoint subscribes to a published topic, the host says so. For a core topic, the module that handles it is probably not enabled. For any other topic close to a core one, the warning names the core topic it probably meant (`gfx/draw-rec` → `gfx/draw-rect`). Other application topics are reported at debug level only, because a topic whose receiver loads later is normal.
 
 ## Hot reload
 

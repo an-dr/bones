@@ -118,10 +118,7 @@ impl Check {
     fn verify(self) -> std::result::Result<(), Missing> {
         let present = match self {
             Check::Rustup => is_on_path("rustup"),
-            Check::RustTarget(target) => {
-                read_output(Command::new("rustup").args(["target", "list", "--installed"]))
-                    .is_some_and(|installed| installed.lines().any(|line| line.trim() == target))
-            }
+            Check::RustTarget(target) => bones_build::target_installed(target),
             Check::CargoComponent { subcommand, .. } => {
                 read_output(&mut cargo(&repo_root(), &[subcommand, "--version"])).is_some()
             }
