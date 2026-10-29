@@ -1,9 +1,9 @@
 use std::cell::RefCell;
 
-use bones_wasm_sdk::Guest;
-use bones_wasm_sdk::bindings::bones::extension::host_api::{log, publish, subscribe, Level};
+use bones_wasm_sdk::bindings::bones::extension::host_api::{log, Level};
+use bones_wasm_sdk::messages::tick::Tick;
 use bones_wasm_sdk::messages::ui::{Changed, Clicked, Spec, Widget};
-use bones_wasm_sdk::messages::{DecodeMessage, EncodeMessage, Message};
+use bones_wasm_sdk::{bus, Guest, Inbound};
 
 const INPUT_ID: u32 = 1;
 const ADD_ID: u32 = 2;
@@ -27,9 +27,9 @@ impl Guest for Component {
     fn shutdown() {}
 
     fn init() {
-        subscribe("core/tick");
-        subscribe(Clicked::TOPIC);
-        subscribe(Changed::TOPIC);
+        bus::subscribe::<Tick>();
+        bus::subscribe::<Clicked>();
+        bus::subscribe::<Changed>();
         log(Level::Info, "init");
     }
 
@@ -53,30 +53,25 @@ impl Guest for Component {
                 title: "notes",
                 widgets,
             };
-            publish(Spec::TOPIC, &spec.encode());
+            bus::publish(&spec);
         });
     }
 
     fn on_message(topic: String, _sender: String, payload: Vec<u8>) -> Option<Vec<u8>> {
         STATE.with(|state| {
             let mut state = state.borrow_mut();
-            if topic == Changed::TOPIC {
-                match Changed::decode(&payload) {
-                    Ok(changed) if changed.id == INPUT_ID => state.input = changed.text.to_string(),
-                    Ok(_) => {}
-                    Err(err) => log(Level::Error, &format!("invalid ui/changed: {err}")),
+            match Inbound::decode(&topic, &payload) {
+                Ok(Inbound::Changed(changed)) if changed.id == INPUT_ID => {
+                    state.input = changed.text.to_string()
                 }
-            } else if topic == Clicked::TOPIC {
-                match Clicked::decode(&payload) {
-                    Ok(clicked) if clicked.id == ADD_ID => {
-                        if !state.input.is_empty() {
-                            let note = std::mem::take(&mut state.input);
-                            state.notes.push(note);
-                        }
+                Ok(Inbound::Clicked(clicked)) if clicked.id == ADD_ID => {
+                    if !state.input.is_empty() {
+                        let note = std::mem::take(&mut state.input);
+                        state.notes.push(note);
                     }
-                    Ok(_) => {}
-                    Err(err) => log(Level::Error, &format!("invalid ui/clicked: {err}")),
                 }
+                Ok(_) => {}
+                Err(err) => log(Level::Error, &format!("invalid {topic}: {err}")),
             }
         });
         None

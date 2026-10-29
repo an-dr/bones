@@ -3,11 +3,15 @@ use crate::game_ui::{ButtonLayout, Canvas, Rect};
 /// Fully positioned panel and buttons for one frame.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MenuLayout {
+    /// The panel behind the buttons, in logical pixels.
     pub panel: Rect,
+    /// The buttons, top to bottom.
     pub buttons: Vec<ButtonLayout>,
 }
 
 impl MenuLayout {
+    /// The position and id of the button under a pointer given in physical
+    /// window pixels, if any.
     pub fn hit_test(
         &self,
         canvas: Canvas,

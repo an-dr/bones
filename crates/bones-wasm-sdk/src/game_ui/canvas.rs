@@ -1,11 +1,14 @@
 /// Fixed logical coordinate space used by screen-space gfx commands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Canvas {
+    /// Logical width in pixels.
     pub width: u32,
+    /// Logical height in pixels.
     pub height: u32,
 }
 
 impl Canvas {
+    /// A logical canvas of this size.
     pub const fn new(width: u32, height: u32) -> Self {
         Self { width, height }
     }

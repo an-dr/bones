@@ -3,6 +3,7 @@ use crate::{DecodeError, DecodeMessage, EncodeMessage, Message, Reader, Writer};
 /// Requests replacement of a running extension from its catalog path.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Reload<'a> {
+    /// The name of the running extension to reload.
     pub extension: &'a str,
 }
 

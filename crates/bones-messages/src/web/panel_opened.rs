@@ -3,7 +3,9 @@ use crate::{DecodeError, DecodeMessage, EncodeMessage, Message, Reader, Writer};
 /// Confirms that a panel is ready.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PanelOpened<'a> {
+    /// The extension that opened the panel.
     pub owner: &'a str,
+    /// The panel that opened.
     pub panel: &'a str,
 }
 

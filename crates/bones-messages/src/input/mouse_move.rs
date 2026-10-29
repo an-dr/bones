@@ -3,9 +3,13 @@ use crate::{DecodeError, DecodeMessage, EncodeMessage, Message, Reader, Writer};
 /// Cursor moved; window-relative pixel position plus this event's raw delta.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MouseMove {
+    /// Cursor x in window coordinates.
     pub x: f32,
+    /// Cursor y in window coordinates.
     pub y: f32,
+    /// Movement along x since the previous event.
     pub dx: f32,
+    /// Movement along y since the previous event.
     pub dy: f32,
 }
 

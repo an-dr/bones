@@ -40,8 +40,9 @@ use bones_messages::input::{
 };
 use bones_messages::instance::Launched;
 use bones_messages::lifecycle::{Event, LifecycleEvent};
+use bones_messages::os::{Action as OsAction, Request as OsRequest, Result as OsResult};
 use bones_messages::persistence::Save;
-use bones_messages::renderer::{DisplayChanged, LogicalCanvas};
+use bones_messages::renderer::{Capture, Captured, DisplayChanged, LogicalCanvas, Scope};
 use bones_messages::tick::Tick;
 use bones_messages::ui::{Changed, Clicked, Spec, Widget};
 use bones_messages::upgrader::{
@@ -296,6 +297,30 @@ fn vectors() -> Vec<Vector> {
                 height: 180,
             },
             "width=320;height=180",
+        ),
+        vector(
+            &Capture {
+                request_id: 7,
+                scope: Scope::Canvas,
+            },
+            "request_id=7;scope=0",
+        ),
+        vector(
+            &Capture {
+                request_id: 8,
+                scope: Scope::Window,
+            },
+            "request_id=8;scope=1",
+        ),
+        vector(
+            &Captured {
+                request_id: 7,
+                scope: Scope::Canvas,
+                width: 2,
+                height: 1,
+                png: &[0x89, 0x50, 0x4e, 0x47],
+            },
+            "request_id=7;scope=0;width=2;height=1;png=89504e47",
         ),
         // -- ui ---------------------------------------------------------
         vector(
@@ -552,6 +577,32 @@ fn vectors() -> Vec<Vector> {
                 outcome: DesktopOutcome::Failed("denied"),
             },
             "request_id=3;tag=1;reason=denied",
+        ),
+        // -- os -----------------------------------------------------------
+        vector(
+            &OsRequest {
+                request_id: 4,
+                action: OsAction::OpenUrl,
+                value: "https://example.com",
+            },
+            "request_id=4;action=2;value=https://example.com",
+        ),
+        vector(
+            &OsRequest {
+                request_id: 5,
+                action: OsAction::ReadClipboard,
+                value: "",
+            },
+            "request_id=5;action=0;value=",
+        ),
+        vector(
+            &OsResult {
+                request_id: 5,
+                accepted: true,
+                value: "copied",
+                error: "",
+            },
+            "request_id=5;accepted=1;value=copied;error=",
         ),
         // -- upgrader -----------------------------------------------------
         vector(

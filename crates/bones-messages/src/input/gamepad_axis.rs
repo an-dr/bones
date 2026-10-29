@@ -5,8 +5,11 @@ use crate::{DecodeError, DecodeMessage, EncodeMessage, Message, Reader, Writer};
 /// (`"LeftX"`, `"TriggerRight"`, …), the same convention `KeyDown::key` uses.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GamepadAxis<'a> {
+    /// The gamepad, as announced by `input/gamepad-connected`.
     pub id: u32,
+    /// SDL's axis name.
     pub axis: &'a str,
+    /// Normalized position in `[-1.0, 1.0]`.
     pub value: f32,
 }
 

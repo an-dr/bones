@@ -1,9 +1,9 @@
-use bones_wasm_sdk::Guest;
-use bones_wasm_sdk::bindings::bones::extension::host_api::{log, publish, subscribe, Level};
+use bones_wasm_sdk::bindings::bones::extension::host_api::{log, Level};
 use bones_wasm_sdk::messages::gfx::{
     Clear, DrawCircle, DrawRect, DrawSprite, DrawText, LoadSprite, SetCamera, TextAlign,
 };
-use bones_wasm_sdk::messages::{EncodeMessage, Message};
+use bones_wasm_sdk::messages::tick::Tick;
+use bones_wasm_sdk::{bus, Guest};
 
 const SPRITE_PNG: &[u8] = include_bytes!("assets/robot_william.png");
 const SPRITE_ID: u32 = 1;
@@ -18,12 +18,12 @@ impl Guest for Component {
     fn shutdown() {}
 
     fn init() {
-        subscribe("core/tick");
+        bus::subscribe::<Tick>();
         let load = LoadSprite {
             id: SPRITE_ID,
             png_bytes: SPRITE_PNG,
         };
-        publish(LoadSprite::TOPIC, &load.encode());
+        bus::publish(&load);
         log(Level::Info, "init, sprite loaded");
 
         // Camera is retained global state (gfx/set-camera), so a one-time,
@@ -34,7 +34,7 @@ impl Guest for Component {
             y: 30.0,
             zoom: 1.5,
         };
-        publish(SetCamera::TOPIC, &camera.encode());
+        bus::publish(&camera);
     }
 
     fn on_tick(_dt: f32) {
@@ -44,7 +44,7 @@ impl Guest for Component {
             b: 30,
             a: 255,
         };
-        publish(Clear::TOPIC, &clear.encode());
+        bus::publish(&clear);
 
         // Two overlapping draws on different layers prove composite order
         // is by `layer`, not publish order: frame 2 (layer 1) is published
@@ -66,7 +66,7 @@ impl Guest for Component {
             flip_v: false,
             tint: (255, 160, 160, 255),
         };
-        publish(DrawSprite::TOPIC, &front.encode());
+        bus::publish(&front);
 
         let back = DrawSprite {
             id: SPRITE_ID,
@@ -84,7 +84,7 @@ impl Guest for Component {
             flip_v: false,
             tint: (255, 255, 255, 255),
         };
-        publish(DrawSprite::TOPIC, &back.encode());
+        bus::publish(&back);
 
         // Shape commands, on the same layer as the background sprite —
         // proves shapes and sprites composite together, not in separate
@@ -99,7 +99,7 @@ impl Guest for Component {
             layer: 0,
             screen_space: false,
         };
-        publish(DrawRect::TOPIC, &outline.encode());
+        bus::publish(&outline);
 
         let marker = DrawCircle {
             x: DST_X + FRAME_SIZE as i32 + 40,
@@ -109,7 +109,7 @@ impl Guest for Component {
             color: (255, 220, 60, 255),
             layer: 2,
         };
-        publish(DrawCircle::TOPIC, &marker.encode());
+        bus::publish(&marker);
 
         // Nameplate text, deliberately world-space (screen_space: false)
         // like everything else here, so it stays anchored to the sprite
@@ -125,7 +125,7 @@ impl Guest for Component {
             screen_space: false,
             align: TextAlign::Left,
         };
-        publish(DrawText::TOPIC, &nameplate.encode());
+        bus::publish(&nameplate);
     }
 
     fn on_message(_topic: String, _sender: String, _payload: Vec<u8>) -> Option<Vec<u8>> {

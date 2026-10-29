@@ -1,7 +1,8 @@
 use std::cell::{Cell, RefCell};
 
-use bones_wasm_sdk::Guest;
-use bones_wasm_sdk::bindings::bones::extension::host_api::{log, publish, subscribe, Level};
+use bones_wasm_sdk::bindings::bones::extension::host_api::{log, publish, Level};
+use bones_wasm_sdk::messages::tick::Tick;
+use bones_wasm_sdk::{bus, Guest};
 
 const UPDATE_TOPIC: &str = "metrics/updated";
 const UPDATE_INTERVAL: f32 = 0.5;
@@ -19,7 +20,7 @@ impl Guest for Component {
     fn shutdown() {}
 
     fn init() {
-        subscribe("core/tick");
+        bus::subscribe::<Tick>();
         publish_update(0);
         log(
             Level::Info,

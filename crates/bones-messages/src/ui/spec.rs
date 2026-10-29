@@ -7,7 +7,9 @@ use super::Widget;
 /// is drawn this frame — there is no retained state to fall back on.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Spec<'a> {
+    /// The panel's window title.
     pub title: &'a str,
+    /// The widgets, top to bottom.
     pub widgets: Vec<Widget<'a>>,
 }
 

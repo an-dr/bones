@@ -3,15 +3,22 @@ use crate::game_ui::{Button, ButtonLayout, Canvas, MenuLayout, Rect};
 /// Configurable centered vertical menu geometry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct VerticalMenu {
+    /// The canvas the menu is centered on.
     pub canvas: Canvas,
+    /// Width of the panel.
     pub panel_width: u32,
+    /// Space above the first button, for a title.
     pub header_height: u32,
+    /// Space between the panel's sides and the buttons, and below the last.
     pub padding: u32,
+    /// Height of each button.
     pub button_height: u32,
+    /// Space between two buttons.
     pub gap: u32,
 }
 
 impl VerticalMenu {
+    /// The panel height that fits `button_count` buttons.
     pub fn panel_height(self, button_count: usize) -> u32 {
         self.header_height
             + self.padding
@@ -19,6 +26,7 @@ impl VerticalMenu {
             + button_count.saturating_sub(1) as u32 * self.gap
     }
 
+    /// Centers the panel on the canvas and stacks the buttons inside it.
     pub fn layout(self, buttons: impl IntoIterator<Item = Button>) -> MenuLayout {
         let buttons: Vec<_> = buttons.into_iter().collect();
         let panel_height = self.panel_height(buttons.len());

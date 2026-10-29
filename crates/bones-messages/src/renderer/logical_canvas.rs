@@ -3,7 +3,9 @@ use crate::{DecodeError, DecodeMessage, EncodeMessage, Message, Reader, Writer};
 /// Fixed logical coordinate space used by renderer draw commands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LogicalCanvas {
+    /// Logical canvas width every `gfx/*` coordinate is expressed in.
     pub width: u32,
+    /// Logical canvas height every `gfx/*` coordinate is expressed in.
     pub height: u32,
 }
 

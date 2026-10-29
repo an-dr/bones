@@ -7,7 +7,9 @@ macro_rules! gamepad_button_message {
         #[doc = "`button` is SDL's own button name (\"South\", \"DPadUp\", …)."]
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         pub struct $name<'a> {
+            /// The gamepad, as announced by `input/gamepad-connected`.
             pub id: u32,
+            /// SDL's button name.
             pub button: &'a str,
         }
 

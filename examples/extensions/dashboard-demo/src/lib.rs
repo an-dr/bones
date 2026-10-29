@@ -1,12 +1,13 @@
 use std::cell::{Cell, RefCell};
 
-use bones_wasm_sdk::Guest;
-use bones_wasm_sdk::bindings::bones::extension::host_api::{log, request_exit, send, subscribe, Level};
+use bones_wasm_sdk::bindings::bones::extension::host_api::{
+    log, request_exit, send, subscribe, Level,
+};
 use bones_wasm_sdk::messages::web::{
     ClosePanel, Command, OpenPanel, PageMessage, PanelClosed, PanelFailed, PanelOpened,
-    PanelSource, SendJson, ENDPOINT,
+    PanelSource, SendJson,
 };
-use bones_wasm_sdk::messages::{DecodeMessage, Message};
+use bones_wasm_sdk::{bus, Guest, Inbound};
 
 /// This extension's own name, as the host stamps it — the stem of the built
 /// `.wasm`, so it tracks the crate name rather than the directory.
@@ -31,6 +32,7 @@ impl Guest for Component {
     }
 
     fn init() {
+        // A prefix pattern rather than one typed topic: every web/* event.
         subscribe("web/*");
         subscribe(UPDATE_TOPIC);
 
@@ -46,13 +48,17 @@ impl Guest for Component {
     fn on_tick(_dt: f32) {}
 
     fn on_message(topic: String, _sender: String, payload: Vec<u8>) -> Option<Vec<u8>> {
-        match topic.as_str() {
-            UPDATE_TOPIC => receive_update(&payload),
-            PageMessage::TOPIC => receive_page_message(&payload),
-            PanelOpened::TOPIC => receive_opened(&payload),
-            PanelClosed::TOPIC => receive_closed(&payload),
-            PanelFailed::TOPIC => receive_failed(&payload),
-            _ => {}
+        match Inbound::decode(&topic, &payload) {
+            Ok(Inbound::PageMessage(message)) => receive_page_message(message),
+            Ok(Inbound::PanelOpened(event)) => receive_opened(event),
+            Ok(Inbound::PanelClosed(event)) => receive_closed(event),
+            Ok(Inbound::PanelFailed(event)) => receive_failed(event),
+            Ok(Inbound::Other {
+                topic: UPDATE_TOPIC,
+                payload,
+            }) => receive_update(payload),
+            Ok(_) => {}
+            Err(error) => log(Level::Warn, &format!("ignored malformed {topic}: {error}")),
         }
         None
     }
@@ -73,10 +79,7 @@ fn receive_update(payload: &[u8]) {
     }
 }
 
-fn receive_page_message(payload: &[u8]) {
-    let Ok(message) = PageMessage::decode(payload) else {
-        return;
-    };
+fn receive_page_message(message: PageMessage<'_>) {
     if message.owner != OWNER || message.panel != PANEL {
         return;
     }
@@ -114,30 +117,21 @@ fn receive_page_message(payload: &[u8]) {
     }
 }
 
-fn receive_opened(payload: &[u8]) {
-    let Ok(event) = PanelOpened::decode(payload) else {
-        return;
-    };
+fn receive_opened(event: PanelOpened<'_>) {
     if event.owner == OWNER && event.panel == PANEL {
         PANEL_OPEN.set(true);
         log(Level::Info, "panel opened");
     }
 }
 
-fn receive_closed(payload: &[u8]) {
-    let Ok(event) = PanelClosed::decode(payload) else {
-        return;
-    };
+fn receive_closed(event: PanelClosed<'_>) {
     if event.owner == OWNER && event.panel == PANEL {
         PANEL_OPEN.set(false);
         log(Level::Info, "panel closed");
     }
 }
 
-fn receive_failed(payload: &[u8]) {
-    let Ok(event) = PanelFailed::decode(payload) else {
-        return;
-    };
+fn receive_failed(event: PanelFailed<'_>) {
     if event.owner == OWNER && event.panel == PANEL {
         PANEL_OPEN.set(false);
         log(Level::Error, &format!("panel failed: {}", event.reason));
@@ -158,8 +152,8 @@ fn error_response(message: &str) -> Vec<u8> {
 }
 
 fn send_web(command: Command<'_>) -> bool {
-    match send(ENDPOINT, &command.encode()) {
-        Ok(_) => true,
+    match bus::web(&command) {
+        Ok(()) => true,
         Err(error) => {
             log(Level::Error, &format!("web command failed: {error:?}"));
             false

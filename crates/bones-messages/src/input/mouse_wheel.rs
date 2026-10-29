@@ -5,7 +5,9 @@ use crate::{DecodeError, DecodeMessage, EncodeMessage, Message, Reader, Writer};
 /// positive `y` is up/away, positive `x` is right.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MouseWheel {
+    /// Horizontal scroll; positive is to the right.
     pub x: f32,
+    /// Vertical scroll; positive is away from the user.
     pub y: f32,
 }
 

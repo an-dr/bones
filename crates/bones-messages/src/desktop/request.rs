@@ -7,6 +7,7 @@ use super::Action;
 pub struct Request {
     /// Echoed back on the matching [`super::Result`].
     pub request_id: u32,
+    /// What to do: register, unregister, or check.
     pub action: Action,
 }
 

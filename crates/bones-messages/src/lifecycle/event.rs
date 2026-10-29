@@ -3,10 +3,15 @@ use crate::DecodeError;
 /// A transition in an extension's lifecycle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Event {
+    /// The extension finished `init` and is running.
     Loaded,
+    /// The extension trapped or exceeded a budget and was quarantined.
     Faulted,
+    /// The extension's file changed and a replacement is loading.
     Reloading,
+    /// The replacement is running.
     Reloaded,
+    /// The extension was unloaded and ran `shutdown`.
     Stopped,
 }
 

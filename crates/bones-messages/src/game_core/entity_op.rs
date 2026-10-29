@@ -38,8 +38,10 @@ pub enum BodyKind {
 /// `Triangle` collider as its own `half_w`/`half_h` AABB bounding box.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Shape {
+    /// An axis-aligned rectangle filling the collider's extent.
     #[default]
     Rect,
+    /// A triangle inscribed in the collider's extent.
     Triangle,
 }
 
@@ -83,16 +85,24 @@ pub enum EntityOp {
     /// `entity_id` already in use replaces that entity, the same
     /// replace-on-republish semantics `gfx::DrawSprite` batches already use.
     Spawn {
+        /// Caller-assigned id; reusing one replaces that entity.
         entity_id: u32,
+        /// World-space x of the entity.
         x: f32,
+        /// World-space y of the entity.
         y: f32,
+        /// The animated sprite to draw, or `None` for a plain square.
         sprite: Option<Sprite>,
+        /// RGBA fill of the square drawn when `sprite` is `None`.
         square_color: (u8, u8, u8, u8),
         /// Only meaningful for a `square_color` entity (`sprite: None`) —
         /// see `Shape`.
         shape: Shape,
+        /// Half the collider's width; `0.0` gives the entity no physics body.
         collider_half_w: f32,
+        /// Half the collider's height; `0.0` gives the entity no physics body.
         collider_half_h: f32,
+        /// How the physics body responds to forces and contacts.
         body_kind: BodyKind,
         /// Which physics world(s) (ADR-021) this entity's body registers
         /// in, when it has a body at all. `PhysicsWorlds::default()`
@@ -104,16 +114,28 @@ pub enum EntityOp {
     /// mechanism a caller (an extension reading `input/*`) drives movement
     /// with. A no-op if `entity_id` names an entity with no collider, or
     /// no entity at all.
-    SetVelocity { entity_id: u32, vx: f32, vy: f32 },
+    SetVelocity {
+        /// The entity to move.
+        entity_id: u32,
+        /// Velocity along x, in world pixels per second.
+        vx: f32,
+        /// Velocity along y, in world pixels per second.
+        vy: f32,
+    },
     /// Removes an entity (and its collider, if any) entirely.
-    Despawn { entity_id: u32 },
+    Despawn {
+        /// The entity to remove.
+        entity_id: u32,
+    },
     /// Overwrites a spawned entity's `SquareColor` in place — the
     /// mechanism a caller uses for a temporary flash (set, wait, set
     /// back), without `game-core` itself needing to know about flash
     /// timing. A no-op if `entity_id` names no entity, or one with no
     /// `SquareColor` (a sprite entity, which has none).
     SetColor {
+        /// The square entity to recolor.
         entity_id: u32,
+        /// The new RGBA fill.
         color: (u8, u8, u8, u8),
     },
     /// Globally toggles a yellow unfilled outline over every collider-
@@ -122,7 +144,10 @@ pub enum EntityOp {
     /// entity's normal draw each tick — a debug aid for checking a
     /// visible sprite/square lines up with what it actually collides as.
     /// Not addressed by `entity_id`: applies to the whole simulation.
-    SetDebugHitboxes { enabled: bool },
+    SetDebugHitboxes {
+        /// Whether the outlines are drawn.
+        enabled: bool,
+    },
     /// Globally freezes the simulation while `paused` is `true`: neither
     /// physics world steps, no contact-clamping or multi-world position
     /// resolution runs, and no `game-core/collision` event can fire — every
@@ -133,7 +158,10 @@ pub enum EntityOp {
     /// visible (frozen) rather than going stale or blank. Not addressed by
     /// `entity_id`: applies to the whole simulation, the same as
     /// `SetDebugHitboxes`.
-    SetPaused { paused: bool },
+    SetPaused {
+        /// Whether the simulation is frozen.
+        paused: bool,
+    },
     /// Has `game-core` auto-follow `entity_id`'s `Transform` every tick,
     /// replacing the fixed `(0, 0)` camera it publishes by default: the
     /// camera centers on that entity, clamped per axis to
@@ -151,28 +179,39 @@ pub enum EntityOp {
     /// A no-op each tick the followed `entity_id` doesn't exist (falls
     /// back to the fixed camera), not a caller-visible error.
     SetCameraFollow {
+        /// The entity the camera centers on.
         entity_id: u32,
+        /// The caller's logical viewport width.
         viewport_w: f32,
+        /// The caller's logical viewport height.
         viewport_h: f32,
+        /// Camera zoom; `1.0` is unscaled.
         zoom: f32,
     },
     /// Replaces only an existing entity's sprite presentation. Its transform,
     /// colliders, velocities, body kinds, and physics-world registrations stay
     /// untouched. A no-op if `entity_id` does not exist.
     SetSprite {
+        /// The sprite entity to change.
         entity_id: u32,
+        /// Its new sprite, animation, size, and flips.
         presentation: SpritePresentation,
     },
     /// Sets RGBA modulation on an existing sprite entity without replacing its
     /// animation or simulation state. A no-op for unknown or square entities.
     SetSpriteTint {
+        /// The sprite entity to tint.
         entity_id: u32,
+        /// RGBA multiplied into every pixel; opaque white leaves it unchanged.
         tint: (u8, u8, u8, u8),
     },
     /// Sets camera-follow responsiveness in inverse seconds. `0.0` keeps the
     /// established immediate-follow behavior; positive values ease toward the
     /// target on each tick before applying the level-edge clamp.
-    SetCameraSmoothing { responsiveness: f32 },
+    SetCameraSmoothing {
+        /// Responsiveness in inverse seconds; `0.0` follows immediately.
+        responsiveness: f32,
+    },
     /// Clears every entity, physics body, loaded tilemap, camera setting,
     /// debug toggle, and paused state. The module remains initialized and
     /// subscribed, ready for a new level session.

@@ -6,7 +6,12 @@ pub enum DecodeError {
     /// A fixed-shape message contained bytes after its final field.
     TrailingBytes,
     /// A tagged enum contained a value not defined by its message contract.
-    InvalidTag { message: &'static str, tag: u8 },
+    InvalidTag {
+        /// The message or union whose tag was read.
+        message: &'static str,
+        /// The tag value that was read.
+        tag: u8,
+    },
     /// A string field was not valid UTF-8.
     InvalidUtf8,
 }

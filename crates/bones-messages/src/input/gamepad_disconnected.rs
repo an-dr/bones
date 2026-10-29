@@ -4,6 +4,7 @@ use crate::{DecodeError, DecodeMessage, EncodeMessage, Message, Reader, Writer};
 /// `GamepadConnected` that introduced it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GamepadDisconnected {
+    /// The gamepad that went away.
     pub id: u32,
 }
 

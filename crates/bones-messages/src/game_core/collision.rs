@@ -8,7 +8,9 @@ use crate::{DecodeError, DecodeMessage, EncodeMessage, Message, Reader, Writer};
 /// into the other.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Collision {
+    /// One of the two entities that started touching.
     pub entity_id_a: u32,
+    /// The other entity.
     pub entity_id_b: u32,
 }
 

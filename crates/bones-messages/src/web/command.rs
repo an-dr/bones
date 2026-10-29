@@ -5,13 +5,18 @@ use super::{ClosePanel, Navigate, OpenPanel, PanelSource, SendJson};
 /// Any direct command accepted by the `web` endpoint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Command<'a> {
+    /// Opens a panel.
     Open(OpenPanel<'a>),
+    /// Closes a panel.
     Close(ClosePanel<'a>),
+    /// Loads a URL into an open panel.
     Navigate(Navigate<'a>),
+    /// Sends JSON to an open panel's page.
     SendJson(SendJson<'a>),
 }
 
 impl Command<'_> {
+    /// The payload a `send` to the `web` endpoint carries.
     pub fn encode(&self) -> Vec<u8> {
         match self {
             Self::Open(open) => Writer::new()
@@ -36,6 +41,7 @@ impl Command<'_> {
 }
 
 impl<'a> Command<'a> {
+    /// Reads a `web` endpoint payload.
     pub fn decode(payload: &'a [u8]) -> Result<Self, DecodeError> {
         let mut reader = Reader::new(payload);
         match reader.read_u8()? {

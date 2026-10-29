@@ -3,6 +3,7 @@ use crate::{DecodeError, DecodeMessage, EncodeMessage, Message, Reader, Writer};
 /// Requests orderly shutdown and release of a running extension.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Unload<'a> {
+    /// The name of the running extension to unload.
     pub extension: &'a str,
 }
 

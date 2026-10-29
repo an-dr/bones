@@ -1,5 +1,6 @@
-use bones_wasm_sdk::Guest;
-use bones_wasm_sdk::bindings::bones::extension::host_api::{log, publish, subscribe, Level};
+use bones_wasm_sdk::bindings::bones::extension::host_api::{log, publish, Level};
+use bones_wasm_sdk::messages::tick::Tick;
+use bones_wasm_sdk::{bus, Guest};
 
 const PUBLISHES_PER_TICK: u32 = 64;
 
@@ -9,7 +10,7 @@ impl Guest for Component {
     fn shutdown() {}
 
     fn init() {
-        subscribe("core/tick");
+        bus::subscribe::<Tick>();
         log(Level::Info, "publishes 64 messages on every tick");
     }
 

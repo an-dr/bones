@@ -1,7 +1,7 @@
-use bones_wasm_sdk::bindings::bones::extension::host_api::{log, publish, subscribe, Level};
+use bones_wasm_sdk::bindings::bones::extension::host_api::{log, publish, Level};
+use bones_wasm_sdk::messages::tick::Tick;
 use bones_wasm_sdk::messages::window::CloseRequested;
-use bones_wasm_sdk::messages::Message;
-use bones_wasm_sdk::Guest;
+use bones_wasm_sdk::{bus, Guest};
 
 struct Component;
 
@@ -12,8 +12,8 @@ impl Guest for Component {
     }
 
     fn init() {
-        subscribe("core/tick");
-        subscribe(CloseRequested::TOPIC);
+        bus::subscribe::<Tick>();
+        bus::subscribe::<CloseRequested>();
         log(Level::Info, "init");
     }
 

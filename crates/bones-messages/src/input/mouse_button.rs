@@ -7,8 +7,11 @@ macro_rules! mouse_button_message {
         #[doc = "`button` is SDL's own code: 1=left, 2=middle, 3=right, 4=x1, 5=x2, 0=unknown."]
         #[derive(Debug, Clone, Copy, PartialEq)]
         pub struct $name {
+            /// SDL's button code.
             pub button: u8,
+            /// Cursor x in window coordinates.
             pub x: f32,
+            /// Cursor y in window coordinates.
             pub y: f32,
         }
 

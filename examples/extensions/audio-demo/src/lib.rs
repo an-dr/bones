@@ -1,8 +1,7 @@
-use bones_wasm_sdk::Guest;
-use bones_wasm_sdk::bindings::bones::extension::host_api::{log, publish, subscribe, Level};
+use bones_wasm_sdk::bindings::bones::extension::host_api::{log, Level};
 use bones_wasm_sdk::messages::audio::{LoadSound, PlayMusic, PlaySound};
 use bones_wasm_sdk::messages::input::KeyDown;
-use bones_wasm_sdk::messages::{EncodeMessage, Message};
+use bones_wasm_sdk::{bus, Guest, Inbound};
 
 const SFX_ID: u32 = 1;
 const MUSIC_ID: u32 = 2;
@@ -18,7 +17,9 @@ fn synthesize_tone(frequency_hz: f32, cycles: u32, amplitude: f32) -> Vec<u8> {
     let mut samples = Vec::with_capacity(sample_count as usize);
     for n in 0..sample_count {
         let t = n as f32 / SAMPLE_RATE as f32;
-        let value = (amplitude * (2.0 * core::f32::consts::PI * frequency_hz * t).sin() * i16::MAX as f32) as i16;
+        let value = (amplitude
+            * (2.0 * core::f32::consts::PI * frequency_hz * t).sin()
+            * i16::MAX as f32) as i16;
         samples.push(value);
     }
 
@@ -49,25 +50,40 @@ impl Guest for Component {
     fn shutdown() {}
 
     fn init() {
-        subscribe(KeyDown::TOPIC);
+        bus::subscribe::<KeyDown>();
 
         // ~150ms, 880Hz — a short click/beep for the one-shot SFX.
         let sfx = synthesize_tone(880.0, 132, 0.6);
-        publish(LoadSound::TOPIC, &LoadSound { id: SFX_ID, bytes: &sfx }.encode());
+        bus::publish(&LoadSound {
+            id: SFX_ID,
+            bytes: &sfx,
+        });
 
         // 2s, 220Hz — a quiet, seamlessly-looping background tone.
         let music = synthesize_tone(220.0, 440, 0.15);
-        publish(LoadSound::TOPIC, &LoadSound { id: MUSIC_ID, bytes: &music }.encode());
-        publish(PlayMusic::TOPIC, &PlayMusic { id: MUSIC_ID, volume: 1.0 }.encode());
+        bus::publish(&LoadSound {
+            id: MUSIC_ID,
+            bytes: &music,
+        });
+        bus::publish(&PlayMusic {
+            id: MUSIC_ID,
+            volume: 1.0,
+        });
 
-        log(Level::Info, "init: loaded sfx + music, press any key for the sfx");
+        log(
+            Level::Info,
+            "init: loaded sfx + music, press any key for the sfx",
+        );
     }
 
     fn on_tick(_dt: f32) {}
 
-    fn on_message(topic: String, _sender: String, _payload: Vec<u8>) -> Option<Vec<u8>> {
-        if topic == KeyDown::TOPIC {
-            publish(PlaySound::TOPIC, &PlaySound { id: SFX_ID, volume: 0.8 }.encode());
+    fn on_message(topic: String, _sender: String, payload: Vec<u8>) -> Option<Vec<u8>> {
+        if let Ok(Inbound::KeyDown(_)) = Inbound::decode(&topic, &payload) {
+            bus::publish(&PlaySound {
+                id: SFX_ID,
+                volume: 0.8,
+            });
         }
         None
     }

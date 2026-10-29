@@ -2,14 +2,22 @@
 /// right and positive y points down, matching bones world coordinates.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum ObjectFacing {
+    /// Toward negative y.
     Up,
+    /// Toward positive x and negative y.
     UpRight,
+    /// Toward positive x.
     Right,
+    /// Toward positive x and positive y.
     DownRight,
     #[default]
+    /// Toward positive y; the default.
     Down,
+    /// Toward negative x and positive y.
     DownLeft,
+    /// Toward negative x.
     Left,
+    /// Toward negative x and negative y.
     UpLeft,
 }
 

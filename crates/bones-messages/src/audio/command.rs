@@ -7,10 +7,15 @@ use super::{LoadSound, PlayMusic, PlaySound, SetMusicVolume, StopMusic};
 // No `Eq`: `PlaySound`/`PlayMusic`/`SetMusicVolume` carry `f32` fields.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Command<'a> {
+    /// Loads a sound from encoded audio bytes (`audio/load-sound`).
     LoadSound(LoadSound<'a>),
+    /// Plays a loaded sound once (`audio/play-sound`).
     PlaySound(PlaySound),
+    /// Loops a loaded sound as music (`audio/play-music`).
     PlayMusic(PlayMusic),
+    /// Stops the music (`audio/stop-music`).
     StopMusic(StopMusic),
+    /// Changes the music volume (`audio/set-music-volume`).
     SetMusicVolume(SetMusicVolume),
 }
 
