@@ -9,23 +9,44 @@ use bones_messages::web::PageMessage;
 use bones_messages::{DecodeMessage, EncodeMessage, Message};
 
 use crate::devtools::{HISTORY, TICK_TOPIC};
+use crate::recorded::Recorded;
 use crate::recording::preview;
 use crate::request::Request;
+use crate::response::Response;
 use crate::server::{parameter, route, State};
 use crate::Devtools;
 
-fn request(line: &str, body: &str) -> Request {
+pub(crate) fn request(line: &str, body: &str) -> Request {
     Request {
         line: line.to_string(),
         body: body.to_string(),
     }
 }
 
-fn state() -> State {
+pub(crate) fn state() -> State {
     State {
         bus: None,
         messages: Arc::new(Mutex::new(Vec::new())),
+        extensions: Arc::new(Mutex::new(Default::default())),
+        logs: None,
+        frame_control: None,
+        frames: Default::default(),
+        captures: Default::default(),
+        next_capture: Default::default(),
+        exit: None,
+        replies: Default::default(),
+        next_send: Default::default(),
         shutdown: Arc::new(AtomicBool::new(false)),
+    }
+}
+
+pub(crate) fn recorded(ms: u128, topic: &str, sender: &str, preview: &str) -> Recorded {
+    Recorded {
+        ms,
+        topic: topic.to_string(),
+        sender: sender.to_string(),
+        preview: preview.to_string(),
+        payload: Some(Vec::new()),
     }
 }
 
@@ -45,7 +66,8 @@ fn page_message(json: &str) -> Envelope {
 
 #[test]
 fn health_answers_without_a_bus() {
-    let (status, body) = route(&request("GET /health HTTP/1.1", ""), &state());
+    let Response { status, body, .. } = route(&request("GET /health HTTP/1.1", ""), &state());
+    let body = String::from_utf8(body).unwrap();
 
     assert_eq!(status, "200 OK");
     assert_eq!(body, "ok\n");
@@ -55,11 +77,13 @@ fn health_answers_without_a_bus() {
 fn recorded_traffic_can_be_filtered_by_topic() {
     let state = state();
     state.messages.lock().unwrap().extend([
-        "      1ms\tweb/page-message\tweb\tapp/main {\"a\":1}".to_string(),
-        "      2ms\tgit/completed\tgit\t[4 bytes] ....".to_string(),
+        recorded(1, "web/page-message", "web", "app/main {\"a\":1}"),
+        recorded(2, "git/completed", "git", "[4 bytes] ...."),
     ]);
 
-    let (status, body) = route(&request("GET /messages?topic=git/ HTTP/1.1", ""), &state);
+    let Response { status, body, .. } =
+        route(&request("GET /messages?topic=git/ HTTP/1.1", ""), &state);
+    let body = String::from_utf8(body).unwrap();
 
     assert_eq!(status, "200 OK");
     assert_eq!(body, "      2ms\tgit/completed\tgit\t[4 bytes] ....\n");
@@ -67,7 +91,7 @@ fn recorded_traffic_can_be_filtered_by_topic() {
 
 #[test]
 fn an_empty_post_is_rejected_rather_than_published_as_nothing() {
-    let (status, _) = route(
+    let Response { status, .. } = route(
         &request("POST /page-message?owner=app&panel=main HTTP/1.1", "  "),
         &state(),
     );
@@ -77,7 +101,7 @@ fn an_empty_post_is_rejected_rather_than_published_as_nothing() {
 
 #[test]
 fn a_post_names_its_owner_and_panel() {
-    let (status, _) = route(
+    let Response { status, .. } = route(
         &request("POST /page-message HTTP/1.1", "{\"command\":\"refresh\"}"),
         &state(),
     );
@@ -87,7 +111,7 @@ fn a_post_names_its_owner_and_panel() {
 
 #[test]
 fn a_post_without_a_bus_reports_that_rather_than_claiming_success() {
-    let (status, _) = route(
+    let Response { status, .. } = route(
         &request(
             "POST /page-message?owner=app&panel=main HTTP/1.1",
             "{\"command\":\"refresh\"}",
@@ -107,7 +131,8 @@ fn query_parameters_are_read_by_name() {
 
 #[test]
 fn an_unknown_route_lists_the_ones_that_exist() {
-    let (status, body) = route(&request("GET /nope HTTP/1.1", ""), &state());
+    let Response { status, body, .. } = route(&request("GET /nope HTTP/1.1", ""), &state());
+    let body = String::from_utf8(body).unwrap();
 
     assert_eq!(status, "404 Not Found");
     assert!(body.contains("/page-message"), "body: {body}");
@@ -121,8 +146,10 @@ fn a_recorded_message_keeps_its_panel_and_json() {
     let messages = module.messages.lock().unwrap();
     assert_eq!(messages.len(), 1);
     assert!(
-        messages[0].contains("web/page-message\tweb\tapp/main {\"command\":\"refresh\"}"),
-        "recorded: {}",
+        messages[0]
+            .line()
+            .contains("web/page-message\tweb\tapp/main {\"command\":\"refresh\"}"),
+        "recorded: {:?}",
         messages[0]
     );
 }
@@ -158,6 +185,7 @@ fn history_is_bounded_so_a_long_session_cannot_grow_without_end() {
     assert!(messages
         .last()
         .unwrap()
+        .line()
         .contains(&format!("{}", HISTORY + 9)));
 }
 

@@ -1,11 +1,21 @@
+use std::collections::{BTreeMap, HashMap};
 use std::net::{SocketAddr, TcpListener};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use bones_kernel_infra::bus::{Bus, Envelope, Handler, Module, ModuleContext};
+use bones_kernel_infra::bus::{Bus, Envelope, Handler, Module, ModuleContext, Registry};
+use bones_kernel_infra::exit::ExitRequest;
+use bones_kernel_infra::frame_control::FrameControl;
 use bones_kernel_infra::logging::Logger;
+use bones_messages::lifecycle::{Event, LifecycleEvent};
+use bones_messages::renderer::Captured;
+use bones_messages::{DecodeMessage, Message};
 
+use crate::direct_send::{self, DirectSend};
+use crate::frames::Frames;
+use crate::log_history::LogHistory;
+use crate::recorded::Recorded;
 use crate::recording::{self, Redact};
 use crate::server::{self, State};
 
@@ -30,7 +40,15 @@ pub struct Devtools {
     redact: Option<Arc<Redact>>,
     started: Instant,
     last_tick: Option<Instant>,
-    pub(crate) messages: Arc<Mutex<Vec<String>>>,
+    pub(crate) messages: Arc<Mutex<Vec<Recorded>>>,
+    pub(crate) extensions: Arc<Mutex<BTreeMap<String, String>>>,
+    logs: Option<LogHistory>,
+    frames: Frames,
+    captures: crate::server::Captures,
+    /// Where `/send` requests are made, once `init` has it.
+    registry: Option<Registry>,
+    /// `/send` replies not yet collected, by request id.
+    replies: crate::direct_send::Replies,
     address: Option<SocketAddr>,
     shutdown: Arc<AtomicBool>,
 }
@@ -50,6 +68,12 @@ impl Devtools {
             started: Instant::now(),
             last_tick: None,
             messages: Arc::new(Mutex::new(Vec::new())),
+            extensions: Arc::new(Mutex::new(BTreeMap::new())),
+            logs: None,
+            frames: Frames::new(),
+            captures: Arc::new(Mutex::new(HashMap::new())),
+            registry: None,
+            replies: Arc::new(Mutex::new(HashMap::new())),
             address: None,
             shutdown: Arc::new(AtomicBool::new(false)),
         }
@@ -58,6 +82,13 @@ impl Devtools {
     /// Logs where the channel listens.
     pub fn logger(mut self, logger: Logger) -> Self {
         self.logger = Some(logger);
+        self
+    }
+
+    /// Serves `history` on `/logs`. Tee the composition's logger into the
+    /// same history (`Logger::tee`) for it to hold anything.
+    pub fn log_history(mut self, history: LogHistory) -> Self {
+        self.logs = Some(history);
         self
     }
 
@@ -93,7 +124,17 @@ impl Handler for Devtools {
     /// can post a message and then read what it caused without a screenshot,
     /// and a stall shows up as the topic the traffic stops at.
     fn handle(&mut self, envelope: &Envelope) {
+        if envelope.topic.starts_with("gfx/") {
+            self.frames.record(envelope);
+        }
+        if envelope.topic == Captured::TOPIC {
+            self.keep_capture(&envelope.payload);
+        }
+        if envelope.topic == direct_send::TOPIC && envelope.sender == ENDPOINT {
+            self.make_send(&envelope.payload);
+        }
         if envelope.topic == TICK_TOPIC {
+            self.frames.end_frame();
             let now = Instant::now();
             if self
                 .last_tick
@@ -103,18 +144,65 @@ impl Handler for Devtools {
             }
             self.last_tick = Some(now);
         }
-        let line = format!(
-            "{:>7}ms\t{}\t{}\t{}",
-            self.started.elapsed().as_millis(),
-            envelope.topic,
-            envelope.sender,
-            recording::preview(envelope, self.redact.as_deref())
-        );
+        if envelope.topic == LifecycleEvent::TOPIC {
+            self.track_lifecycle(&envelope.payload);
+        }
+        let redacted = self
+            .redact
+            .as_deref()
+            .is_some_and(|redact| redact(envelope));
+        let recorded = Recorded {
+            ms: self.started.elapsed().as_millis(),
+            topic: envelope.topic.clone(),
+            sender: envelope.sender.clone(),
+            preview: recording::preview(envelope, self.redact.as_deref()),
+            payload: (!redacted).then(|| envelope.payload.clone()),
+        };
         let mut messages = self.messages.lock().unwrap();
         if messages.len() >= HISTORY {
             messages.remove(0);
         }
-        messages.push(line);
+        messages.push(recorded);
+    }
+}
+
+impl Devtools {
+    /// Makes a `/send` request on the frame thread and keeps the reply
+    /// until the route collects it.
+    fn make_send(&mut self, payload: &[u8]) {
+        let (Ok(send), Some(registry)) = (DirectSend::decode(payload), &self.registry) else {
+            return;
+        };
+        let reply = send.call(registry);
+        self.replies.lock().unwrap().insert(send.id, reply);
+    }
+
+    /// Keeps a capture until `/screenshot` collects it by request id.
+    fn keep_capture(&mut self, payload: &[u8]) {
+        if let Ok(captured) = Captured::decode(payload) {
+            self.captures
+                .lock()
+                .unwrap()
+                .insert(captured.request_id, (captured.scope, captured.png.to_vec()));
+        }
+    }
+
+    /// Keeps each extension's last lifecycle state for `/extensions`.
+    fn track_lifecycle(&mut self, payload: &[u8]) {
+        let Ok(event) = LifecycleEvent::decode(payload) else {
+            return;
+        };
+        let state = match event.event {
+            Event::Loaded => "loaded",
+            Event::Faulted => "faulted",
+            Event::Reloading => "reloading",
+            Event::Reloaded => "reloaded",
+            Event::Stopped => "stopped",
+        };
+        self.extensions
+            .lock()
+            .unwrap()
+            .insert(event.extension.to_string(), state.to_string());
     }
 }
 
@@ -130,8 +218,14 @@ impl Module for Devtools {
         // Everything: a trailing `*` is a prefix match, so this is the whole
         // bus. Costly only when the channel is switched on.
         context.subscribe("*");
-        let listener = TcpListener::bind(("127.0.0.1", port))
-            .map_err(|error| format!("binding devtools channel: {error}"))?;
+        let listener = TcpListener::bind(("127.0.0.1", port)).map_err(|error| {
+            format!(
+                "binding the devtools channel on 127.0.0.1:{port}: {error}; another process, \
+                 often another engine, holds the port: set {} to a free one",
+                self.variable
+            )
+        })?;
+        self.registry = context.get_service::<Registry>().cloned();
         listener
             .set_nonblocking(true)
             .map_err(|error| format!("configuring devtools channel: {error}"))?;
@@ -141,6 +235,15 @@ impl Module for Devtools {
         let state = State {
             bus: context.get_service::<Bus>().cloned(),
             messages: Arc::clone(&self.messages),
+            extensions: Arc::clone(&self.extensions),
+            logs: self.logs.clone(),
+            frame_control: context.get_service::<FrameControl>().cloned(),
+            frames: self.frames.last(),
+            captures: Arc::clone(&self.captures),
+            next_capture: Arc::new(AtomicU32::new(0)),
+            exit: context.get_service::<ExitRequest>().cloned(),
+            replies: Arc::clone(&self.replies),
+            next_send: Arc::new(AtomicU32::new(0)),
             shutdown: Arc::clone(&self.shutdown),
         };
         std::thread::Builder::new()

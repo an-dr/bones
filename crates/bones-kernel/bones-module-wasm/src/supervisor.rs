@@ -3,6 +3,7 @@
 //! rest of the engine.
 
 mod owned_command;
+mod quarantine_message;
 mod tracked_extension;
 
 use bones_kernel_infra::exit::ExitRequest;
@@ -18,6 +19,8 @@ use bones_kernel_infra::bus::{BudgetLimits, Bus, Registry};
 use bones_kernel_infra::logging::Logger;
 
 use crate::loading::{attach_extension, read_file_mtime, ENGINE_SENDER};
+use crate::permissions::Permissions;
+use quarantine_message::quarantine_message;
 
 pub use owned_command::OwnedCommand;
 pub use tracked_extension::TrackedExtension;
@@ -51,6 +54,14 @@ pub struct Supervisor {
     /// Hot reload re-runs `instantiate` + `init`, so it needs the same
     /// wall-clock budget the initial load was given.
     timeouts: ExtensionTimeouts,
+    /// Deny-lists by extension name (ADR-042), applied to every instance
+    /// loaded under that name, including reloads.
+    permissions: HashMap<String, Permissions>,
+}
+
+/// The deny-list for `name`; one with no entry may use everything.
+fn permissions_of(permissions: &HashMap<String, Permissions>, name: &str) -> Permissions {
+    permissions.get(name).cloned().unwrap_or_default()
 }
 
 impl Supervisor {
@@ -67,6 +78,7 @@ impl Supervisor {
         display_info: DisplayInfo,
         budget_limits: BudgetLimits,
         timeouts: ExtensionTimeouts,
+        permissions: HashMap<String, Permissions>,
     ) -> Self {
         Self {
             wasm_engine,
@@ -81,6 +93,7 @@ impl Supervisor {
             display_info,
             budget_limits,
             timeouts,
+            permissions,
         }
     }
 
@@ -116,10 +129,7 @@ impl Supervisor {
             extension.quarantined = true;
             self.logger.error(
                 "engine",
-                &format!(
-                    "'{}' faulted and was quarantined (dropped inbound={}, publishes={})",
-                    extension.name, drops.inbound, drops.publishes
-                ),
+                &quarantine_message(&extension.name, drops, self.budget_limits),
             );
             lifecycle::publish(&self.bus, ENGINE_SENDER, &extension.name, Event::Faulted);
         }
@@ -151,6 +161,7 @@ impl Supervisor {
                 &self.display_info,
                 self.budget_limits,
                 self.timeouts,
+                &permissions_of(&self.permissions, &extension.name),
             ) {
                 Ok((ep, shared, budget, topics)) => {
                     if !extension.quarantined {
@@ -228,6 +239,7 @@ impl Supervisor {
             &self.display_info,
             self.budget_limits,
             self.timeouts,
+            &permissions_of(&self.permissions, name),
         ) {
             Ok((endpoint, shared, budget, topics)) => {
                 self.tracked.retain(|extension| extension.name != name);
@@ -294,6 +306,7 @@ impl Supervisor {
             &self.display_info,
             self.budget_limits,
             self.timeouts,
+            &permissions_of(&self.permissions, name),
         ) {
             Ok((endpoint, shared, budget, topics)) => {
                 let extension = &mut self.tracked[index];

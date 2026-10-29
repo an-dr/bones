@@ -1045,8 +1045,9 @@ fn a_flooding_extension_is_faulted_without_starving_its_peer() {
     );
     assert!(records.iter().any(|(_, _, message)| {
         message.contains("'flood_demo' faulted")
-            && message.contains("inbound=0")
-            && message.contains("publishes=56")
+            && message.contains("(56 dropped)")
+            && message.contains("extension_max_publishes")
+            && !message.contains("extension_max_inbound")
     }));
 }
 
@@ -1083,8 +1084,9 @@ fn exceeding_the_publish_allowance_quarantines_with_drop_counters() {
     );
     assert!(sink.records().iter().any(|(_, _, message)| {
         message.contains("'hello_demo' faulted")
-            && message.contains("inbound=0")
-            && message.contains("publishes=1")
+            && message.contains("(1 dropped)")
+            && message.contains("extension_max_publishes")
+            && !message.contains("extension_max_inbound")
     }));
 }
 
@@ -1123,8 +1125,9 @@ fn exceeding_the_inbound_allowance_quarantines_with_drop_counters() {
     );
     assert!(sink.records().iter().any(|(_, _, message)| {
         message.contains("'hello_demo' faulted")
-            && message.contains("inbound=1")
-            && message.contains("publishes=0")
+            && message.contains("(1 dropped)")
+            && message.contains("extension_max_inbound")
+            && !message.contains("extension_max_publishes")
     }));
 }
 

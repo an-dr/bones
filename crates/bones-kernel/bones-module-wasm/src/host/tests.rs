@@ -27,6 +27,7 @@ fn load_hello(bus: Bus, logger: Logger) -> Host {
         DisplayInfo::default(),
         EndpointBudget::new(bones_kernel_infra::bus::BudgetLimits::default()),
         ExtensionTimeouts::default(),
+        Permissions::default(),
     )
     .expect("build examples/extensions/hello-demo first: cargo xtask example hello-demo")
 }
@@ -43,6 +44,8 @@ fn test_state(name: &str, registry: Registry) -> State {
         budget: EndpointBudget::new(bones_kernel_infra::bus::BudgetLimits::default()),
         exit_requested: ExitRequest::new(),
         display_info: DisplayInfo::default(),
+        diagnostics: Diagnostics::new(),
+        permissions: Permissions::default(),
     }
 }
 
@@ -257,6 +260,7 @@ fn a_call_that_never_returns_traps_and_faults_instead_of_hanging_forever() {
         DisplayInfo::default(),
         EndpointBudget::new(bones_kernel_infra::bus::BudgetLimits::default()),
         ExtensionTimeouts::default(),
+        Permissions::default(),
     )
     .expect("build examples/extensions/runaway-demo first: cargo xtask example runaway-demo");
     assert!(!host.is_faulted(), "must not start out faulted");
@@ -271,7 +275,7 @@ fn a_call_that_never_returns_traps_and_faults_instead_of_hanging_forever() {
     assert!(
         records
             .iter()
-            .any(|(_, _, msg)| msg.contains("handler trapped")),
+            .any(|(_, _, msg)| msg.contains("trapped in on-tick")),
         "expected a trap log line, got {records:?}"
     );
 }
@@ -290,6 +294,7 @@ fn a_faulted_host_ignores_further_deliveries_instead_of_hanging_again() {
         DisplayInfo::default(),
         EndpointBudget::new(bones_kernel_infra::bus::BudgetLimits::default()),
         ExtensionTimeouts::default(),
+        Permissions::default(),
     )
     .expect("build examples/extensions/runaway-demo first: cargo xtask example runaway-demo");
     host.handle(&tick_envelope());
@@ -312,4 +317,53 @@ fn a_budget_converts_to_whole_epoch_ticks_and_never_to_zero() {
     // Saturates instead of wrapping, so "effectively unlimited" stays that
     // way rather than becoming a tiny deadline.
     assert_eq!(timeout_ticks(Duration::MAX), u64::MAX);
+}
+
+#[test]
+fn a_denied_send_fails_as_an_unknown_endpoint_even_when_it_exists() {
+    let registry = Registry::new();
+    registry.insert("files", Arc::new(EchoRespond));
+    let mut state = test_state("plugin", registry);
+    state.permissions = Permissions::deny(["files"]);
+
+    assert_eq!(
+        state.send("files".to_string(), Vec::new()),
+        Err(SendError::UnknownEndpoint)
+    );
+}
+
+#[test]
+fn a_denied_publish_is_dropped_and_an_allowed_one_is_not() {
+    let mut state = test_state("plugin", Registry::new());
+    state.permissions = Permissions::deny(["os/*"]);
+    let log = bones_kernel_infra::logging::RecordingSink::new();
+    state.logger = Logger::new(Arc::new(log.clone()));
+    let received = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let sink = received.clone();
+    let endpoint = state.bus.register("listener", move |e: &Envelope| {
+        sink.lock().unwrap().push(e.topic.clone());
+    });
+    endpoint.subscribe("*");
+
+    state.publish("os/request".to_string(), Vec::new());
+    state.publish("plugin/hello".to_string(), Vec::new());
+    state.bus.dispatch();
+
+    assert_eq!(*received.lock().unwrap(), ["plugin/hello"]);
+    assert!(log
+        .records()
+        .iter()
+        .any(|(_, _, line)| line.contains("may not publish to 'os/request'")));
+}
+
+#[test]
+fn a_subscription_that_could_reach_a_denied_topic_is_not_requested() {
+    let mut state = test_state("plugin", Registry::new());
+    state.permissions = Permissions::deny(["os/*"]);
+
+    state.subscribe("*".to_string());
+    state.subscribe("os/result".to_string());
+    state.subscribe("core/tick".to_string());
+
+    assert_eq!(state.requested_topics, ["core/tick"]);
 }

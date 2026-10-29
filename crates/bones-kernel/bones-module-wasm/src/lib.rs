@@ -11,10 +11,12 @@
 //! - `loading` attaches a component to the bus and discovers files.
 //! - `supervisor` quarantines, reloads, and applies runtime commands.
 //! - `lifecycle` publishes state transitions.
+//! - [`Permissions`] is one extension's deny-list (ADR-042).
 //! - [`Wasm`] is the module that composes them, and the only type most
 //!   callers name.
 
 mod contract;
+mod permissions;
 mod wasm;
 
 pub mod host;
@@ -22,4 +24,5 @@ pub mod lifecycle;
 pub mod loading;
 pub mod supervisor;
 
+pub use permissions::Permissions;
 pub use wasm::Wasm;

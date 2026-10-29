@@ -116,7 +116,7 @@ pub use bones_kernel_infra::runner::{read_tick_dt, Runner};
 #[cfg(feature = "wasm")]
 pub mod wasm {
     pub use bones_module_wasm::host::ExtensionTimeouts;
-    pub use bones_module_wasm::Wasm;
+    pub use bones_module_wasm::{Permissions, Wasm};
 }
 
 /// The message bus, and the traits a native module implements to join it.
@@ -214,6 +214,13 @@ pub mod exit {
     pub use bones_kernel_infra::exit::ExitRequest;
 }
 
+/// The `frame-control` service (design/modules.md): pause the simulation and
+/// step it frame by frame. [`BuiltKernel::frame_control`](crate::BuiltKernel)
+/// is the same control.
+pub mod frame_control {
+    pub use bones_kernel_infra::frame_control::FrameControl;
+}
+
 /// The `display-info` service (ADR-040): the display's fullscreen modes and
 /// desktop resolution, queried once before any window hand-off.
 pub mod display {
@@ -300,7 +307,9 @@ pub mod draw_target {
 /// Structured logging, including the sink trait the kernel infrastructure resolves against
 /// (ADR-012).
 pub mod logging {
-    pub use bones_kernel_infra::logging::{Level, LogSink, Logger, RecordingSink, StdoutSink};
+    pub use bones_kernel_infra::logging::{
+        JsonSink, Level, LevelFilter, LogSink, Logger, RecordingSink, StdoutSink,
+    };
 }
 
 /// The typed core messages and their payload codecs.

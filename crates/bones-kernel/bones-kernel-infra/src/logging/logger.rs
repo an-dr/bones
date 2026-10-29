@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::logging::{Level, LogSink, StdoutSink};
+use crate::logging::{Level, LogSink, StdoutSink, TeeSink};
 
 /// Cheap to clone; every component that logs holds one of these.
 #[derive(Clone)]
@@ -11,6 +11,11 @@ pub struct Logger {
 impl Logger {
     pub fn new(sink: Arc<dyn LogSink>) -> Self {
         Self { sink }
+    }
+
+    /// A logger writing everywhere this one does, and to `other` as well.
+    pub fn tee(&self, other: Arc<dyn LogSink>) -> Logger {
+        Logger::new(Arc::new(TeeSink::new(self.sink.clone(), other)))
     }
 
     pub fn log(&self, level: Level, category: &str, message: &str) {

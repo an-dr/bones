@@ -10,8 +10,8 @@
 
 use bones_wasm_sdk::bindings::bones::extension::host_api::{log, send, Level};
 use bones_wasm_sdk::messages::ui::{Spec, Widget};
-use bones_wasm_sdk::messages::{DecodeMessage, EncodeMessage, Message};
-use bones_wasm_sdk::Guest;
+use bones_wasm_sdk::messages::{DecodeMessage, EncodeMessage};
+use bones_wasm_sdk::{bus, Guest};
 use host_facts_messages::{Fact, FactsReply, FactsRequest, ENDPOINT};
 
 /// Asks the native module for one fact.
@@ -46,7 +46,10 @@ impl Guest for Component {
         let path_length = ask(Fact::EnvironmentVariable("PATH")).len();
 
         log(Level::Info, &format!("hostname: {hostname}"));
-        log(Level::Info, &format!("working directory: {working_directory}"));
+        log(
+            Level::Info,
+            &format!("working directory: {working_directory}"),
+        );
         log(Level::Info, &format!("PATH is {path_length} bytes"));
 
         // Published, not sent: a widget spec is a broadcast to whichever ui
@@ -64,7 +67,7 @@ impl Guest for Component {
                 },
             ],
         };
-        bones_wasm_sdk::bindings::bones::extension::host_api::publish(Spec::TOPIC, &spec.encode());
+        bus::publish(&spec);
     }
 
     fn shutdown() {}

@@ -8,7 +8,9 @@ publish.workspace = true
 
 [dependencies]
 bones-kernel-infra = { path = "../bones-kernel-infra", default-features = false }
-sdl3 = { version = "0.18.4", features = ["build-from-source-static", "image", "unsafe_textures"] }
+sdl3 = { version = "0.18.4", features = ["build-from-source-static", "image", "unsafe_textures", "raw-window-handle"] }
+# The native window behind SDL's, for capturing it whole (window_capture.rs).
+raw-window-handle = "0.6.2"
 send_wrapper = "0.6.0"
 bones-messages = { path = "../../bones-messages" }
 # Already resolved transitively via egui (core/ui) — reused here instead of
@@ -19,8 +21,18 @@ bones-messages = { path = "../../bones-messages" }
 # build) — release-only linking would break the default `cargo build`/
 # `cargo test` workflow, so this avoids the native C++ dependency entirely.
 ab_glyph = "0.2.32"
+# Encodes renderer/capture replies; already in the tree through the os module's clipboard crate.
+png = "0.18"
 # Hack-Regular.ttf, MIT licensed, embedded as the one gfx/* text font.
 epaint_default_fonts = "0.32.3"
+
+[target.'cfg(windows)'.dependencies]
+# PrintWindow and GDI, for a capture of the whole window.
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Storage_Xps", "Win32_UI_WindowsAndMessaging"] }
+
+[target.'cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))'.dependencies]
+# GetImage, for a capture of the whole window under X11.
+x11rb = "0.13"
 
 [dev-dependencies]
 bones-kernel-infra = { path = "../bones-kernel-infra", default-features = false, features = ["platform"] }

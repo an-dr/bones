@@ -2,6 +2,7 @@
 //! (structure.md); every field defaults to today's hardcoded values, so
 //! running with no config file is unchanged.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use serde::Deserialize;
@@ -22,6 +23,12 @@ pub struct Config {
     pub persistence_read_only: bool,
     pub extension_max_inbound: u32,
     pub extension_max_publishes: u32,
+    /// How long an extension's instantiation and `init` may take.
+    pub extension_load_timeout_ms: u64,
+    /// How long any later call into an extension may take.
+    pub extension_call_timeout_ms: u64,
+    /// Topics and endpoints each named extension may not use (ADR-042).
+    pub deny: BTreeMap<String, Vec<String>>,
 }
 
 impl Default for Config {
@@ -56,6 +63,10 @@ impl Default for Config {
             persistence_read_only: false,
             extension_max_inbound: 1_024,
             extension_max_publishes: 1_024,
+            // The extension host's own defaults (ExtensionTimeouts).
+            extension_load_timeout_ms: 1_000,
+            extension_call_timeout_ms: 50,
+            deny: BTreeMap::new(),
         }
     }
 }
@@ -122,6 +133,21 @@ mod tests {
             config.extensions_dir, "extensions",
             "omitted field should default"
         );
+    }
+
+    #[test]
+    fn a_deny_table_lists_patterns_per_extension() {
+        let dir = std::env::temp_dir().join("bones-app-test-deny-config");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("bones.toml");
+        std::fs::write(&path, "[deny]\nplugin = [\"os/*\", \"files\"]\n").unwrap();
+
+        let config = Config::load(path.to_str().unwrap());
+
+        std::fs::remove_dir_all(&dir).ok();
+
+        let config = config.unwrap();
+        assert_eq!(config.deny["plugin"], ["os/*", "files"]);
     }
 
     #[test]

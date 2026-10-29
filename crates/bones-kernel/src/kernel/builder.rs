@@ -104,6 +104,10 @@ pub struct Kernel {
     #[cfg(feature = "presentation")]
     min_window_size: Option<(u32, u32)>,
     #[cfg(feature = "presentation")]
+    offscreen: bool,
+    #[cfg(feature = "presentation")]
+    offscreen_variable: Option<String>,
+    #[cfg(feature = "presentation")]
     renderer_enabled: bool,
     #[cfg(feature = "presentation")]
     ui_enabled: bool,
@@ -121,6 +125,8 @@ pub struct Kernel {
     extension_budget: BudgetLimits,
     #[cfg(feature = "wasm")]
     extension_timeouts: ExtensionTimeouts,
+    #[cfg(feature = "wasm")]
+    extension_permissions: Vec<(String, bones_module_wasm::Permissions)>,
 }
 
 impl Kernel {
@@ -147,6 +153,10 @@ impl Kernel {
             #[cfg(feature = "presentation")]
             min_window_size: None,
             #[cfg(feature = "presentation")]
+            offscreen: false,
+            #[cfg(feature = "presentation")]
+            offscreen_variable: None,
+            #[cfg(feature = "presentation")]
             renderer_enabled: false,
             #[cfg(feature = "presentation")]
             ui_enabled: false,
@@ -164,6 +174,8 @@ impl Kernel {
             extension_budget: BudgetLimits::default(),
             #[cfg(feature = "wasm")]
             extension_timeouts: ExtensionTimeouts::default(),
+            #[cfg(feature = "wasm")]
+            extension_permissions: Vec::new(),
         }
     }
 
@@ -241,6 +253,30 @@ impl Kernel {
     #[cfg(feature = "presentation")]
     pub fn min_window_size(mut self, width: u32, height: u32) -> Self {
         self.min_window_size = Some((width, height));
+        self
+    }
+
+    /// Opens `.window(...)`'s window in memory instead of on a display,
+    /// through SDL's offscreen video driver, so an engine with a renderer
+    /// runs where there is no display: a test, a CI job, or a screenshot
+    /// taken for documentation. `renderer/capture` reads its frames back.
+    ///
+    /// The driver is chosen by an SDL hint that lasts for the whole process
+    /// (`Platform::select_offscreen_video_driver`). No effect without
+    /// `.window(...)`. `build` refuses it with `.web()`: a webview needs a
+    /// visible parent window.
+    #[cfg(feature = "presentation")]
+    pub fn offscreen(mut self) -> Self {
+        self.offscreen = true;
+        self
+    }
+
+    /// As [`Kernel::offscreen`] when the environment variable `variable` is
+    /// set at `build` to anything but empty or `0`, so a tool can take
+    /// screenshots of an application that otherwise opens a visible window.
+    #[cfg(feature = "presentation")]
+    pub fn offscreen_from_env(mut self, variable: &str) -> Self {
+        self.offscreen_variable = Some(variable.to_string());
         self
     }
 
@@ -422,6 +458,23 @@ impl Kernel {
         self
     }
 
+    #[cfg(feature = "wasm")]
+    /// Denies the extension called `name` the topics and endpoints in
+    /// `permissions` (ADR-042).
+    ///
+    /// - For an extension the application did not write: a plugin, or code
+    ///   nobody has reviewed yet.
+    /// - Applies to every instance loaded under that name, including hot
+    ///   reloads and runtime loads.
+    pub fn extension_permissions(
+        mut self,
+        name: impl Into<String>,
+        permissions: crate::wasm::Permissions,
+    ) -> Self {
+        self.extension_permissions.push((name.into(), permissions));
+        self
+    }
+
     /// Wires the bus, every `.wasm` file in `extensions_dir`, the window
     /// (if `.window(...)` was set), and the renderer (if `.renderer()` was
     /// set). A file that fails to load, or whose name is already taken, is
@@ -436,6 +489,18 @@ impl Kernel {
         // engine already knows is unusable.
         tick_period(self.tick_hz)?;
 
+        // Teed before any module takes a copy of the logger, so the channel's
+        // `/logs` sees every line the console does.
+        #[cfg(feature = "devtools")]
+        let devtools_logs = match &self.devtools_variable {
+            Some(variable) if bones_module_devtools::Devtools::requested(variable) => {
+                let history = bones_module_devtools::LogHistory::new();
+                self.logger = self.logger.tee(std::sync::Arc::new(history.clone()));
+                Some(history)
+            }
+            _ => None,
+        };
+
         #[cfg(feature = "presentation")]
         let window = self.window.take();
         #[cfg(feature = "presentation")]
@@ -445,6 +510,7 @@ impl Kernel {
         let bus = bones_kernel_infra::bus::Bus::new();
         let registry = Registry::new();
         let exit_requested = bones_kernel_infra::exit::ExitRequest::new();
+        let frame_control = bones_kernel_infra::frame_control::FrameControl::new();
 
         #[cfg(feature = "presentation")]
         let min_window_size = self.min_window_size.take();
@@ -453,6 +519,21 @@ impl Kernel {
         #[cfg(feature = "web")]
         if self.web_enabled {
             bones_kernel_infra::platform::Platform::select_x11_video_driver();
+        }
+        #[cfg(feature = "presentation")]
+        let offscreen = self.offscreen || env_flag(self.offscreen_variable.as_deref());
+        // A webview needs a real parent window; under the offscreen driver
+        // there is none, and creating one fails inside the platform.
+        #[cfg(feature = "web")]
+        if offscreen && self.web_enabled {
+            return Err(crate::Error::msg(
+                "web panels need a visible window, so this engine cannot run offscreen; \
+                 capture the visible window instead (bones-cli screenshot --window)",
+            ));
+        }
+        #[cfg(feature = "presentation")]
+        if offscreen {
+            bones_kernel_infra::platform::Platform::select_offscreen_video_driver();
         }
         #[cfg(feature = "presentation")]
         let mut platform = match window {
@@ -523,6 +604,9 @@ impl Kernel {
         services
             .provide(display_info.clone())
             .expect("no other service registers as DisplayInfo");
+        services
+            .provide(frame_control.clone())
+            .expect("no other service registers as FrameControl");
 
         #[cfg(feature = "web")]
         let web_module: Option<Box<dyn Module>> = if self.web_enabled {
@@ -610,8 +694,11 @@ impl Kernel {
         #[cfg(feature = "devtools")]
         if let Some(variable) = self.devtools_variable.take() {
             if bones_module_devtools::Devtools::requested(&variable) {
-                let devtools =
+                let mut devtools =
                     bones_module_devtools::Devtools::from_env(variable).logger(self.logger.clone());
+                if let Some(history) = devtools_logs {
+                    devtools = devtools.log_history(history);
+                }
                 register_module(
                     &bus,
                     &registry,
@@ -671,6 +758,9 @@ impl Kernel {
                 .startup_extensions(self.startup_extensions.drain(..))
                 .budget(self.extension_budget)
                 .timeouts(self.extension_timeouts);
+            for (name, permissions) in self.extension_permissions.drain(..) {
+                wasm = wasm.permissions(name, permissions);
+            }
             if let Some(dir) = &self.extensions_dir {
                 wasm = wasm.extensions_dir(resolve_relative_to_exe(dir.clone()));
             }
@@ -696,6 +786,7 @@ impl Kernel {
             modules,
             registry,
             exit_requested,
+            frame_control,
             shutdown_started: false,
         })
     }
@@ -714,6 +805,7 @@ impl Kernel {
             modules,
             registry: _,
             exit_requested,
+            frame_control,
             shutdown_started: _,
         } = self.build()?;
 
@@ -742,7 +834,17 @@ impl Kernel {
             let dt = (now - last).as_secs_f32();
             last = now;
 
-            step_frame(&runner, &modules, dt);
+            // Paused by `frame-control`, the frame still dispatches and
+            // renders: requests such as a capture reach their modules, the
+            // window stays live, and a capture shows the held frame. Only
+            // the tick and its hooks stop.
+            match frame_control.next_dt(dt, period.as_secs_f32()) {
+                Some(dt) => step_frame(&runner, &modules, dt),
+                None => {
+                    runner.begin_frame();
+                    runner.bus().dispatch();
+                }
+            }
 
             // render then present, both over every module in registration
             // order (design/modules.md). The renderer composites its
@@ -762,6 +864,14 @@ impl Kernel {
     }
 }
 
+/// Whether the environment variable named `variable` is set to anything but
+/// empty or `0`; `false` when no variable is named.
+#[cfg(feature = "presentation")]
+fn env_flag(variable: Option<&str>) -> bool {
+    variable
+        .and_then(|name| std::env::var(name).ok())
+        .is_some_and(|value| !value.is_empty() && value != "0")
+}
 impl Default for Kernel {
     fn default() -> Self {
         Self::new()
