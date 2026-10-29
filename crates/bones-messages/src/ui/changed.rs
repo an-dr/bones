@@ -4,7 +4,9 @@ use crate::{DecodeError, DecodeMessage, EncodeMessage, Message, Reader, Writer};
 /// changes; carries the field's full new content, not a diff.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Changed<'a> {
+    /// The `TextEdit` widget that changed.
     pub id: u32,
+    /// The widget's whole new text.
     pub text: &'a str,
 }
 

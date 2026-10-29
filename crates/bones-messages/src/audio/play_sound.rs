@@ -4,7 +4,9 @@ use crate::{DecodeError, DecodeMessage, EncodeMessage, Message, Reader, Writer};
 /// amplitude: `0.0` silent, `1.0` unity gain — not decibels).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PlaySound {
+    /// The loaded sound to play.
     pub id: u32,
+    /// Volume from `0.0` (silent) to `1.0` (full).
     pub volume: f32,
 }
 

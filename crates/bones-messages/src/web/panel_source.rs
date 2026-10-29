@@ -3,7 +3,9 @@ use crate::DecodeError;
 /// Initial content for a panel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PanelSource<'a> {
+    /// Inline HTML text.
     Html(&'a str),
+    /// A URL to load.
     Url(&'a str),
 }
 

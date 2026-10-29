@@ -3,8 +3,11 @@ use crate::{DecodeError, DecodeMessage, EncodeMessage, Message, Reader, Writer};
 /// Carries opaque JSON posted by a panel page to its owning extension.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PageMessage<'a> {
+    /// The extension that opened the panel.
     pub owner: &'a str,
+    /// The panel the page belongs to.
     pub panel: &'a str,
+    /// The JSON the page posted.
     pub json: &'a str,
 }
 

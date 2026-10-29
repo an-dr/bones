@@ -6,7 +6,9 @@ use crate::{DecodeError, DecodeMessage, EncodeMessage, Message, Reader, Writer};
 /// limit. `volume` is linear amplitude, same convention as `PlaySound`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PlayMusic {
+    /// The loaded sound to loop.
     pub id: u32,
+    /// Volume from `0.0` (silent) to `1.0` (full).
     pub volume: f32,
 }
 

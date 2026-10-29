@@ -1,5 +1,6 @@
-use bones_wasm_sdk::Guest;
-use bones_wasm_sdk::bindings::bones::extension::host_api::{log, subscribe, Level};
+use bones_wasm_sdk::bindings::bones::extension::host_api::{log, Level};
+use bones_wasm_sdk::messages::tick::Tick;
+use bones_wasm_sdk::{bus, Guest};
 
 struct Component;
 
@@ -7,7 +8,7 @@ impl Guest for Component {
     fn shutdown() {}
 
     fn init() {
-        subscribe("core/tick");
+        bus::subscribe::<Tick>();
         log(Level::Info, "init, about to hang on its first tick");
     }
 

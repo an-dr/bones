@@ -9,16 +9,27 @@ use super::{
 // No `Eq`: `SetCamera` carries `f32` fields.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Command<'a> {
+    /// `gfx/clear`.
     Clear(Clear),
+    /// `gfx/clear-draw-batch`.
     ClearDrawBatch(ClearDrawBatch),
+    /// `gfx/load-sprite`.
     LoadSprite(LoadSprite<'a>),
+    /// `gfx/draw-sprite`.
     DrawSprite(DrawSprite),
+    /// `gfx/set-camera`.
     SetCamera(SetCamera),
+    /// `gfx/set-display`.
     SetDisplay(SetDisplay),
+    /// `gfx/draw-rect`.
     DrawRect(DrawRect),
+    /// `gfx/draw-line`.
     DrawLine(DrawLine),
+    /// `gfx/draw-circle`.
     DrawCircle(DrawCircle),
+    /// `gfx/draw-text`.
     DrawText(DrawText<'a>),
+    /// `gfx/draw-triangle`.
     DrawTriangle(DrawTriangle),
 }
 

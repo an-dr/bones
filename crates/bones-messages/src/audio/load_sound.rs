@@ -5,7 +5,9 @@ use crate::{DecodeError, DecodeMessage, EncodeMessage, Message, Reader, Writer};
 /// id — the same pattern as `gfx::LoadSprite`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LoadSound<'a> {
+    /// Caller-assigned sound identifier that later commands refer to.
     pub id: u32,
+    /// The encoded audio file, in any format the audio module decodes (WAV, MP3, OGG, FLAC).
     pub bytes: &'a [u8],
 }
 

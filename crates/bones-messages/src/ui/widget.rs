@@ -5,9 +5,25 @@ use crate::{DecodeError, Reader, Writer};
 /// produced them; `Label` has no interaction, so no id.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Widget<'a> {
-    Label { text: &'a str },
-    TextEdit { id: u32, text: &'a str },
-    Button { id: u32, label: &'a str },
+    /// Static text.
+    Label {
+        /// The text shown.
+        text: &'a str,
+    },
+    /// A single-line text field; edits arrive as `ui/changed`.
+    TextEdit {
+        /// Extension-assigned id, echoed by `ui/changed`.
+        id: u32,
+        /// The field's current text.
+        text: &'a str,
+    },
+    /// A push button; clicks arrive as `ui/clicked`.
+    Button {
+        /// Extension-assigned id, echoed by `ui/clicked`.
+        id: u32,
+        /// The button's caption.
+        label: &'a str,
+    },
 }
 
 const TAG_LABEL: u8 = 0;

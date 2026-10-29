@@ -1,0 +1,822 @@
+{
+  "$schema": "./wire-format.schema.json",
+  "title": "bones core message wire format",
+  "introduction": "This specification and [extension.wit](extension.wit) are the two halves of the extension ABI: `extension.wit` defines the calls, this defines the bytes those calls carry on core-owned topics. It describes the ABI line of the `abi-v*` tag or release archive you took it from; `bones-messages` carries the same version number.\n\nWritten so an extension author in any language can produce and consume core messages without reading Rust. The Rust implementation lives in `bones-messages`; where the two ever disagree, the [conformance vectors](vectors/README.md) decide, because both this specification and that crate are checked against them.",
+  "sections": [
+    {
+      "heading": "Scope",
+      "markdown": "The bus itself is untyped. A payload is a byte string, and an extension may put anything in one for topics it owns — bones neither inspects nor constrains those (ADR-016). What is specified here is only the set of topics bones itself defines, because those are the ones both sides must agree on.\n\nSo there are three kinds of traffic, and only the first is in scope:\n\n- **Core-owned topics** — `core/*`, `input/*`, `gfx/*`, `ui/*`, `audio/*`, `game-core/*`, `web/*`, `renderer/*`, `window/*`, `persistence/*`, `instance/*`, `desktop/*`, `os/*`, `upgrader/*`. Encoded exactly as below.\n- **Direct sends to core endpoints** — `persistence`, `files`, `web`. Their request and reply shapes are in [Direct-send endpoints](#direct-send-endpoints).\n- **Everything else** — opaque application payloads between extensions. Not specified, deliberately."
+    },
+    {
+      "heading": "Versioning",
+      "markdown": "This specification carries the **ABI version line**, not the engine's (ADR-029). It moves when the encoding of an existing message changes or a core topic is removed — both of which break every extension built against the previous version — and not when the engine's Rust API changes.\n\nAdding a new core topic does not break a decoder that does not subscribe to it, and adding a new variant to a tagged union does not break a decoder that never receives one. Both are additive and do not force a major bump on their own. Removing or renumbering a tag does.\n\nThere is no version field in a payload. The version is established out of band, by the `bones:extension@<version>` import in the component itself, which the host refuses to instantiate on a mismatch — see [README.md](README.md) for how that check behaves."
+    },
+    {
+      "heading": "Primitives",
+      "markdown": "Every multi-byte number is **little-endian**, two's complement where signed. There is no alignment or padding anywhere: a field starts at the byte after the previous field ends.",
+      "primitives": [
+        { "name": "u8", "size": "1", "encoding": "unsigned byte" },
+        { "name": "u16", "size": "2", "encoding": "unsigned, little-endian" },
+        { "name": "u32", "size": "4", "encoding": "unsigned, little-endian" },
+        { "name": "i32", "size": "4", "encoding": "signed two's complement, little-endian" },
+        { "name": "f32", "size": "4", "encoding": "IEEE 754 binary32, little-endian" },
+        { "name": "bool", "size": "1", "encoding": "`0` is false; **any non-zero byte is true**. Encoders write `1`" },
+        { "name": "str", "size": "2 + n", "encoding": "`u16` byte length, then that many bytes of UTF-8. Not NUL-terminated" },
+        { "name": "blob", "size": "4 + n", "encoding": "`u32` byte length, then that many raw bytes" },
+        { "name": "rest", "size": "—", "encoding": "every remaining byte of the payload, raw. Only ever the final field" },
+        { "name": "str-rest", "size": "—", "encoding": "every remaining byte, as UTF-8. Only ever the final field" }
+      ],
+      "after_primitives": "`str` and `blob` differ only in the width of their length prefix and whether the content is required to be UTF-8. A field is written as `str`/`blob` rather than `rest` precisely when something follows it.\n\nA length prefix counts **bytes, not characters**. A `str` cannot exceed 65535 bytes and a `blob` cannot exceed 4294967295; an encoder that is handed more must fail rather than truncate."
+    },
+    {
+      "heading": "Framing",
+      "markdown": "A payload is the concatenation of its fields, in the order the topic lists them. There is no envelope, no length prefix on the payload as a whole, no type tag, and no field names — the topic determines the shape completely.\n\nThree rules make that unambiguous:\n\n- **Fixed-shape messages must be consumed exactly.** If any byte remains after the last field, the payload is invalid (`trailing-bytes`). Decoders must check this rather than ignore the tail; it is what catches a version skew that happens to parse.\n- **`rest` and `str-rest` may appear only as the final field**, and consume whatever is left, including nothing. A message whose only variable field is last uses `rest`; one with a variable field before another field uses `str` or `blob`.\n- **A tagged union leads with a `u8` tag**, and the fields that follow depend on it. An unrecognised tag is invalid (`invalid-tag`), not skippable — a payload does not carry the length of its own variant, so a decoder that does not know the tag cannot find the end of it.\n\nCounted sequences are a `u16` count followed by that many elements back to back, each encoded as its element shape says. There is no separator and no terminator."
+    },
+    {
+      "heading": "Decoding failures",
+      "markdown": "Four failures are distinguishable, and an implementation should report them separately because they mean different things:\n\n| Failure | Meaning |\n| --- | --- |\n| `truncated` | the payload ended before a field could be read in full |\n| `trailing-bytes` | a fixed-shape payload had bytes left after its final field |\n| `invalid-tag` | a tagged union carried a tag the contract does not define |\n| `invalid-utf8` | a `str`, `str-rest`, or string field was not valid UTF-8 |\n\nA malformed payload is dropped by the receiver, not reported back to the sender. The bus is at-most-once and has no negative acknowledgement (ADR-009).\n\nThe extension host checks every core-topic payload an extension publishes against this specification before delivering it. When one fails, it logs a warning naming the extension, the topic, the failure, the payload's length and leading bytes, and this specification's section for the topic. It warns once per extension and topic, so a malformed message published every frame produces one line. The payload is still delivered, and its receiver drops it as above."
+    }
+  ],
+  "groups": [
+    {
+      "name": "Core topics",
+      "entries": [
+        {
+          "topics": ["core/tick"],
+          "description": "Published by the engine each frame to `core/tick` subscribers (ADR-004).",
+          "payload": {
+            "fields": [
+              { "name": "dt", "type": "f32", "meaning": "seconds since the previous tick" }
+            ]
+          }
+        },
+        {
+          "topics": ["core/lifecycle"],
+          "description": "Published by the engine when an extension's state changes.",
+          "payload": {
+            "fields": [
+              {
+                "name": "event",
+                "type": "u8",
+                "meaning": "what happened",
+                "values": [
+                  { "value": 0, "name": "loaded" },
+                  { "value": 1, "name": "faulted" },
+                  { "value": 2, "name": "reloading" },
+                  { "value": 3, "name": "reloaded" },
+                  { "value": 4, "name": "stopped" }
+                ]
+              },
+              { "name": "extension", "type": "str-rest", "meaning": "the extension's host-stamped name" }
+            ]
+          }
+        },
+        {
+          "topics": ["core/extensions/load", "core/extensions/unload", "core/extensions/reload"],
+          "description": "Runtime activation commands (ADR-024), honoured only from the sender the embedder authorised as the extension controller.",
+          "payload": {
+            "fields": [
+              { "name": "extension", "type": "str-rest", "meaning": "catalog name to act on" }
+            ]
+          },
+          "notes": "All three share one shape; the topic is the verb."
+        },
+        {
+          "topics": ["window/close-requested"],
+          "payload": { "fields": [] },
+          "notes": "The topic is the whole message."
+        }
+      ]
+    },
+    {
+      "name": "input/*",
+      "entries": [
+        {
+          "topics": ["input/key-down", "input/key-up"],
+          "payload": {
+            "fields": [
+              { "name": "key", "type": "str-rest", "meaning": "key name, e.g. `\"A\"`, `\"Space\"`, `\"Left\"`" }
+            ]
+          },
+          "notes": "`key` is SDL's name for the key, the same on every platform and layout-independent. Letters are upper case, `A` to `Z`, and digits are `0` to `9`. The arrows are `Left`, `Right`, `Up`, and `Down`. Other common names are `Space`, `Return`, `Escape`, `Backspace`, `Tab`, `Left Shift`, `Left Ctrl`, `F1` to `F12`, and `Keypad Enter`."
+        },
+        {
+          "topics": ["input/mouse-down", "input/mouse-up"],
+          "payload": {
+            "fields": [
+              { "name": "button", "type": "u8", "meaning": "platform button index; 1 is left" },
+              { "name": "x", "type": "f32", "meaning": "window coordinate" },
+              { "name": "y", "type": "f32", "meaning": "window coordinate" }
+            ]
+          }
+        },
+        {
+          "topics": ["input/mouse-move"],
+          "payload": {
+            "fields": [
+              { "name": "x", "type": "f32", "meaning": "window coordinate" },
+              { "name": "y", "type": "f32", "meaning": "window coordinate" },
+              { "name": "dx", "type": "f32", "meaning": "movement since the previous event" },
+              { "name": "dy", "type": "f32", "meaning": "movement since the previous event" }
+            ]
+          }
+        },
+        {
+          "topics": ["input/mouse-wheel"],
+          "payload": {
+            "fields": [
+              { "name": "x", "type": "f32", "meaning": "horizontal scroll" },
+              { "name": "y", "type": "f32", "meaning": "vertical scroll" }
+            ]
+          }
+        },
+        {
+          "topics": ["input/gamepad-connected", "input/gamepad-disconnected"],
+          "payload": {
+            "fields": [
+              { "name": "id", "type": "u32", "meaning": "gamepad instance id" }
+            ]
+          }
+        },
+        {
+          "topics": ["input/gamepad-button-down", "input/gamepad-button-up"],
+          "payload": {
+            "fields": [
+              { "name": "id", "type": "u32", "meaning": "gamepad instance id" },
+              { "name": "button", "type": "str", "meaning": "button name" }
+            ]
+          },
+          "notes": "`button` is `str`, not `str-rest`, because the fixed-shape check still applies after it — a decoder must find no bytes beyond it."
+        },
+        {
+          "topics": ["input/gamepad-axis"],
+          "payload": {
+            "fields": [
+              { "name": "id", "type": "u32", "meaning": "gamepad instance id" },
+              { "name": "axis", "type": "str", "meaning": "axis name" },
+              { "name": "value", "type": "f32", "meaning": "normalised position" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "gfx/*",
+      "description": "Draw commands an extension publishes and the renderer executes (ADR-002). Colors are four `u8` channels in `r`, `g`, `b`, `a` order, straight (non-premultiplied) alpha. `layer` is a `u8`; the renderer draws layers bottom-up and, within a layer, in arrival order.",
+      "entries": [
+        {
+          "topics": ["gfx/clear"],
+          "payload": {
+            "fields": [
+              { "name": "r", "type": "u8", "meaning": "the color to clear to" },
+              { "name": "g", "type": "u8", "meaning": "the color to clear to" },
+              { "name": "b", "type": "u8", "meaning": "the color to clear to" },
+              { "name": "a", "type": "u8", "meaning": "the color to clear to" }
+            ]
+          }
+        },
+        {
+          "topics": ["gfx/clear-draw-batch"],
+          "payload": { "fields": [] }
+        },
+        {
+          "topics": ["gfx/load-sprite"],
+          "payload": {
+            "fields": [
+              { "name": "id", "type": "u32", "meaning": "sprite id this image is addressed by afterwards" },
+              { "name": "png_bytes", "type": "rest", "meaning": "a PNG image" }
+            ]
+          }
+        },
+        {
+          "topics": ["gfx/draw-sprite"],
+          "payload": {
+            "fields": [
+              { "name": "id", "type": "u32", "meaning": "a previously loaded sprite id" },
+              { "name": "dst_x", "type": "i32", "meaning": "destination rectangle" },
+              { "name": "dst_y", "type": "i32", "meaning": "destination rectangle" },
+              { "name": "dst_w", "type": "u32", "meaning": "destination rectangle" },
+              { "name": "dst_h", "type": "u32", "meaning": "destination rectangle" },
+              { "name": "src_x", "type": "i32", "meaning": "source rectangle within the sprite" },
+              { "name": "src_y", "type": "i32", "meaning": "source rectangle within the sprite" },
+              { "name": "src_w", "type": "u32", "meaning": "source rectangle within the sprite" },
+              { "name": "src_h", "type": "u32", "meaning": "source rectangle within the sprite" },
+              { "name": "layer", "type": "u8" },
+              { "name": "angle", "type": "f32", "meaning": "rotation in degrees" },
+              { "name": "flip_h", "type": "bool" },
+              { "name": "flip_v", "type": "bool" },
+              { "name": "tint_r", "type": "u8", "meaning": "tint color, multiplied into the image" },
+              { "name": "tint_g", "type": "u8", "meaning": "tint color, multiplied into the image" },
+              { "name": "tint_b", "type": "u8", "meaning": "tint color, multiplied into the image" },
+              { "name": "tint_a", "type": "u8", "meaning": "tint color, multiplied into the image" }
+            ]
+          }
+        },
+        {
+          "topics": ["gfx/draw-rect"],
+          "payload": {
+            "fields": [
+              { "name": "x", "type": "i32" },
+              { "name": "y", "type": "i32" },
+              { "name": "w", "type": "u32" },
+              { "name": "h", "type": "u32" },
+              { "name": "filled", "type": "bool" },
+              { "name": "r", "type": "u8", "meaning": "color" },
+              { "name": "g", "type": "u8", "meaning": "color" },
+              { "name": "b", "type": "u8", "meaning": "color" },
+              { "name": "a", "type": "u8", "meaning": "color" },
+              { "name": "layer", "type": "u8" },
+              { "name": "screen_space", "type": "bool" }
+            ]
+          }
+        },
+        {
+          "topics": ["gfx/draw-line"],
+          "payload": {
+            "fields": [
+              { "name": "x1", "type": "i32" },
+              { "name": "y1", "type": "i32" },
+              { "name": "x2", "type": "i32" },
+              { "name": "y2", "type": "i32" },
+              { "name": "r", "type": "u8", "meaning": "color" },
+              { "name": "g", "type": "u8", "meaning": "color" },
+              { "name": "b", "type": "u8", "meaning": "color" },
+              { "name": "a", "type": "u8", "meaning": "color" },
+              { "name": "layer", "type": "u8" }
+            ]
+          }
+        },
+        {
+          "topics": ["gfx/draw-circle"],
+          "payload": {
+            "fields": [
+              { "name": "x", "type": "i32" },
+              { "name": "y", "type": "i32" },
+              { "name": "radius", "type": "u32" },
+              { "name": "filled", "type": "bool" },
+              { "name": "r", "type": "u8", "meaning": "color" },
+              { "name": "g", "type": "u8", "meaning": "color" },
+              { "name": "b", "type": "u8", "meaning": "color" },
+              { "name": "a", "type": "u8", "meaning": "color" },
+              { "name": "layer", "type": "u8" }
+            ]
+          }
+        },
+        {
+          "topics": ["gfx/draw-triangle"],
+          "payload": {
+            "fields": [
+              { "name": "x1", "type": "i32" },
+              { "name": "y1", "type": "i32" },
+              { "name": "x2", "type": "i32" },
+              { "name": "y2", "type": "i32" },
+              { "name": "x3", "type": "i32" },
+              { "name": "y3", "type": "i32" },
+              { "name": "filled", "type": "bool" },
+              { "name": "r", "type": "u8", "meaning": "color" },
+              { "name": "g", "type": "u8", "meaning": "color" },
+              { "name": "b", "type": "u8", "meaning": "color" },
+              { "name": "a", "type": "u8", "meaning": "color" },
+              { "name": "layer", "type": "u8" }
+            ]
+          }
+        },
+        {
+          "topics": ["gfx/draw-text"],
+          "description": "`text` comes **first** and is length-prefixed, because fixed fields follow it.",
+          "payload": {
+            "fields": [
+              { "name": "text", "type": "str" },
+              { "name": "x", "type": "i32" },
+              { "name": "y", "type": "i32" },
+              { "name": "size", "type": "u16", "meaning": "point size" },
+              { "name": "r", "type": "u8", "meaning": "color" },
+              { "name": "g", "type": "u8", "meaning": "color" },
+              { "name": "b", "type": "u8", "meaning": "color" },
+              { "name": "a", "type": "u8", "meaning": "color" },
+              { "name": "layer", "type": "u8" },
+              { "name": "screen_space", "type": "bool" },
+              {
+                "name": "align",
+                "type": "u8",
+                "values": [
+                  { "value": 0, "name": "left" },
+                  { "value": 1, "name": "center" },
+                  { "value": 2, "name": "right" }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "topics": ["gfx/set-camera"],
+          "payload": {
+            "fields": [
+              { "name": "x", "type": "f32" },
+              { "name": "y", "type": "f32" },
+              { "name": "zoom", "type": "f32" }
+            ]
+          }
+        },
+        {
+          "topics": ["gfx/set-display"],
+          "payload": {
+            "fields": [
+              { "name": "width", "type": "u32" },
+              { "name": "height", "type": "u32" },
+              { "name": "fullscreen", "type": "bool" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "renderer/*",
+      "description": "Published by the renderer, except `renderer/capture`, which asks it for an image.",
+      "entries": [
+        {
+          "topics": ["renderer/display-changed", "renderer/logical-canvas"],
+          "payload": {
+            "fields": [
+              { "name": "width", "type": "u32" },
+              { "name": "height", "type": "u32" }
+            ]
+          }
+        },
+        {
+          "topics": ["renderer/capture"],
+          "description": "Asks the renderer for an image of the next frame it presents. Published to the renderer, unlike the rest of `renderer/*`.",
+          "payload": {
+            "fields": [
+              { "name": "request_id", "type": "u32", "meaning": "chosen by the caller, echoed on the reply" },
+              {
+                "name": "scope",
+                "type": "u8",
+                "meaning": "what to capture",
+                "values": [
+                  { "value": 0, "name": "canvas: what the renderer drew, `gfx/*` and egui; works everywhere, an offscreen window included" },
+                  { "value": 1, "name": "window: the whole window once shown, web panels included; needs a visible window on Windows or X11" }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "topics": ["renderer/captured"],
+          "description": "The reply to `renderer/capture`: for the canvas, published once that frame is drawn and before it is shown; for the window, once it is shown.",
+          "payload": {
+            "fields": [
+              { "name": "request_id", "type": "u32", "meaning": "the request this answers" },
+              { "name": "scope", "type": "u8", "meaning": "what the image shows, as in `renderer/capture`; a window capture the platform cannot make is answered with the canvas" },
+              { "name": "width", "type": "u32", "meaning": "image width in physical pixels; `0` when the capture failed" },
+              { "name": "height", "type": "u32", "meaning": "image height in physical pixels; `0` when the capture failed" },
+              { "name": "png", "type": "rest", "meaning": "the frame as a PNG file; empty when the capture failed" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "ui/*",
+      "entries": [
+        {
+          "topics": ["ui/spec"],
+          "description": "A whole widget panel, republished whenever it changes (ADR-005).",
+          "payload": {
+            "fields": [
+              { "name": "title", "type": "str" },
+              { "name": "count", "type": "u16", "meaning": "number of widgets that follow" },
+              { "name": "widgets", "type": { "list": "widget", "count": "count" }, "meaning": "back to back, no separator" }
+            ]
+          },
+          "types": [
+            {
+              "name": "widget",
+              "description": "Each widget is a tagged union.",
+              "payload": {
+                "union": {
+                  "tag": "kind",
+                  "variants": [
+                    { "tag": 0, "name": "label", "fields": [{ "name": "text", "type": "str" }] },
+                    { "tag": 1, "name": "text-edit", "fields": [{ "name": "id", "type": "u32" }, { "name": "text", "type": "str" }] },
+                    { "tag": 2, "name": "button", "fields": [{ "name": "id", "type": "u32" }, { "name": "label", "type": "str" }] }
+                  ]
+                }
+              },
+              "notes": "Every widget string is `str`, not `str-rest`, because another widget may follow it."
+            }
+          ]
+        },
+        {
+          "topics": ["ui/clicked"],
+          "payload": {
+            "fields": [
+              { "name": "id", "type": "u32", "meaning": "the widget id from the spec" }
+            ]
+          }
+        },
+        {
+          "topics": ["ui/changed"],
+          "payload": {
+            "fields": [
+              { "name": "id", "type": "u32", "meaning": "the widget id from the spec" },
+              { "name": "text", "type": "str-rest", "meaning": "the field's new contents" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "audio/*",
+      "entries": [
+        {
+          "topics": ["audio/load-sound"],
+          "payload": {
+            "fields": [
+              { "name": "id", "type": "u32", "meaning": "sound id this clip is addressed by afterwards" },
+              { "name": "bytes", "type": "rest", "meaning": "encoded audio" }
+            ]
+          }
+        },
+        {
+          "topics": ["audio/play-sound", "audio/play-music"],
+          "payload": {
+            "fields": [
+              { "name": "id", "type": "u32", "meaning": "a previously loaded sound id" },
+              { "name": "volume", "type": "f32", "meaning": "`0.0` to `1.0`" }
+            ]
+          }
+        },
+        {
+          "topics": ["audio/set-music-volume"],
+          "payload": {
+            "fields": [
+              { "name": "volume", "type": "f32", "meaning": "`0.0` to `1.0`" }
+            ]
+          }
+        },
+        {
+          "topics": ["audio/stop-music"],
+          "payload": { "fields": [] }
+        }
+      ]
+    },
+    {
+      "name": "game-core/*",
+      "entries": [
+        {
+          "topics": ["game-core/entity-op"],
+          "description": "One tagged union, the whole payload (ADR-023 — the operation set grows additively, so a decoder must expect tags it does not know).",
+          "payload": {
+            "union": {
+              "tag": "tag",
+              "variants": [
+                { "tag": 0, "name": "spawn", "fields": [{ "name": "spawn", "type": "spawn" }] },
+                { "tag": 1, "name": "set-velocity", "fields": [{ "name": "entity_id", "type": "u32" }, { "name": "vx", "type": "f32" }, { "name": "vy", "type": "f32" }] },
+                { "tag": 2, "name": "despawn", "fields": [{ "name": "entity_id", "type": "u32" }] },
+                { "tag": 3, "name": "set-color", "fields": [{ "name": "entity_id", "type": "u32" }, { "name": "r", "type": "u8" }, { "name": "g", "type": "u8" }, { "name": "b", "type": "u8" }, { "name": "a", "type": "u8" }] },
+                { "tag": 4, "name": "set-debug-hitboxes", "fields": [{ "name": "enabled", "type": "bool" }] },
+                { "tag": 5, "name": "set-paused", "fields": [{ "name": "paused", "type": "bool" }] },
+                { "tag": 6, "name": "set-camera-follow", "fields": [{ "name": "entity_id", "type": "u32" }, { "name": "viewport_w", "type": "f32" }, { "name": "viewport_h", "type": "f32" }, { "name": "zoom", "type": "f32" }] },
+                { "tag": 7, "name": "set-sprite", "fields": [{ "name": "entity_id", "type": "u32" }, { "name": "presentation", "type": "sprite presentation" }] },
+                { "tag": 8, "name": "set-camera-smoothing", "fields": [{ "name": "responsiveness", "type": "f32" }] },
+                { "tag": 9, "name": "reset" },
+                { "tag": 10, "name": "set-sprite-tint", "fields": [{ "name": "entity_id", "type": "u32" }, { "name": "r", "type": "u8" }, { "name": "g", "type": "u8" }, { "name": "b", "type": "u8" }, { "name": "a", "type": "u8" }] }
+              ]
+            }
+          },
+          "types": [
+            {
+              "name": "spawn",
+              "description": "The fields of tag 0.",
+              "payload": {
+                "fields": [
+                  { "name": "entity_id", "type": "u32" },
+                  { "name": "x", "type": "f32" },
+                  { "name": "y", "type": "f32" },
+                  { "name": "has_sprite", "type": "bool", "meaning": "whether the sprite fields are meaningful" },
+                  { "name": "sprite_id", "type": "u32", "meaning": "present regardless; zeroed when `has_sprite` is false" },
+                  { "name": "frame_w", "type": "u32" },
+                  { "name": "frame_h", "type": "u32" },
+                  { "name": "frame_count", "type": "u32" },
+                  { "name": "frame_duration", "type": "f32", "meaning": "seconds per frame" },
+                  { "name": "r", "type": "u8", "meaning": "square color, used when there is no sprite" },
+                  { "name": "g", "type": "u8", "meaning": "square color, used when there is no sprite" },
+                  { "name": "b", "type": "u8", "meaning": "square color, used when there is no sprite" },
+                  { "name": "a", "type": "u8", "meaning": "square color, used when there is no sprite" },
+                  {
+                    "name": "shape",
+                    "type": "u8",
+                    "values": [
+                      { "value": 0, "name": "rect" },
+                      { "value": 1, "name": "triangle" }
+                    ]
+                  },
+                  { "name": "collider_half_w", "type": "f32" },
+                  { "name": "collider_half_h", "type": "f32" },
+                  {
+                    "name": "body_kind",
+                    "type": "u8",
+                    "values": [
+                      { "value": 0, "name": "dynamic" },
+                      { "value": 1, "name": "kinematic" },
+                      { "value": 2, "name": "frictionless" },
+                      { "value": 3, "name": "fixed" }
+                    ]
+                  },
+                  { "name": "worlds", "type": "u8", "meaning": "bit flags: `0b01` rapier2d, `0b10` retro" }
+                ]
+              },
+              "notes": "The five sprite fields are **always present**, zero-filled when `has_sprite` is false, so the variant has one fixed length rather than two. An encoder must write the zeros; a decoder must read past them."
+            },
+            {
+              "name": "sprite presentation",
+              "description": "The fields of tag 7 after `entity_id`.",
+              "payload": {
+                "fields": [
+                  { "name": "sprite_id", "type": "u32" },
+                  { "name": "frame_w", "type": "u32" },
+                  { "name": "frame_h", "type": "u32" },
+                  { "name": "frame_count", "type": "u32" },
+                  { "name": "frame_duration", "type": "f32", "meaning": "seconds per frame" },
+                  { "name": "frames_per_row", "type": "u32" },
+                  { "name": "draw_w", "type": "u32" },
+                  { "name": "draw_h", "type": "u32" },
+                  { "name": "looping", "type": "bool" },
+                  { "name": "advance_while_stopped", "type": "bool" },
+                  { "name": "flip_h", "type": "bool" },
+                  { "name": "flip_v", "type": "bool" }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "topics": ["game-core/entity-transform"],
+          "description": "Authoritative position, published by game-core each frame (ADR-026).",
+          "payload": {
+            "fields": [
+              { "name": "entity_id", "type": "u32" },
+              { "name": "x", "type": "f32" },
+              { "name": "y", "type": "f32" }
+            ]
+          }
+        },
+        {
+          "topics": ["game-core/collision"],
+          "payload": {
+            "fields": [
+              { "name": "entity_id_a", "type": "u32" },
+              { "name": "entity_id_b", "type": "u32" }
+            ]
+          }
+        },
+        {
+          "topics": ["game-core/load-tilemap"],
+          "payload": {
+            "fields": [
+              { "name": "tmx_bytes", "type": "blob", "meaning": "a Tiled TMX document" },
+              { "name": "count", "type": "u16", "meaning": "number of tileset images that follow" },
+              { "name": "images", "type": { "list": "image", "count": "count" }, "meaning": "back to back" }
+            ]
+          },
+          "types": [
+            {
+              "name": "image",
+              "description": "One tileset image.",
+              "payload": {
+                "fields": [
+                  { "name": "name", "type": "str" },
+                  { "name": "sprite_id", "type": "u32" },
+                  { "name": "png_bytes", "type": "blob" }
+                ]
+              }
+            }
+          ],
+          "notes": "`tmx_bytes` is a `blob` rather than `rest` because the tileset images follow it."
+        }
+      ]
+    },
+    {
+      "name": "web/*",
+      "description": "Published by the web module, not to it — panels are opened by a direct `send` to the `web` endpoint, below.",
+      "entries": [
+        {
+          "topics": ["web/panel-opened", "web/panel-closed"],
+          "payload": {
+            "fields": [
+              { "name": "owner", "type": "str", "meaning": "the extension that owns the panel" },
+              { "name": "panel", "type": "str-rest", "meaning": "owner-local panel id" }
+            ]
+          }
+        },
+        {
+          "topics": ["web/panel-failed"],
+          "payload": {
+            "fields": [
+              { "name": "owner", "type": "str", "meaning": "the extension that owns the panel" },
+              { "name": "panel", "type": "str", "meaning": "owner-local panel id" },
+              { "name": "reason", "type": "str-rest", "meaning": "human-readable failure" }
+            ]
+          }
+        },
+        {
+          "topics": ["web/page-message"],
+          "payload": {
+            "fields": [
+              { "name": "owner", "type": "str", "meaning": "the extension that owns the panel" },
+              { "name": "panel", "type": "str", "meaning": "owner-local panel id" },
+              { "name": "json", "type": "str-rest", "meaning": "the page's message, as JSON text" }
+            ]
+          },
+          "notes": "The JSON is not parsed by the engine. It is carried verbatim between the page and the owning extension."
+        }
+      ]
+    },
+    {
+      "name": "instance/*",
+      "description": "Published by the instance module when a later launch of a single-instance application hands its arguments to the running one (ADR-035). The application's own startup arguments are never published here.",
+      "entries": [
+        {
+          "topics": ["instance/launched"],
+          "payload": {
+            "fields": [
+              { "name": "cwd", "type": "str", "meaning": "the launching process's working directory" },
+              { "name": "count", "type": "u16", "meaning": "number of arguments that follow" },
+              { "name": "args", "type": { "list": "str", "count": "count" }, "meaning": "the arguments, without the program name, in order" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "desktop/*",
+      "description": "Request and result for registering one application with the desktop (ADR-036). Which application, and under which names, is fixed by whoever composed the engine; a request only chooses the action. Replies arrive in the order the work finishes, so `request_id` pairs each result with its request.",
+      "entries": [
+        {
+          "topics": ["desktop/request"],
+          "payload": {
+            "fields": [
+              { "name": "request_id", "type": "u32", "meaning": "chosen by the caller, echoed on the result" },
+              {
+                "name": "action",
+                "type": "u8",
+                "values": [
+                  { "value": 0, "name": "register" },
+                  { "value": 1, "name": "unregister" },
+                  { "value": 2, "name": "status" }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "topics": ["desktop/result"],
+          "payload": {
+            "fields": [
+              { "name": "request_id", "type": "u32", "meaning": "the request this answers" }
+            ],
+            "union": {
+              "tag": "tag",
+              "variants": [
+                { "tag": 0, "name": "registered", "fields": [{ "name": "registered", "type": "bool", "meaning": "whether every part of the registration is now present" }] },
+                { "tag": 1, "name": "failed", "fields": [{ "name": "reason", "type": "str-rest" }] }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "os/*",
+      "description": "Request and result for the desktop capabilities a sandboxed extension cannot reach itself: the clipboard, the browser, native file dialogs, revealing a folder, and a small HTTPS fetch. The `os` module answers off the frame thread, so replies arrive in the order the work finishes, and `request_id` pairs each result with its request. A host that does not offer an action answers with `error` rather than staying silent.",
+      "entries": [
+        {
+          "topics": ["os/request"],
+          "payload": {
+            "fields": [
+              { "name": "request_id", "type": "u32", "meaning": "chosen by the caller, echoed on the result" },
+              {
+                "name": "action",
+                "type": "u8",
+                "values": [
+                  { "value": 0, "name": "read clipboard" },
+                  { "value": 1, "name": "write clipboard" },
+                  { "value": 2, "name": "open URL" },
+                  { "value": 3, "name": "pick file" },
+                  { "value": 4, "name": "pick folder" },
+                  { "value": 5, "name": "open directory" },
+                  { "value": 6, "name": "fetch URL" }
+                ]
+              },
+              { "name": "value", "type": "str", "meaning": "the action's argument: text to copy, a URL, a dialog title, or a directory; empty when it takes none" }
+            ]
+          }
+        },
+        {
+          "topics": ["os/result"],
+          "payload": {
+            "fields": [
+              { "name": "request_id", "type": "u32", "meaning": "the request this answers" },
+              { "name": "accepted", "type": "bool", "meaning": "whether the action produced an answer; a cancelled dialog is `false` with an empty `error`" },
+              { "name": "value", "type": "str", "meaning": "the answer: clipboard text, a chosen path, or for a fetch `{content-type};base64,{data}`" },
+              { "name": "error", "type": "str", "meaning": "why the action failed; empty unless it did" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "upgrader/*",
+      "description": "Request and result for self-update (ADR-037). Where releases come from is fixed by whoever composed the engine; a request only chooses the action. Replies arrive in the order the work finishes, so `request_id` pairs each result with its request.",
+      "entries": [
+        {
+          "topics": ["upgrader/request"],
+          "payload": {
+            "fields": [
+              { "name": "request_id", "type": "u32", "meaning": "chosen by the caller, echoed on the result" },
+              {
+                "name": "action",
+                "type": "u8",
+                "values": [
+                  { "value": 0, "name": "check" },
+                  { "value": 1, "name": "stage" },
+                  { "value": 2, "name": "install" },
+                  { "value": 3, "name": "last-applied" }
+                ]
+              }
+            ]
+          },
+          "notes": "- **check** reads the release manifest and reports whether it is newer than the running version.\n- **stage** downloads and verifies a newer release into its own version folder; the launcher starts it next time.\n- **install** copies the running build into the install location — the \"install this portable copy\" action.\n- **last-applied** reports the version that ran before this one, so an application can say it was just updated."
+        },
+        {
+          "topics": ["upgrader/result"],
+          "payload": {
+            "fields": [
+              { "name": "request_id", "type": "u32", "meaning": "the request this answers" }
+            ],
+            "union": {
+              "tag": "tag",
+              "variants": [
+                { "tag": 0, "name": "available", "fields": [{ "name": "version", "type": "str-rest", "meaning": "a newer release exists" }] },
+                { "tag": 1, "name": "up-to-date" },
+                { "tag": 2, "name": "staged", "fields": [{ "name": "version", "type": "str-rest", "meaning": "staged for the next start" }] },
+                { "tag": 3, "name": "installed", "fields": [{ "name": "fresh", "type": "bool", "meaning": "true when nothing was installed before, so the files went straight to the install location" }] },
+                { "tag": 4, "name": "last-applied", "fields": [{ "name": "has_previous", "type": "bool" }, { "name": "previous", "type": "str" }, { "name": "current", "type": "str-rest" }] },
+                { "tag": 5, "name": "failed", "fields": [{ "name": "reason", "type": "str-rest" }] }
+              ]
+            }
+          },
+          "notes": "`has_previous` is false on the first run of an installed application and on every run outside an install; `previous` is then empty. An application shows \"updated\" only when `has_previous` is true and `previous` differs from `current`."
+        }
+      ]
+    },
+    {
+      "name": "Direct-send endpoints",
+      "description": "A direct `send` (ADR-010) names an endpoint rather than a topic, and completes within the call with a reply. Three endpoints are core-owned.",
+      "entries": [
+        {
+          "endpoints": ["persistence"],
+          "topics": ["persistence/save"],
+          "payload": {
+            "fields": [
+              { "name": "bytes", "type": "rest", "meaning": "the whole state to keep, opaque to the engine" }
+            ]
+          },
+          "notes": "- **Save** — publish to the topic `persistence/save` with the payload above. The sender's own name selects the slot; an extension cannot write another's.\n- **Load** — `send` to `persistence` with an empty payload. The reply is the previously saved bytes, or empty if there is nothing saved.\n\nAn empty reply is not distinguishable from an empty saved state. That is deliberate: the caller's next move is the same either way."
+        },
+        {
+          "endpoints": ["files"],
+          "description": "`send` to `files` with a path.",
+          "payload": {
+            "fields": [
+              { "name": "path", "type": "str-rest", "meaning": "relative to a directory the embedder granted" }
+            ]
+          },
+          "notes": "The reply is the file's raw bytes, or empty.\n\nEmpty covers every failure — no such file, not a file, over the size limit, or a path that resolved outside the granted root — for the same reason as `persistence`. The extension is never told the root and cannot escape it."
+        },
+        {
+          "endpoints": ["web"],
+          "description": "`send` to `web` with a tagged-union payload. Panels report back on `web/*`, above.",
+          "payload": {
+            "union": {
+              "tag": "tag",
+              "variants": [
+                { "tag": 0, "name": "open", "fields": [{ "name": "panel", "type": "str" }, { "name": "source_kind", "type": "u8", "values": [{ "value": 0, "name": "inline HTML" }, { "value": 1, "name": "URL" }] }, { "name": "source", "type": "str-rest", "meaning": "the HTML text or the URL, as `source_kind` says" }] },
+                { "tag": 1, "name": "close", "fields": [{ "name": "panel", "type": "str-rest" }] },
+                { "tag": 2, "name": "navigate", "fields": [{ "name": "panel", "type": "str" }, { "name": "url", "type": "str-rest" }] },
+                { "tag": 3, "name": "send-json", "fields": [{ "name": "panel", "type": "str" }, { "name": "json", "type": "str-rest" }] }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "closing": [
+    {
+      "heading": "Conformance",
+      "markdown": "[vectors/](vectors/README.md) holds machine-readable test vectors: for each topic, a payload as hex and the field values it decodes to. An implementation is conformant when it decodes every vector to the stated values and re-encodes those values to the identical bytes.\n\nThe vectors are generated from `bones-messages` and checked against it by its own test suite, so they cannot drift from the engine. Check against the vectors rather than against this prose — the prose is here to be understood, the vectors to be executed."
+    }
+  ]
+}

@@ -1,7 +1,11 @@
 //! Renderer-owned outbound notifications, distinct from `gfx/*` commands.
 
+mod capture;
+mod captured;
 mod logical_canvas;
 
+pub use capture::{Capture, Scope};
+pub use captured::Captured;
 pub use logical_canvas::LogicalCanvas;
 
 use crate::{DecodeError, DecodeMessage, EncodeMessage, Message, Reader, Writer};
@@ -13,7 +17,9 @@ use crate::{DecodeError, DecodeMessage, EncodeMessage, Message, Reader, Writer};
 /// took effect.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DisplayChanged {
+    /// The window width the OS actually applied, in physical pixels.
     pub width: u32,
+    /// The window height the OS actually applied, in physical pixels.
     pub height: u32,
 }
 

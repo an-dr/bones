@@ -3,8 +3,11 @@ use crate::{DecodeError, DecodeMessage, EncodeMessage, Message, Reader, Writer};
 /// Authoritative world-space center of one caller-addressable game-core entity.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct EntityTransform {
+    /// The entity this position belongs to.
     pub entity_id: u32,
+    /// World-space x after this tick's simulation.
     pub x: f32,
+    /// World-space y after this tick's simulation.
     pub y: f32,
 }
 

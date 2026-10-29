@@ -31,26 +31,29 @@ An extension that subscribes to nothing and skips `core/tick` costs nothing per 
 
 ## Walking through the source
 
-The whole extension is [`src/lib.rs`](src/lib.rs). Generate the bindings from the WIT package, then implement `Guest`:
+The whole extension is [`src/lib.rs`](src/lib.rs). It depends on `bones-wasm-sdk` alone, implements `Guest`, and hands the type to `export!`:
 
 ```rust
-wit_bindgen::generate!({
-    path: "../../wit",
-    world: "extension",
-});
+use bones_wasm_sdk::{bus, Guest};
+
+struct Component;
+
+impl Guest for Component { /* init, shutdown, on_tick, on_message */ }
+
+bones_wasm_sdk::export!(Component);
 ```
 
-**Subscribe in `init`.** Nothing is delivered to you until you ask for it:
+**Subscribe in `init`.** Nothing is delivered to you until you ask for it. `bus::subscribe` takes the topic from the message type, so it cannot be misspelt:
 
 ```rust
 fn init() {
-    subscribe("core/tick");
-    subscribe(CloseRequested::TOPIC);
+    bus::subscribe::<Tick>();
+    bus::subscribe::<CloseRequested>();
     log(Level::Info, "init");
 }
 ```
 
-**Handle deliveries in `on_message`.** `topic` is empty for a direct send — those have a sender and a payload but no topic (ADR-010). Return `Some(bytes)` to reply to a direct send; return `None` for pub/sub deliveries, where the return value is ignored:
+**Handle deliveries in `on_message`.** `topic` is empty for a direct send — those have a sender and a payload but no topic (ADR-010). Return `Some(bytes)` to reply to a direct send; return `None` for pub/sub deliveries, where the return value is ignored. To read a core message, decode the arguments with `Inbound::decode(&topic, &payload)` and match on the variant; `hello` only logs the topic, so it needs no decoding:
 
 ```rust
 fn on_message(topic: String, sender: String, _payload: Vec<u8>) -> Option<Vec<u8>> {
@@ -64,9 +67,9 @@ fn on_message(topic: String, sender: String, _payload: Vec<u8>) -> Option<Vec<u8
 
 ## Topics and payloads
 
-`publish` and `subscribe` take a topic string; payloads are raw bytes. Two kinds of topic exist:
+The raw `publish` and `subscribe` imports take a topic string; payloads are raw bytes. Two kinds of topic exist:
 
-- **Core-defined topics** — `core/tick`, `input/*`, `gfx/*`, `ui/*`, `audio/*`, `web/*`, `core/lifecycle`. Their payloads are typed, and the encoders and decoders live in [`crates/bones-messages`](../../../crates/bones-messages/README.md). Use them rather than hand-rolling a format — that is what `CloseRequested::TOPIC` above is. The full topic table is in [`docs/design/messaging.md`](../../../docs/design/messaging.md).
+- **Core-defined topics** — `core/tick`, `input/*`, `gfx/*`, `ui/*`, `audio/*`, `web/*`, `core/lifecycle`, and the rest in [`wit/wire-format.md`](../../../wit/wire-format.md). Their payloads are typed, and the encoders and decoders live in [`crates/bones-messages`](../../../crates/bones-messages/README.md). Use the typed calls — `bus::publish(&message)`, `bus::subscribe::<Message>()`, and `Inbound::decode` — rather than hand-rolling a format. The full topic table is in [`docs/design/messaging.md`](../../../docs/design/messaging.md).
 - **Your own topics** — anything else, like `hello/received`. The engine treats these as opaque bytes and never inspects them; the extensions on both ends agree on the schema.
 
 For a reply-shaped exchange rather than a broadcast, use `send` to a named endpoint instead of `publish`. It completes within the call (ADR-010).

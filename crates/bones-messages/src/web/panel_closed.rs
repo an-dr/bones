@@ -3,7 +3,9 @@ use crate::{DecodeError, DecodeMessage, EncodeMessage, Message, Reader, Writer};
 /// Announces that a panel has closed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PanelClosed<'a> {
+    /// The extension that opened the panel.
     pub owner: &'a str,
+    /// The panel that closed.
     pub panel: &'a str,
 }
 

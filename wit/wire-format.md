@@ -1,8 +1,10 @@
 # bones core message wire format
 
-This document and [extension.wit](extension.wit) are the two halves of the extension ABI: `extension.wit` defines the calls, this defines the bytes those calls carry on core-owned topics. It describes the ABI line of the `abi-v*` tag or release archive you took it from; `bones-messages` carries the same version number.
+<!-- Generated from wire-format.json by `cargo xtask wire-format`. Do not edit. -->
 
-Written so an extension author in any language can produce and consume core messages without reading Rust. The Rust implementation lives in `bones-messages`; where the two ever disagree, the [conformance vectors](vectors/README.md) decide, because both this document and that crate are checked against them.
+This specification and [extension.wit](extension.wit) are the two halves of the extension ABI: `extension.wit` defines the calls, this defines the bytes those calls carry on core-owned topics. It describes the ABI line of the `abi-v*` tag or release archive you took it from; `bones-messages` carries the same version number.
+
+Written so an extension author in any language can produce and consume core messages without reading Rust. The Rust implementation lives in `bones-messages`; where the two ever disagree, the [conformance vectors](vectors/README.md) decide, because both this specification and that crate are checked against them.
 
 ## Scope
 
@@ -10,13 +12,13 @@ The bus itself is untyped. A payload is a byte string, and an extension may put 
 
 So there are three kinds of traffic, and only the first is in scope:
 
-- **Core-owned topics** — `core/*`, `input/*`, `gfx/*`, `ui/*`, `audio/*`, `game-core/*`, `web/*`, `renderer/*`, `window/*`, `persistence/*`. Encoded exactly as below.
+- **Core-owned topics** — `core/*`, `input/*`, `gfx/*`, `ui/*`, `audio/*`, `game-core/*`, `web/*`, `renderer/*`, `window/*`, `persistence/*`, `instance/*`, `desktop/*`, `os/*`, `upgrader/*`. Encoded exactly as below.
 - **Direct sends to core endpoints** — `persistence`, `files`, `web`. Their request and reply shapes are in [Direct-send endpoints](#direct-send-endpoints).
 - **Everything else** — opaque application payloads between extensions. Not specified, deliberately.
 
 ## Versioning
 
-This document carries the **ABI version line**, not the engine's (ADR-029). It moves when the encoding of an existing message changes or a core topic is removed — both of which break every extension built against the previous version — and not when the engine's Rust API changes.
+This specification carries the **ABI version line**, not the engine's (ADR-029). It moves when the encoding of an existing message changes or a core topic is removed — both of which break every extension built against the previous version — and not when the engine's Rust API changes.
 
 Adding a new core topic does not break a decoder that does not subscribe to it, and adding a new variant to a tagged union does not break a decoder that never receives one. Both are additive and do not force a major bump on their own. Removing or renumbering a tag does.
 
@@ -26,7 +28,7 @@ There is no version field in a payload. The version is established out of band, 
 
 Every multi-byte number is **little-endian**, two's complement where signed. There is no alignment or padding anywhere: a field starts at the byte after the previous field ends.
 
-| Notation | Size | Encoding |
+| Type | Size | Encoding |
 | --- | --- | --- |
 | `u8` | 1 | unsigned byte |
 | `u16` | 2 | unsigned, little-endian |
@@ -34,8 +36,8 @@ Every multi-byte number is **little-endian**, two's complement where signed. The
 | `i32` | 4 | signed two's complement, little-endian |
 | `f32` | 4 | IEEE 754 binary32, little-endian |
 | `bool` | 1 | `0` is false; **any non-zero byte is true**. Encoders write `1` |
-| `str(n)` | 2 + n | `u16` byte length, then that many bytes of UTF-8. Not NUL-terminated |
-| `blob(n)` | 4 + n | `u32` byte length, then that many raw bytes |
+| `str` | 2 + n | `u16` byte length, then that many bytes of UTF-8. Not NUL-terminated |
+| `blob` | 4 + n | `u32` byte length, then that many raw bytes |
 | `rest` | — | every remaining byte of the payload, raw. Only ever the final field |
 | `str-rest` | — | every remaining byte, as UTF-8. Only ever the final field |
 
@@ -68,6 +70,8 @@ Four failures are distinguishable, and an implementation should report them sepa
 
 A malformed payload is dropped by the receiver, not reported back to the sender. The bus is at-most-once and has no negative acknowledgement (ADR-009).
 
+The extension host checks every core-topic payload an extension publishes against this specification before delivering it. When one fails, it logs a warning naming the extension, the topic, the failure, the payload's length and leading bytes, and this specification's section for the topic. It warns once per extension and topic, so a malformed message published every frame produces one line. The payload is still delivered, and its receiver drops it as above.
+
 ## Core topics
 
 ### `core/tick`
@@ -84,16 +88,8 @@ Published by the engine when an extension's state changes.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `event` | `u8` | tag, see below |
+| `event` | `u8` | what happened: `0` loaded, `1` faulted, `2` reloading, `3` reloaded, `4` stopped |
 | `extension` | `str-rest` | the extension's host-stamped name |
-
-| Tag | Event |
-| ---: | --- |
-| 0 | `loaded` |
-| 1 | `faulted` |
-| 2 | `reloading` |
-| 3 | `reloaded` |
-| 4 | `stopped` |
 
 ### `core/extensions/load`, `core/extensions/unload`, `core/extensions/reload`
 
@@ -107,7 +103,9 @@ All three share one shape; the topic is the verb.
 
 ### `window/close-requested`
 
-Empty payload, zero bytes. The topic is the whole message.
+Empty payload, zero bytes.
+
+The topic is the whole message.
 
 ## `input/*`
 
@@ -117,22 +115,21 @@ Empty payload, zero bytes. The topic is the whole message.
 | --- | --- | --- |
 | `key` | `str-rest` | key name, e.g. `"A"`, `"Space"`, `"Left"` |
 
+`key` is SDL's name for the key, the same on every platform and layout-independent. Letters are upper case, `A` to `Z`, and digits are `0` to `9`. The arrows are `Left`, `Right`, `Up`, and `Down`. Other common names are `Space`, `Return`, `Escape`, `Backspace`, `Tab`, `Left Shift`, `Left Ctrl`, `F1` to `F12`, and `Keypad Enter`.
+
 ### `input/mouse-down`, `input/mouse-up`
 
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `button` | `u8` | platform button index; 1 is left |
-| `x` | `f32` | window coordinate |
-| `y` | `f32` | window coordinate |
+| `x`, `y` | `f32` each | window coordinate |
 
 ### `input/mouse-move`
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `x` | `f32` | window coordinate |
-| `y` | `f32` | window coordinate |
-| `dx` | `f32` | movement since the previous event |
-| `dy` | `f32` | movement since the previous event |
+| `x`, `y` | `f32` each | window coordinate |
+| `dx`, `dy` | `f32` each | movement since the previous event |
 
 ### `input/mouse-wheel`
 
@@ -170,12 +167,9 @@ Draw commands an extension publishes and the renderer executes (ADR-002). Colors
 
 ### `gfx/clear`
 
-| Field | Type |
-| --- | --- |
-| `r` | `u8` |
-| `g` | `u8` |
-| `b` | `u8` |
-| `a` | `u8` |
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `r`, `g`, `b`, `a` | `u8` each | the color to clear to |
 
 ### `gfx/clear-draw-batch`
 
@@ -193,71 +187,64 @@ Empty payload, zero bytes.
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `id` | `u32` | a previously loaded sprite id |
-| `dst_x` | `i32` | destination rectangle |
-| `dst_y` | `i32` | |
-| `dst_w` | `u32` | |
-| `dst_h` | `u32` | |
-| `src_x` | `i32` | source rectangle within the sprite |
-| `src_y` | `i32` | |
-| `src_w` | `u32` | |
-| `src_h` | `u32` | |
+| `dst_x`, `dst_y` | `i32` each | destination rectangle |
+| `dst_w`, `dst_h` | `u32` each | destination rectangle |
+| `src_x`, `src_y` | `i32` each | source rectangle within the sprite |
+| `src_w`, `src_h` | `u32` each | source rectangle within the sprite |
 | `layer` | `u8` | |
 | `angle` | `f32` | rotation in degrees |
 | `flip_h` | `bool` | |
 | `flip_v` | `bool` | |
-| `tint_r` | `u8` | |
-| `tint_g` | `u8` | |
-| `tint_b` | `u8` | |
-| `tint_a` | `u8` | |
+| `tint_r`, `tint_g`, `tint_b`, `tint_a` | `u8` each | tint color, multiplied into the image |
 
 ### `gfx/draw-rect`
 
-| Field | Type |
-| --- | --- |
-| `x` | `i32` |
-| `y` | `i32` |
-| `w` | `u32` |
-| `h` | `u32` |
-| `filled` | `bool` |
-| `r`, `g`, `b`, `a` | `u8` each |
-| `layer` | `u8` |
-| `screen_space` | `bool` |
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `x` | `i32` | |
+| `y` | `i32` | |
+| `w` | `u32` | |
+| `h` | `u32` | |
+| `filled` | `bool` | |
+| `r`, `g`, `b`, `a` | `u8` each | color |
+| `layer` | `u8` | |
+| `screen_space` | `bool` | |
 
 ### `gfx/draw-line`
 
-| Field | Type |
-| --- | --- |
-| `x1` | `i32` |
-| `y1` | `i32` |
-| `x2` | `i32` |
-| `y2` | `i32` |
-| `r`, `g`, `b`, `a` | `u8` each |
-| `layer` | `u8` |
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `x1` | `i32` | |
+| `y1` | `i32` | |
+| `x2` | `i32` | |
+| `y2` | `i32` | |
+| `r`, `g`, `b`, `a` | `u8` each | color |
+| `layer` | `u8` | |
 
 ### `gfx/draw-circle`
 
-| Field | Type |
-| --- | --- |
-| `x` | `i32` |
-| `y` | `i32` |
-| `radius` | `u32` |
-| `filled` | `bool` |
-| `r`, `g`, `b`, `a` | `u8` each |
-| `layer` | `u8` |
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `x` | `i32` | |
+| `y` | `i32` | |
+| `radius` | `u32` | |
+| `filled` | `bool` | |
+| `r`, `g`, `b`, `a` | `u8` each | color |
+| `layer` | `u8` | |
 
 ### `gfx/draw-triangle`
 
-| Field | Type |
-| --- | --- |
-| `x1` | `i32` |
-| `y1` | `i32` |
-| `x2` | `i32` |
-| `y2` | `i32` |
-| `x3` | `i32` |
-| `y3` | `i32` |
-| `filled` | `bool` |
-| `r`, `g`, `b`, `a` | `u8` each |
-| `layer` | `u8` |
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `x1` | `i32` | |
+| `y1` | `i32` | |
+| `x2` | `i32` | |
+| `y2` | `i32` | |
+| `x3` | `i32` | |
+| `y3` | `i32` | |
+| `filled` | `bool` | |
+| `r`, `g`, `b`, `a` | `u8` each | color |
+| `layer` | `u8` | |
 
 ### `gfx/draw-text`
 
@@ -269,7 +256,7 @@ Empty payload, zero bytes.
 | `x` | `i32` | |
 | `y` | `i32` | |
 | `size` | `u16` | point size |
-| `r`, `g`, `b`, `a` | `u8` each | |
+| `r`, `g`, `b`, `a` | `u8` each | color |
 | `layer` | `u8` | |
 | `screen_space` | `bool` | |
 | `align` | `u8` | `0` left, `1` center, `2` right |
@@ -292,7 +279,7 @@ Empty payload, zero bytes.
 
 ## `renderer/*`
 
-Published by the renderer, not to it.
+Published by the renderer, except `renderer/capture`, which asks it for an image.
 
 ### `renderer/display-changed`, `renderer/logical-canvas`
 
@@ -300,6 +287,27 @@ Published by the renderer, not to it.
 | --- | --- |
 | `width` | `u32` |
 | `height` | `u32` |
+
+### `renderer/capture`
+
+Asks the renderer for an image of the next frame it presents. Published to the renderer, unlike the rest of `renderer/*`.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `request_id` | `u32` | chosen by the caller, echoed on the reply |
+| `scope` | `u8` | what to capture: `0` canvas: what the renderer drew, `gfx/*` and egui; works everywhere, an offscreen window included, `1` window: the whole window once shown, web panels included; needs a visible window on Windows or X11 |
+
+### `renderer/captured`
+
+The reply to `renderer/capture`: for the canvas, published once that frame is drawn and before it is shown; for the window, once it is shown.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `request_id` | `u32` | the request this answers |
+| `scope` | `u8` | what the image shows, as in `renderer/capture`; a window capture the platform cannot make is answered with the canvas |
+| `width` | `u32` | image width in physical pixels; `0` when the capture failed |
+| `height` | `u32` | image height in physical pixels; `0` when the capture failed |
+| `png` | `rest` | the frame as a PNG file; empty when the capture failed |
 
 ## `ui/*`
 
@@ -313,13 +321,15 @@ A whole widget panel, republished whenever it changes (ADR-005).
 | `count` | `u16` | number of widgets that follow |
 | `widgets` | `count` × widget | back to back, no separator |
 
-Each widget is a tagged union:
+#### widget
 
-| Tag | Variant | Fields |
+Each widget is a tagged union.
+
+| Tag | Variant | Fields after the tag |
 | ---: | --- | --- |
-| 0 | label | `text: str` |
-| 1 | text-edit | `id: u32`, `text: str` |
-| 2 | button | `id: u32`, `label: str` |
+| 0 | label | `text`: `str` |
+| 1 | text-edit | `id`: `u32`; `text`: `str` |
+| 2 | button | `id`: `u32`; `label`: `str` |
 
 Every widget string is `str`, not `str-rest`, because another widget may follow it.
 
@@ -354,9 +364,9 @@ Every widget string is `str`, not `str-rest`, because another widget may follow 
 
 ### `audio/set-music-volume`
 
-| Field | Type |
-| --- | --- |
-| `volume` | `f32` |
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `volume` | `f32` | `0.0` to `1.0` |
 
 ### `audio/stop-music`
 
@@ -370,19 +380,21 @@ One tagged union, the whole payload (ADR-023 — the operation set grows additiv
 
 | Tag | Variant | Fields after the tag |
 | ---: | --- | --- |
-| 0 | spawn | see below |
-| 1 | set-velocity | `entity_id: u32`, `vx: f32`, `vy: f32` |
-| 2 | despawn | `entity_id: u32` |
-| 3 | set-color | `entity_id: u32`, `r`, `g`, `b`, `a: u8` |
-| 4 | set-debug-hitboxes | `enabled: bool` |
-| 5 | set-paused | `paused: bool` |
-| 6 | set-camera-follow | `entity_id: u32`, `viewport_w: f32`, `viewport_h: f32`, `zoom: f32` |
-| 7 | set-sprite | `entity_id: u32`, then a sprite presentation |
-| 8 | set-camera-smoothing | `responsiveness: f32` |
+| 0 | spawn | spawn (below) |
+| 1 | set-velocity | `entity_id`: `u32`; `vx`, `vy`: `f32` |
+| 2 | despawn | `entity_id`: `u32` |
+| 3 | set-color | `entity_id`: `u32`; `r`, `g`, `b`, `a`: `u8` |
+| 4 | set-debug-hitboxes | `enabled`: `bool` |
+| 5 | set-paused | `paused`: `bool` |
+| 6 | set-camera-follow | `entity_id`: `u32`; `viewport_w`, `viewport_h`, `zoom`: `f32` |
+| 7 | set-sprite | `entity_id`: `u32`; sprite presentation (below) |
+| 8 | set-camera-smoothing | `responsiveness`: `f32` |
 | 9 | reset | none |
-| 10 | set-sprite-tint | `entity_id: u32`, `r`, `g`, `b`, `a: u8` |
+| 10 | set-sprite-tint | `entity_id`: `u32`; `r`, `g`, `b`, `a`: `u8` |
 
-**spawn** (tag 0):
+#### spawn
+
+The fields of tag 0.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
@@ -404,22 +416,24 @@ One tagged union, the whole payload (ADR-023 — the operation set grows additiv
 
 The five sprite fields are **always present**, zero-filled when `has_sprite` is false, so the variant has one fixed length rather than two. An encoder must write the zeros; a decoder must read past them.
 
-**sprite presentation** (the tail of tag 7):
+#### sprite presentation
 
-| Field | Type |
-| --- | --- |
-| `sprite_id` | `u32` |
-| `frame_w` | `u32` |
-| `frame_h` | `u32` |
-| `frame_count` | `u32` |
-| `frame_duration` | `f32` |
-| `frames_per_row` | `u32` |
-| `draw_w` | `u32` |
-| `draw_h` | `u32` |
-| `looping` | `bool` |
-| `advance_while_stopped` | `bool` |
-| `flip_h` | `bool` |
-| `flip_v` | `bool` |
+The fields of tag 7 after `entity_id`.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `sprite_id` | `u32` | |
+| `frame_w` | `u32` | |
+| `frame_h` | `u32` | |
+| `frame_count` | `u32` | |
+| `frame_duration` | `f32` | seconds per frame |
+| `frames_per_row` | `u32` | |
+| `draw_w` | `u32` | |
+| `draw_h` | `u32` | |
+| `looping` | `bool` | |
+| `advance_while_stopped` | `bool` | |
+| `flip_h` | `bool` | |
+| `flip_v` | `bool` | |
 
 ### `game-core/entity-transform`
 
@@ -446,7 +460,9 @@ Authoritative position, published by game-core each frame (ADR-026).
 | `count` | `u16` | number of tileset images that follow |
 | `images` | `count` × image | back to back |
 
-Each image:
+#### image
+
+One tileset image.
 
 | Field | Type |
 | --- | --- |
@@ -471,16 +487,16 @@ Published by the web module, not to it — panels are opened by a direct `send` 
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `owner` | `str` | |
-| `panel` | `str` | |
+| `owner` | `str` | the extension that owns the panel |
+| `panel` | `str` | owner-local panel id |
 | `reason` | `str-rest` | human-readable failure |
 
 ### `web/page-message`
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `owner` | `str` | |
-| `panel` | `str` | |
+| `owner` | `str` | the extension that owns the panel |
+| `panel` | `str` | owner-local panel id |
 | `json` | `str-rest` | the page's message, as JSON text |
 
 The JSON is not parsed by the engine. It is carried verbatim between the page and the owning extension.
@@ -513,12 +529,33 @@ Request and result for registering one application with the desktop (ADR-036). W
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `request_id` | `u32` | the request this answers |
-| `tag` | `u8` | which outcome follows |
+| `tag` | `u8` | which variant follows, below |
 
-| Tag | Outcome | Fields after the tag |
+| Tag | Variant | Fields after the tag |
 | ---: | --- | --- |
-| 0 | registered | `registered: bool` — whether every part of the registration is now present |
-| 1 | failed | `reason: str-rest` |
+| 0 | registered | `registered`: `bool` — whether every part of the registration is now present |
+| 1 | failed | `reason`: `str-rest` |
+
+## `os/*`
+
+Request and result for the desktop capabilities a sandboxed extension cannot reach itself: the clipboard, the browser, native file dialogs, revealing a folder, and a small HTTPS fetch. The `os` module answers off the frame thread, so replies arrive in the order the work finishes, and `request_id` pairs each result with its request. A host that does not offer an action answers with `error` rather than staying silent.
+
+### `os/request`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `request_id` | `u32` | chosen by the caller, echoed on the result |
+| `action` | `u8` | `0` read clipboard, `1` write clipboard, `2` open URL, `3` pick file, `4` pick folder, `5` open directory, `6` fetch URL |
+| `value` | `str` | the action's argument: text to copy, a URL, a dialog title, or a directory; empty when it takes none |
+
+### `os/result`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `request_id` | `u32` | the request this answers |
+| `accepted` | `bool` | whether the action produced an answer; a cancelled dialog is `false` with an empty `error` |
+| `value` | `str` | the answer: clipboard text, a chosen path, or for a fetch `{content-type};base64,{data}` |
+| `error` | `str` | why the action failed; empty unless it did |
 
 ## `upgrader/*`
 
@@ -541,16 +578,16 @@ Request and result for self-update (ADR-037). Where releases come from is fixed 
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `request_id` | `u32` | the request this answers |
-| `tag` | `u8` | which outcome follows |
+| `tag` | `u8` | which variant follows, below |
 
-| Tag | Outcome | Fields after the tag |
+| Tag | Variant | Fields after the tag |
 | ---: | --- | --- |
-| 0 | available | `version: str-rest` — a newer release exists |
+| 0 | available | `version`: `str-rest` — a newer release exists |
 | 1 | up-to-date | none |
-| 2 | staged | `version: str-rest` — staged for the next start |
-| 3 | installed | `fresh: bool` — true when nothing was installed before, so the files went straight to the install location |
-| 4 | last-applied | `has_previous: bool`, `previous: str`, `current: str-rest` |
-| 5 | failed | `reason: str-rest` |
+| 2 | staged | `version`: `str-rest` — staged for the next start |
+| 3 | installed | `fresh`: `bool` — true when nothing was installed before, so the files went straight to the install location |
+| 4 | last-applied | `has_previous`: `bool`; `previous`: `str`; `current`: `str-rest` |
+| 5 | failed | `reason`: `str-rest` |
 
 `has_previous` is false on the first run of an installed application and on every run outside an install; `previous` is then empty. An application shows "updated" only when `has_previous` is true and `previous` differs from `current`.
 
@@ -558,31 +595,39 @@ Request and result for self-update (ADR-037). Where releases come from is fixed 
 
 A direct `send` (ADR-010) names an endpoint rather than a topic, and completes within the call with a reply. Three endpoints are core-owned.
 
-### `persistence`
+### `persistence`, `persistence/save`
 
-- **Save** — publish to the topic `persistence/save` with the payload being the state bytes, `rest`. The sender's own name selects the slot; an extension cannot write another's.
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `bytes` | `rest` | the whole state to keep, opaque to the engine |
+
+- **Save** — publish to the topic `persistence/save` with the payload above. The sender's own name selects the slot; an extension cannot write another's.
 - **Load** — `send` to `persistence` with an empty payload. The reply is the previously saved bytes, or empty if there is nothing saved.
 
 An empty reply is not distinguishable from an empty saved state. That is deliberate: the caller's next move is the same either way.
 
 ### `files`
 
-`send` to `files` with the payload being a path as UTF-8, relative to a directory the embedder granted. The reply is the file's raw bytes, or empty.
+`send` to `files` with a path.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `path` | `str-rest` | relative to a directory the embedder granted |
+
+The reply is the file's raw bytes, or empty.
 
 Empty covers every failure — no such file, not a file, over the size limit, or a path that resolved outside the granted root — for the same reason as `persistence`. The extension is never told the root and cannot escape it.
 
 ### `web`
 
-`send` to `web` with a tagged-union payload:
+`send` to `web` with a tagged-union payload. Panels report back on `web/*`, above.
 
-| Tag | Command | Fields after the tag |
+| Tag | Variant | Fields after the tag |
 | ---: | --- | --- |
-| 0 | open | `panel: str`, `source_kind: u8`, `source: str-rest` |
-| 1 | close | `panel: str-rest` |
-| 2 | navigate | `panel: str`, `url: str-rest` |
-| 3 | send-json | `panel: str`, `json: str-rest` |
-
-`source_kind` is `0` for inline HTML and `1` for a URL; `source` is the HTML text or the URL accordingly.
+| 0 | open | `panel`: `str`; `source_kind`: `u8` — `0` inline HTML, `1` URL; `source`: `str-rest` — the HTML text or the URL, as `source_kind` says |
+| 1 | close | `panel`: `str-rest` |
+| 2 | navigate | `panel`: `str`; `url`: `str-rest` |
+| 3 | send-json | `panel`: `str`; `json`: `str-rest` |
 
 ## Conformance
 

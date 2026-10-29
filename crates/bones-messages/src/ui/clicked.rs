@@ -3,6 +3,7 @@ use crate::{DecodeError, DecodeMessage, EncodeMessage, Message, Reader, Writer};
 /// Published back to the owning extension when a `Button` widget is clicked.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Clicked {
+    /// The `Button` widget that was clicked.
     pub id: u32,
 }
 

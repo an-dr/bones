@@ -23,6 +23,7 @@ pub const ENDPOINT: &str = "persistence";
 /// was saved before. Fire-and-forget: publish and move on, no reply.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Save<'a> {
+    /// The complete state to keep, opaque to the engine.
     pub bytes: &'a [u8],
 }
 

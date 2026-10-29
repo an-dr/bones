@@ -85,6 +85,7 @@ pub struct Request<'a> {
     /// Echoed back on the matching [`Result`], so several requests can be in
     /// flight at once.
     pub request_id: u32,
+    /// What to do with `value`.
     pub action: Action,
     /// The action's one argument: a URL, a path, a dialog title, or the text
     /// to copy. Empty for an action that takes none.
@@ -129,9 +130,13 @@ impl<'a> DecodeMessage<'a> for Request<'a> {
 /// carries `error`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Result<'a> {
+    /// The `request_id` of the request this answers.
     pub request_id: u32,
+    /// Whether the action produced an answer.
     pub accepted: bool,
+    /// The answer: clipboard text, a chosen path, or fetched text. Empty when there is none.
     pub value: &'a str,
+    /// Why the action failed. Empty unless it did.
     pub error: &'a str,
 }
 

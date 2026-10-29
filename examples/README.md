@@ -49,7 +49,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-bones-wasm-sdk = { git = "https://github.com/an-dr/bones", tag = "abi-v1.0.0" }
+bones-wasm-sdk = { git = "https://github.com/an-dr/bones", tag = "abi-v1.3.0" }
 ```
 
 Build it with `cargo build --target wasm32-wasip2 --release` (after `rustup target add wasm32-wasip2` once), and copy `target/wasm32-wasip2/release/my_extension.wasm` into the `extensions/` folder of a [release archive](../README.md#release-archives). The file's stem is the extension's bus name, so choose one no native module uses.

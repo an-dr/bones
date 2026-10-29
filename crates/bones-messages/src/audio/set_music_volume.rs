@@ -5,6 +5,7 @@ use crate::{DecodeError, DecodeMessage, EncodeMessage, Message, Reader, Writer};
 /// are fire-and-forget with no retained handle to adjust.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SetMusicVolume {
+    /// Volume from `0.0` (silent) to `1.0` (full).
     pub volume: f32,
 }
 

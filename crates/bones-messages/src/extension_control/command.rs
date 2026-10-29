@@ -5,8 +5,11 @@ use super::{Load, Reload, Unload};
 /// Any runtime extension-control command, selected by exact topic.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Command<'a> {
+    /// Loads a cataloged extension.
     Load(Load<'a>),
+    /// Stops and removes a running extension.
     Unload(Unload<'a>),
+    /// Reloads a running extension from its file.
     Reload(Reload<'a>),
 }
 

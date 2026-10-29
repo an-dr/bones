@@ -5,7 +5,9 @@ use super::Outcome;
 /// One request's outcome, correlated by its id.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Result<'a> {
+    /// The `request_id` of the request this answers.
     pub request_id: u32,
+    /// How the request ended.
     pub outcome: Outcome<'a>,
 }
 

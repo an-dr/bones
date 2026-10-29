@@ -8,9 +8,48 @@ An extension is a WASM guest: it never touches the OS, never renders, and reache
 
 - `Guest` — the trait an extension implements: `init`, `shutdown`, `on_tick`, `on_message`.
 - `export!` — wires a `Guest` implementation up as the component's exports.
-- `bindings` — the generated module, including `bones::core::host_api` with `log`, `subscribe`, `publish`, `send`, `request_exit`, and the display queries.
+- `bindings` — the generated module, including `bones::extension::host_api` with `log`, `subscribe`, `publish`, `send`, `request_exit`, and the display queries.
 - `messages` — `bones-messages`, re-exported: the typed payloads carried on core-defined topics.
+- `bus` — typed calls over those raw imports: `publish(&message)`, `subscribe::<Message>()`, and one call per core endpoint (`load_state`, `save_state`, `read_file`, `web`). The topic comes from the message type, so a misspelt topic is a compile error rather than a message nobody receives.
+- `Inbound` — every core topic an extension can receive, decoded from the `on_message` arguments in one call. Anything else, including an extension's own topics, arrives as `Inbound::Other`.
 - `game_ui` — behind the `game-ui` feature: logical-canvas geometry, vertical menu layout, keyboard selection, and mouse hit-testing for in-world UI (ADR-025).
+
+## Typed calls
+
+The raw imports take a topic string and a byte payload. Use them for an extension's own topics; for core topics, the typed layer removes the two mistakes that compile and then fail silently, a wrong topic string and a wrong decoder:
+
+```rust
+use bones_wasm_sdk::bus;
+use bones_wasm_sdk::messages::gfx::Clear;
+use bones_wasm_sdk::messages::input::KeyDown;
+use bones_wasm_sdk::messages::tick::Tick;
+use bones_wasm_sdk::{Guest, Inbound};
+
+struct Component;
+
+impl Guest for Component {
+    fn init() {
+        bus::subscribe::<Tick>();
+        bus::subscribe::<KeyDown>();
+    }
+    fn shutdown() {}
+    fn on_tick(_dt: f32) {
+        bus::publish(&Clear { r: 0, g: 0, b: 0, a: 255 });
+    }
+    fn on_message(topic: String, sender: String, payload: Vec<u8>) -> Option<Vec<u8>> {
+        match Inbound::decode(&topic, &payload) {
+            Ok(Inbound::KeyDown(key)) => log(Level::Info, &format!("{} from {sender}", key.key)),
+            Ok(_) => {}
+            Err(error) => log(Level::Warn, &format!("bad {topic} payload: {error}")),
+        }
+        None
+    }
+}
+
+bones_wasm_sdk::export!(Component);
+```
+
+A payload that fails to decode is an `Err`, never silently skipped, so a version mismatch shows up in the log at the first message.
 
 ## Constraints worth knowing
 

@@ -3,8 +3,11 @@ use crate::{DecodeError, DecodeMessage, EncodeMessage, Message, Reader, Writer};
 /// Reports an asynchronous panel creation or operation failure.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PanelFailed<'a> {
+    /// The extension that asked for the panel.
     pub owner: &'a str,
+    /// The panel that could not open.
     pub panel: &'a str,
+    /// Why it could not open.
     pub reason: &'a str,
 }
 

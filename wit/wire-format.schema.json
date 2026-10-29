@@ -1,0 +1,374 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Spec",
+  "description": "The bones core message wire format: every core-owned topic and\ndirect-send endpoint, and the rules that apply to all of them.",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "description": "The JSON Schema this file follows, for editors.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null
+    },
+    "closing": {
+      "description": "Sections after the last group.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Section"
+      }
+    },
+    "groups": {
+      "description": "Topics and endpoints, grouped by namespace.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Group"
+      }
+    },
+    "introduction": {
+      "description": "Markdown shown before the first section.",
+      "type": "string"
+    },
+    "sections": {
+      "description": "The rules that apply to every message, in order: scope, versioning,\nprimitives, framing, decoding failures.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Section"
+      }
+    },
+    "title": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "title",
+    "introduction",
+    "sections",
+    "groups",
+    "closing"
+  ],
+  "$defs": {
+    "Entry": {
+      "description": "Topics or endpoints that share one payload shape.",
+      "type": "object",
+      "properties": {
+        "description": {
+          "description": "Markdown shown before the payload.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "endpoints": {
+          "description": "Direct-send endpoints this entry describes. When the entry also\nnames topics, the payload is the topics'; the notes give the\nendpoint's request and reply.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "notes": {
+          "description": "Markdown shown after the payload.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "payload": {
+          "$ref": "#/$defs/Payload"
+        },
+        "topics": {
+          "description": "Bus topics with this payload.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "types": {
+          "description": "Shapes the payload refers to by name, such as a list's element.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TypeDef"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "payload"
+      ]
+    },
+    "EnumValue": {
+      "description": "One value of an enumerated `u8` field.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "name"
+      ]
+    },
+    "Field": {
+      "description": "One field of a payload.",
+      "type": "object",
+      "properties": {
+        "meaning": {
+          "description": "Markdown.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/$defs/FieldType"
+        },
+        "values": {
+          "description": "The values a `u8` field may take, and what each means.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EnumValue"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "type"
+      ]
+    },
+    "FieldType": {
+      "description": "A field's type.",
+      "anyOf": [
+        {
+          "description": "A primitive, or a type the entry defines. A defined type with fields\nonly is written in place: its fields follow on the wire as if listed\nhere.",
+          "type": "string"
+        },
+        {
+          "description": "A counted sequence.",
+          "$ref": "#/$defs/ListType"
+        }
+      ]
+    },
+    "Group": {
+      "description": "The topics of one namespace, such as `gfx/*`.",
+      "type": "object",
+      "properties": {
+        "description": {
+          "description": "Markdown that applies to every entry of the group.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Entry"
+          }
+        },
+        "name": {
+          "description": "The namespace (`gfx/*`) or a title (`Direct-send endpoints`).",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "entries"
+      ]
+    },
+    "ListType": {
+      "description": "Elements back to back, as many as an earlier field says.",
+      "type": "object",
+      "properties": {
+        "count": {
+          "description": "The earlier `u16` field that holds the number of elements.",
+          "type": "string"
+        },
+        "list": {
+          "description": "The element: a primitive or a type the entry defines.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "list",
+        "count"
+      ]
+    },
+    "Payload": {
+      "description": "A byte layout: fields in order, optionally followed by a tagged union.\nNo fields and no union is the empty payload.",
+      "type": "object",
+      "properties": {
+        "fields": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Field"
+          }
+        },
+        "union": {
+          "description": "A `u8` tag after the fields, then the fields of the variant it names.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Union"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "Primitive": {
+      "description": "One primitive field type.",
+      "type": "object",
+      "properties": {
+        "encoding": {
+          "description": "Markdown.",
+          "type": "string"
+        },
+        "name": {
+          "description": "The name a field's `type` uses: `u8`, `str`, `rest`, ...",
+          "type": "string"
+        },
+        "size": {
+          "description": "Encoded size in bytes; `n` is the content length, `—` means the rest\nof the payload.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "size",
+        "encoding"
+      ]
+    },
+    "Section": {
+      "description": "A section of prose that applies to the whole specification.",
+      "type": "object",
+      "properties": {
+        "after_primitives": {
+          "description": "Markdown shown after the primitives table.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "heading": {
+          "type": "string"
+        },
+        "markdown": {
+          "description": "Markdown.",
+          "type": "string"
+        },
+        "primitives": {
+          "description": "The primitive types every field type is built from, shown as a table\nafter `markdown`. Only the section that defines them lists them.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Primitive"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "heading",
+        "markdown"
+      ]
+    },
+    "TypeDef": {
+      "description": "A named shape, local to the entry that defines it.",
+      "type": "object",
+      "properties": {
+        "description": {
+          "description": "Markdown.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "notes": {
+          "description": "Markdown.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "payload": {
+          "$ref": "#/$defs/Payload"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "payload"
+      ]
+    },
+    "Union": {
+      "description": "A `u8` tag followed by the fields of the variant it selects.",
+      "type": "object",
+      "properties": {
+        "tag": {
+          "description": "The tag's field name, as the conformance vectors list it.",
+          "type": "string"
+        },
+        "variants": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Variant"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "tag",
+        "variants"
+      ]
+    },
+    "Variant": {
+      "description": "One variant of a tagged union.",
+      "type": "object",
+      "properties": {
+        "fields": {
+          "description": "The fields after the tag; none when the tag is the whole variant.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Field"
+          }
+        },
+        "name": {
+          "type": "string"
+        },
+        "tag": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "tag",
+        "name"
+      ]
+    }
+  }
+}

@@ -1,11 +1,10 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use bones_wasm_sdk::Guest;
 use bones_wasm_sdk::bindings::bones::extension::host_api::{
-    list_display_modes, log, native_display_mode, publish, request_exit, subscribe, DisplayMode,
-    Level,
+    list_display_modes, log, native_display_mode, publish, request_exit, DisplayMode, Level,
 };
+use bones_wasm_sdk::game_ui::{ButtonLayout, Canvas, DrawCommand, MenuLayout, Rect};
 use bones_wasm_sdk::messages::audio::{LoadSound, PlaySound};
 use bones_wasm_sdk::messages::game_core::{
     BodyKind, Collision, EntityOp, EntityOpMessage, LoadTilemap, PhysicsWorlds, Shape, Sprite,
@@ -14,8 +13,8 @@ use bones_wasm_sdk::messages::game_core::{
 use bones_wasm_sdk::messages::gfx::{DrawRect, DrawText, LoadSprite, SetDisplay, TextAlign};
 use bones_wasm_sdk::messages::input::{GamepadAxis, KeyDown, KeyUp, MouseDown};
 use bones_wasm_sdk::messages::renderer::DisplayChanged;
-use bones_wasm_sdk::messages::{DecodeMessage, EncodeMessage, Message};
-use bones_wasm_sdk::game_ui::{ButtonLayout, Canvas, DrawCommand, MenuLayout, Rect};
+use bones_wasm_sdk::messages::tick::Tick;
+use bones_wasm_sdk::{bus, Guest, Inbound};
 
 const LEVEL_TMX: &[u8] = include_bytes!("assets/level.tmx");
 const SPRITE_PNG: &[u8] = include_bytes!("assets/robot_william.png");
@@ -289,7 +288,7 @@ thread_local! {
 }
 
 fn publish_entity_op(op: EntityOp) {
-    publish(EntityOpMessage::TOPIC, &EntityOpMessage(op).encode());
+    bus::publish(&EntityOpMessage(op));
 }
 
 /// Synthesizes a mono 16-bit PCM WAV sine tone over an exact whole number
@@ -543,64 +542,48 @@ const HUD_TEXT_COLOR: (u8, u8, u8, u8) = (235, 235, 235, 255);
 /// entity draws already use; this is this demo's own HUD layer, above
 /// every entity (`ENTITY_LAYER` is 0 in game-core).
 fn draw_hud(score: u32, life: u32) {
-    publish(
-        DrawRect::TOPIC,
-        &DrawRect {
-            x: HUD_X,
-            y: HUD_Y,
-            w: HUD_W,
-            h: HUD_H,
-            filled: true,
-            color: HUD_BG_COLOR,
-            layer: HUD_LAYER,
-            screen_space: true,
-        }
-        .encode(),
-    );
-    publish(
-        DrawRect::TOPIC,
-        &DrawRect {
-            x: HUD_X,
-            y: HUD_Y,
-            w: HUD_W,
-            h: HUD_H,
-            filled: false,
-            color: HUD_BORDER_COLOR,
-            layer: HUD_LAYER,
-            screen_space: true,
-        }
-        .encode(),
-    );
+    bus::publish(&DrawRect {
+        x: HUD_X,
+        y: HUD_Y,
+        w: HUD_W,
+        h: HUD_H,
+        filled: true,
+        color: HUD_BG_COLOR,
+        layer: HUD_LAYER,
+        screen_space: true,
+    });
+    bus::publish(&DrawRect {
+        x: HUD_X,
+        y: HUD_Y,
+        w: HUD_W,
+        h: HUD_H,
+        filled: false,
+        color: HUD_BORDER_COLOR,
+        layer: HUD_LAYER,
+        screen_space: true,
+    });
     let score_text = format!("Score: {score}");
-    publish(
-        DrawText::TOPIC,
-        &DrawText {
-            text: &score_text,
-            x: HUD_X + 10,
-            y: HUD_Y + 8,
-            size: 16,
-            color: HUD_TEXT_COLOR,
-            layer: HUD_LAYER,
-            screen_space: true,
-            align: TextAlign::Left,
-        }
-        .encode(),
-    );
+    bus::publish(&DrawText {
+        text: &score_text,
+        x: HUD_X + 10,
+        y: HUD_Y + 8,
+        size: 16,
+        color: HUD_TEXT_COLOR,
+        layer: HUD_LAYER,
+        screen_space: true,
+        align: TextAlign::Left,
+    });
     let life_text = format!("Life: {life}");
-    publish(
-        DrawText::TOPIC,
-        &DrawText {
-            text: &life_text,
-            x: HUD_X + 10,
-            y: HUD_Y + 30,
-            size: 16,
-            color: HUD_TEXT_COLOR,
-            layer: HUD_LAYER,
-            screen_space: true,
-            align: TextAlign::Left,
-        }
-        .encode(),
-    );
+    bus::publish(&DrawText {
+        text: &life_text,
+        x: HUD_X + 10,
+        y: HUD_Y + 30,
+        size: 16,
+        color: HUD_TEXT_COLOR,
+        layer: HUD_LAYER,
+        screen_space: true,
+        align: TextAlign::Left,
+    });
 }
 
 const PANEL_W: u32 = 360;
@@ -840,67 +823,51 @@ fn draw_menu(
         MenuState::Settings => "Settings",
         MenuState::Closed => "",
     };
-    publish(
-        DrawText::TOPIC,
-        &DrawText {
-            text: title,
+    bus::publish(&DrawText {
+        text: title,
+        x: PANEL_X + BUTTON_MARGIN,
+        y: panel_y + 20,
+        size: 18,
+        color: PANEL_TITLE_COLOR,
+        layer: MENU_LAYER,
+        screen_space: true,
+        align: TextAlign::Left,
+    });
+
+    if menu == MenuState::Settings {
+        bus::publish(&DrawText {
+            text: "Big box color",
             x: PANEL_X + BUTTON_MARGIN,
-            y: panel_y + 20,
-            size: 18,
-            color: PANEL_TITLE_COLOR,
+            y: panel_y + 52,
+            size: 14,
+            color: SECTION_LABEL_COLOR,
             layer: MENU_LAYER,
             screen_space: true,
             align: TextAlign::Left,
-        }
-        .encode(),
-    );
-
-    if menu == MenuState::Settings {
-        publish(
-            DrawText::TOPIC,
-            &DrawText {
-                text: "Big box color",
-                x: PANEL_X + BUTTON_MARGIN,
-                y: panel_y + 52,
-                size: 14,
-                color: SECTION_LABEL_COLOR,
-                layer: MENU_LAYER,
-                screen_space: true,
-                align: TextAlign::Left,
-            }
-            .encode(),
-        );
+        });
         let small_row_y = panel_y + 70 + BUTTON_H as i32 + SECTION_GAP;
         let small_label_y = panel_y + 70 + BUTTON_H as i32 + 10;
-        publish(
-            DrawText::TOPIC,
-            &DrawText {
-                text: "Small box color",
-                x: PANEL_X + BUTTON_MARGIN,
-                y: small_label_y,
-                size: 14,
-                color: SECTION_LABEL_COLOR,
-                layer: MENU_LAYER,
-                screen_space: true,
-                align: TextAlign::Left,
-            }
-            .encode(),
-        );
+        bus::publish(&DrawText {
+            text: "Small box color",
+            x: PANEL_X + BUTTON_MARGIN,
+            y: small_label_y,
+            size: 14,
+            color: SECTION_LABEL_COLOR,
+            layer: MENU_LAYER,
+            screen_space: true,
+            align: TextAlign::Left,
+        });
         let display_label_y = small_row_y + BUTTON_H as i32 + 10;
-        publish(
-            DrawText::TOPIC,
-            &DrawText {
-                text: "Display",
-                x: PANEL_X + BUTTON_MARGIN,
-                y: display_label_y,
-                size: 14,
-                color: SECTION_LABEL_COLOR,
-                layer: MENU_LAYER,
-                screen_space: true,
-                align: TextAlign::Left,
-            }
-            .encode(),
-        );
+        bus::publish(&DrawText {
+            text: "Display",
+            x: PANEL_X + BUTTON_MARGIN,
+            y: display_label_y,
+            size: 14,
+            color: SECTION_LABEL_COLOR,
+            layer: MENU_LAYER,
+            screen_space: true,
+            align: TextAlign::Left,
+        });
     }
 
     for button in layout.buttons {
@@ -937,20 +904,16 @@ const WIN_TITLE_COLOR: (u8, u8, u8, u8) = (255, 215, 0, 255);
 fn draw_centered_text(text: &str, y: i32, size: u16, color: (u8, u8, u8, u8)) {
     let width_estimate = text.len() as i32 * size as i32 / 2;
     let x = (SCREEN_WIDTH - width_estimate) / 2;
-    publish(
-        DrawText::TOPIC,
-        &DrawText {
-            text,
-            x,
-            y,
-            size,
-            color,
-            layer: END_LAYER,
-            screen_space: true,
-            align: TextAlign::Left,
-        }
-        .encode(),
-    );
+    bus::publish(&DrawText {
+        text,
+        x,
+        y,
+        size,
+        color,
+        layer: END_LAYER,
+        screen_space: true,
+        align: TextAlign::Left,
+    });
 }
 
 /// A full-canvas backdrop (opaque — `DrawRect` doesn't blend alpha for
@@ -959,20 +922,16 @@ fn draw_centered_text(text: &str, y: i32, size: u16, color: (u8, u8, u8, u8)) {
 /// is only shown for `Win` — `GameOver` doesn't need it, life having
 /// already hit zero is the whole story.
 fn draw_end_screen(outcome: Outcome, score: u32) {
-    publish(
-        DrawRect::TOPIC,
-        &DrawRect {
-            x: 0,
-            y: 0,
-            w: SCREEN_WIDTH as u32,
-            h: SCREEN_HEIGHT as u32,
-            filled: true,
-            color: END_OVERLAY_COLOR,
-            layer: END_LAYER,
-            screen_space: true,
-        }
-        .encode(),
-    );
+    bus::publish(&DrawRect {
+        x: 0,
+        y: 0,
+        w: SCREEN_WIDTH as u32,
+        h: SCREEN_HEIGHT as u32,
+        filled: true,
+        color: END_OVERLAY_COLOR,
+        layer: END_LAYER,
+        screen_space: true,
+    });
     match outcome {
         Outcome::GameOver => {
             draw_centered_text(
@@ -1147,15 +1106,11 @@ fn resolution_option_at(id: u32, options: &[(u32, u32)]) -> Option<(u32, u32)> {
 
 fn publish_display(resolution: (u32, u32), fullscreen: bool) {
     let (width, height) = resolution;
-    publish(
-        SetDisplay::TOPIC,
-        &SetDisplay {
-            width,
-            height,
-            fullscreen,
-        }
-        .encode(),
-    );
+    bus::publish(&SetDisplay {
+        width,
+        height,
+        fullscreen,
+    });
 }
 
 struct Component;
@@ -1164,19 +1119,19 @@ impl Guest for Component {
     fn shutdown() {}
 
     fn init() {
-        subscribe(KeyDown::TOPIC);
-        subscribe(KeyUp::TOPIC);
-        subscribe(GamepadAxis::TOPIC);
-        subscribe(Collision::TOPIC);
-        subscribe(MouseDown::TOPIC);
-        subscribe(DisplayChanged::TOPIC);
-        subscribe("core/tick");
+        bus::subscribe::<KeyDown>();
+        bus::subscribe::<KeyUp>();
+        bus::subscribe::<GamepadAxis>();
+        bus::subscribe::<Collision>();
+        bus::subscribe::<MouseDown>();
+        bus::subscribe::<DisplayChanged>();
+        bus::subscribe::<Tick>();
 
         let load_sprite = LoadSprite {
             id: SPRITE_ID,
             png_bytes: SPRITE_PNG,
         };
-        publish(LoadSprite::TOPIC, &load_sprite.encode());
+        bus::publish(&load_sprite);
 
         // Tile placement (grass margin, rock-paved interior) lives in
         // level.tmx's own "Ground" layer, real Tiled data — game-core
@@ -1191,7 +1146,7 @@ impl Guest for Component {
                 png_bytes: TILESET_GRASS_PNG,
             }],
         };
-        publish(LoadTilemap::TOPIC, &load_tilemap.encode());
+        bus::publish(&load_tilemap);
 
         // The level is now much bigger than the window (level.tmx is
         // 120x90 tiles), so the camera needs to actually follow the
@@ -1208,24 +1163,16 @@ impl Guest for Component {
 
         // ~82ms, 110Hz — a low thud for footsteps.
         let footstep = synthesize_tone(110.0, 9, 0.5);
-        publish(
-            LoadSound::TOPIC,
-            &LoadSound {
-                id: FOOTSTEP_SOUND_ID,
-                bytes: &footstep,
-            }
-            .encode(),
-        );
+        bus::publish(&LoadSound {
+            id: FOOTSTEP_SOUND_ID,
+            bytes: &footstep,
+        });
         // ~120ms, 300Hz — a higher blip for a hit, distinct from footsteps.
         let hit = synthesize_tone(300.0, 36, 0.7);
-        publish(
-            LoadSound::TOPIC,
-            &LoadSound {
-                id: HIT_SOUND_ID,
-                bytes: &hit,
-            }
-            .encode(),
-        );
+        bus::publish(&LoadSound {
+            id: HIT_SOUND_ID,
+            bytes: &hit,
+        });
 
         spawn_entities();
 
@@ -1276,14 +1223,10 @@ impl Guest for Component {
                 state.footstep_cooldown -= dt;
                 if state.footstep_cooldown <= 0.0 {
                     state.footstep_cooldown = FOOTSTEP_INTERVAL_SECONDS;
-                    publish(
-                        PlaySound::TOPIC,
-                        &PlaySound {
-                            id: FOOTSTEP_SOUND_ID,
-                            volume: 0.5,
-                        }
-                        .encode(),
-                    );
+                    bus::publish(&PlaySound {
+                        id: FOOTSTEP_SOUND_ID,
+                        volume: 0.5,
+                    });
                 }
             } else {
                 state.footstep_cooldown = 0.0;
@@ -1349,69 +1292,47 @@ impl Guest for Component {
     }
 
     fn on_message(topic: String, _sender: String, payload: Vec<u8>) -> Option<Vec<u8>> {
-        match topic.as_str() {
-            KeyDown::TOPIC => {
-                if let Ok(message) = KeyDown::decode(&payload) {
-                    match message.key {
-                        "H" => toggle_debug_hitboxes(),
-                        "Escape" => toggle_menu(),
-                        // Only meaningful once State::game_over is Some -
-                        // a no-op the rest of the time, not bound to
-                        // anything else this demo does with Enter. Both
-                        // keycodes: SDL reports the numpad Enter key as
-                        // its own distinct "KpEnter", not "Return".
-                        "Return" | "KpEnter" => {
-                            if STATE.with(|state| state.borrow().game_over.is_some()) {
-                                restart();
-                            }
-                        }
-                        _ => set_key_held(message.key, true),
+        match Inbound::decode(&topic, &payload) {
+            Ok(Inbound::KeyDown(message)) => match message.key {
+                "H" => toggle_debug_hitboxes(),
+                "Escape" => toggle_menu(),
+                // Only meaningful once State::game_over is Some - a no-op
+                // the rest of the time, not bound to anything else this demo
+                // does with Enter. Both keycodes: SDL reports the numpad
+                // Enter key as its own distinct "KpEnter", not "Return".
+                "Return" | "KpEnter" => {
+                    if STATE.with(|state| state.borrow().game_over.is_some()) {
+                        restart();
                     }
                 }
-            }
-            KeyUp::TOPIC => {
-                if let Ok(message) = KeyUp::decode(&payload) {
-                    set_key_held(message.key, false);
-                }
-            }
-            GamepadAxis::TOPIC => {
-                if let Ok(message) = GamepadAxis::decode(&payload) {
-                    STATE.with(|state| {
-                        let mut state = state.borrow_mut();
-                        match message.axis {
-                            "LeftX" => state.held.axis_x = message.value,
-                            "LeftY" => state.held.axis_y = message.value,
-                            _ => {}
-                        }
-                    });
-                }
-            }
-            Collision::TOPIC => {
-                if let Ok(message) = Collision::decode(&payload) {
-                    on_collision(message);
-                }
-            }
-            MouseDown::TOPIC => {
-                if let Ok(message) = MouseDown::decode(&payload) {
-                    // 1: SDL's left mouse button code (see MouseDown's own
-                    // doc comment) — the only button this demo's menu reacts
-                    // to.
-                    if message.button == 1 {
-                        on_mouse_down(message.x, message.y);
+                _ => set_key_held(message.key, true),
+            },
+            Ok(Inbound::KeyUp(message)) => set_key_held(message.key, false),
+            Ok(Inbound::GamepadAxis(message)) => {
+                STATE.with(|state| {
+                    let mut state = state.borrow_mut();
+                    match message.axis {
+                        "LeftX" => state.held.axis_x = message.value,
+                        "LeftY" => state.held.axis_y = message.value,
+                        _ => {}
                     }
-                }
+                });
             }
-            DisplayChanged::TOPIC => {
+            Ok(Inbound::Collision(message)) => on_collision(message),
+            // 1: SDL's left mouse button code (see MouseDown's own doc
+            // comment) — the only button this demo's menu reacts to.
+            Ok(Inbound::MouseDown(message)) if message.button == 1 => {
+                on_mouse_down(message.x, message.y);
+            }
+            Ok(Inbound::DisplayChanged(message)) => {
                 // The renderer's confirmation of what the window's actual
                 // size ended up being - fullscreen especially may not honor
                 // whatever gfx::SetDisplay last requested, so mouse-click
                 // hit-testing (on_mouse_down's own rescale) needs the real
                 // value, not just this extension's own last guess.
-                if let Ok(message) = DisplayChanged::decode(&payload) {
-                    STATE.with(|state| {
-                        state.borrow_mut().resolution = (message.width, message.height);
-                    });
-                }
+                STATE.with(|state| {
+                    state.borrow_mut().resolution = (message.width, message.height);
+                });
             }
             _ => {}
         }
@@ -1516,14 +1437,10 @@ fn on_collision(collision: Collision) {
             color: FLASH_COLOR,
         });
     }
-    publish(
-        PlaySound::TOPIC,
-        &PlaySound {
-            id: HIT_SOUND_ID,
-            volume: 0.9,
-        }
-        .encode(),
-    );
+    bus::publish(&PlaySound {
+        id: HIT_SOUND_ID,
+        volume: 0.9,
+    });
 }
 
 fn toggle_debug_hitboxes() {

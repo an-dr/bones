@@ -1,0 +1,5 @@
+# Copy beside the engine with dist/ts_demo.wasm in extensions/, or point
+# BONES_CONFIG here. A JavaScript component carries its own JS engine, so
+# its first load can take more than the default second.
+extension_load_timeout_ms = 10000
+extension_call_timeout_ms = 200

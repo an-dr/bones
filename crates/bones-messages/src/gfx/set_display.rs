@@ -9,8 +9,11 @@ use crate::{DecodeError, DecodeMessage, EncodeMessage, Message, Reader, Writer};
 /// that the window changed size.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SetDisplay {
+    /// Requested window width in physical pixels.
     pub width: u32,
+    /// Requested window height in physical pixels.
     pub height: u32,
+    /// Whether the window should cover its display.
     pub fullscreen: bool,
 }
 

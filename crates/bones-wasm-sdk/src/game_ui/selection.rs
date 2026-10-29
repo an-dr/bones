@@ -7,14 +7,18 @@ pub struct Selection {
 }
 
 impl Selection {
+    /// The selected item's position in the menu.
     pub const fn index(self) -> usize {
         self.index
     }
 
+    /// Selects the first item.
     pub fn reset(&mut self) {
         self.index = 0;
     }
 
+    /// Moves the selection by `direction` items, wrapping at both ends of a
+    /// menu with `item_count` items.
     pub fn move_by(&mut self, item_count: usize, direction: i32) {
         self.index = if item_count == 0 {
             0
@@ -23,10 +27,14 @@ impl Selection {
         };
     }
 
+    /// The selected button's id, or `None` when the layout has no button at
+    /// the selected position.
     pub fn selected_id(self, layout: &MenuLayout) -> Option<u32> {
         layout.buttons.get(self.index).map(|button| button.id)
     }
 
+    /// Selects the button under a pointer given in physical window pixels,
+    /// and returns its id; the selection is unchanged when none is there.
     pub fn hover(
         &mut self,
         layout: &MenuLayout,

@@ -25,12 +25,18 @@
 //! Guests in other languages do not use this crate. They take `wit/extension.wit`
 //! and the message wire format directly — see `wit/README.md`.
 
+#![warn(missing_docs)]
+
 /// Guest bindings generated from the `bones:extension` WIT package.
 ///
 /// Generated inside a module rather than at the crate root on purpose:
 /// `pub_export_macro` marks the export macros `#[macro_export]`, which hoists
 /// them to the crate root, and the sibling `pub use` would then collide with
 /// them there (`E0255`). A module keeps the two apart.
+///
+/// Generated code carries no doc comments of its own; `wit/extension.wit`
+/// documents every call, so the lint is silenced here rather than repeated.
+#[allow(missing_docs)]
 pub mod bindings {
     wit_bindgen::generate!({
         path: "../../wit",
@@ -57,6 +63,11 @@ pub use bindings::export;
 /// The typed core messages and their payload codecs, shared byte-for-byte with
 /// the native host.
 pub use bones_messages as messages;
+
+pub mod bus;
+mod inbound;
+
+pub use inbound::Inbound;
 
 #[cfg(feature = "game-ui")]
 pub mod game_ui;

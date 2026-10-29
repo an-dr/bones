@@ -3,6 +3,7 @@ use crate::{DecodeError, DecodeMessage, EncodeMessage, Message, Reader, Writer};
 /// Requests activation of a discovered extension by its unique name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Load<'a> {
+    /// The catalog name of the extension to load.
     pub extension: &'a str,
 }
 

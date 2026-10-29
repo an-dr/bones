@@ -4,6 +4,7 @@ use crate::{DecodeError, DecodeMessage, EncodeMessage, Message, Reader, Writer};
 /// this connection's lifetime, distinguishes multiple gamepads.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GamepadConnected {
+    /// Identifies this gamepad in every later gamepad message.
     pub id: u32,
 }
 

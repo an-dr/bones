@@ -1,5 +1,6 @@
-use bones_wasm_sdk::Guest;
-use bones_wasm_sdk::bindings::bones::extension::host_api::{log, subscribe, Level};
+use bones_wasm_sdk::bindings::bones::extension::host_api::{log, Level};
+use bones_wasm_sdk::messages::tick::Tick;
+use bones_wasm_sdk::{bus, Guest};
 
 // Edit this, rebuild (cargo xtask example level-demo), and watch the next log line change
 // without restarting the app — that's the hot-reload demo (README.md).
@@ -11,7 +12,7 @@ impl Guest for Component {
     fn shutdown() {}
 
     fn init() {
-        subscribe("core/tick");
+        bus::subscribe::<Tick>();
         log(Level::Info, &format!("{VERSION}: loaded"));
     }
 
