@@ -33,7 +33,7 @@ All feature-flagged and individually optional; embedders may add their own.
 | instance | Claims the application's `app_uid` before the kernel starts, or hands the launch to the instance that holds it; publishes each later launch as `instance/launched` and raises the window (ADR-035) | bus; `window-control` service |
 | desktop | Registers an installed application in the application list and as "Open in" on folders — directly from an installer, or over `desktop/request`/`desktop/result` for one composition-fixed application (ADR-036) | bus |
 | upgrade | Owns checks, downloads, installation and rollback; exposes the existing `upgrader/*` bus contract; reports the version an update replaced (ADR-039) | bus; `registry` service; versioning |
-| devtools | An opt-in, loopback-only HTTP channel that injects page messages and records bus traffic, for end-to-end tests and agents driving the real application | bus |
+| devtools | An opt-in, loopback-only HTTP channel for end-to-end tests and agents driving the real application: injects page messages and any other message, records bus traffic, reports extension states and the log, and issues runtime extension commands | bus |
 
 ## Capabilities a module also offers directly
 
@@ -66,6 +66,8 @@ Both are first-class products; the app is the common case.
 | Rust SDK | `bones-wasm-sdk`: the WIT, its generated bindings, and the message vocabulary | Extension authors writing Rust |
 | launcher | `bones-launcher`: selects and starts an installed application | Applications shipping version folders |
 | versioning | `bones-versioning`: pure version and folder-name semantics | Launcher and upgrade module |
+| developer tools | `bones-cli`: new projects, doctor, build, the hot-reload dev loop, and an MCP server over the devtools channel (ADR-043); ships beside `bones` in every archive | Product developers and their AI agents |
+| test harness | `bones-test`: one built extension on a headless kernel, driven frame by frame and recorded | Products testing their extensions, and the agents writing them |
 | ABI | `bones:extension` and the message wire format | Extension authors in any other language |
 
 ### How each one is obtained
@@ -122,6 +124,10 @@ graph TD
     end
     Versioning["versioning (pure)"]
     Launcher["bones-launcher"] --> Versioning
+    TestHarness["bones-test"] --> Facade
+    Cli["bones-cli"] --> Messages["bones-messages"]
+    Cli --> Build["bones-build"]
+    TestHarness --> Build
     Facade --> Launch
     Facade --> Watch
     Wasm --> Bus
@@ -149,6 +155,7 @@ graph TD
 - **bus and contract know nothing about presentation** — messaging must stay usable in a headless build. Only the `wasm` module depends on the contract, so a kernel without it carries no WASM runtime (ADR-040).
 - **logging is a universal leaf**: anyone may depend on it (edges omitted above for readability); it depends on nothing.
 - **Every module in the optional, consumer-composed set is optional**; the kernel infrastructure must build and run with zero of them registered (headless configuration). `persistence` is `Module`-shaped but kernel-infrastructure-tier, not a member of that set — see ADR-020.
+- **`bones-build` depends on no bones crate**; `bones-cli`, `bones-test`, and `xtask` depend on it.
 - **Kernel libraries depend on no bones crate**, and nothing but the kernel crate depends on them. `bones-launcher` depends only on `bones-versioning`, which contains pure version semantics and depends on no bones crate (ADR-039).
 - **Nothing depends on app**, and app has no access embedders lack. This is now a graph constraint rather than a convention: `bones` depends on `bones-kernel` and nothing else among these crates.
 - Extensions depend only on the **ABI** — `wit/` and the message vocabulary, reached through `bones-wasm-sdk` in Rust — never on core internals.
@@ -176,6 +183,9 @@ bones/
 │   ├── bones/                         #  the engine executable (default composition)
 │   ├── bones-messages/                #  crate both host and WASM guest code depend on
 │   ├── bones-launcher/                #  selects and starts an installed application
+│   ├── bones-build/                   #  builds an extension for wasm32-wasip2; shared by xtask, bones-cli, bones-test
+│   ├── bones-cli/                     #  developer tools beside the engine (ADR-043)
+│   ├── bones-test/                    #  headless harness for testing a built extension
 │   ├── bones-versioning/              #  pure version semantics
 │   └── bones-wasm-sdk/                #  the Rust extension SDK, incl. the optional game_ui
 ├── wit/                       # the ABI: the WIT contract (used by the wasm module) and the wire format of every bus message

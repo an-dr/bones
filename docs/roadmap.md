@@ -19,14 +19,6 @@ Once the library runs on Android, an example APK showing an application that hos
 
 Completion artifact: the example APK on an arm64 device, adding an extension at runtime and toggling it from its own screen.
 
-## Per-extension topic permissions
-
-Every extension may publish to and subscribe to any topic: the sandbox limits what an extension can reach in the OS, not what it may say on the bus. That is right for an application's own extensions and too generous for third-party plugins, where an application may want "this plugin may not use `os/*`".
-
-Because the bus is universal, permissions belong in the `wasm` module, as a filter on each extension's endpoint, declared by the application at composition time. No change to the bus or the ABI is needed.
-
-Completion artifact: a test in which an extension denied a topic prefix has its publish to that prefix rejected and logged, while an extension without the restriction still reaches it.
-
 ## Supply-chain checks and the rest of the platform matrix
 
 [CI](../.github/workflows/ci.yml) runs `cargo xtask test` on Windows and Linux, x64 and ARM64, and builds the release archives there. Three gaps remain, and they are separable:
@@ -43,13 +35,11 @@ Completion artifact: CI running an advisory and licence scan on every push, the 
 
 Completion artifact: two runs of the CI build job over the same commit producing byte-identical archives, and the checksum published from source rather than from the upload.
 
-## API documentation on the ABI-line crates
+## Message rustdoc checked against the specification
 
-`bones-kernel` enables `missing_docs`, so the embedder-facing surface cannot grow an undocumented public item. `bones-messages` and `bones-wasm-sdk` do not, and between them have roughly two hundred undocumented public items — mostly message fields and generated bindings.
+`bones-messages` and `bones-wasm-sdk` document every public item, and `wit/wire-format.json` ties each topic's field names to the codec. The field descriptions themselves are written twice, once in `wire-format.json` and once in rustdoc, and nothing compares them.
 
-The message fields are not undocumented in substance: [wit/wire-format.md](../wit/wire-format.md) specifies every one of them, for every language rather than only Rust, which is where an extension author should be reading. What is missing is the rustdoc a Rust author sees at the call site, and the lint that would keep it honest.
-
-Completion artifact: `missing_docs` enabled on both crates with the gap closed, and the message documentation generated from or checked against the wire-format specification rather than written twice.
+Completion artifact: a test that fails when a message field's rustdoc and its `wire-format.md` meaning disagree, or rustdoc generated from the catalogue.
 
 ## Panels that paint while the frame thread is busy
 

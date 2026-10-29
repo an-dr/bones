@@ -26,6 +26,8 @@ The altitude test: **an ordinary refactoring must not require a documentation up
 - [architecture/](architecture/index.md) — the system: parts, structure, messaging, upgrading.
 - [glossary.md](glossary.md) — host, guest, embedder, native module, service, and where new code goes.
 - [CONTRIBUTING](../CONTRIBUTING.md) — how to build, test, and land a change.
+- [agent-plugins/](../agent-plugins/README.md) — everything bones offers an AI agent, as Agent Plugins packages; `bones-user` ships in every release ([ADR-044](adr/ADR-044-bones-is-built-for-ai-assisted-product-development.md)).
+- [tests/agent/](../tests/agent/README.md) — the benchmark that measures how well agents build on each release.
 
 ## Architecture
 
