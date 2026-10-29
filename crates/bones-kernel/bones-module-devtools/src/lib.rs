@@ -13,12 +13,20 @@
 //! reach the port can act as the user — so it binds to loopback only, refuses
 //! browser requests, and a shipped launch never sets the variable.
 
+mod control;
 mod devtools;
+mod direct_send;
+mod frame_routes;
+mod frames;
+mod log_history;
+mod recorded;
 mod recording;
 mod request;
+mod response;
 mod server;
 
 pub use devtools::Devtools;
+pub use log_history::LogHistory;
 
 #[cfg(test)]
 mod tests;

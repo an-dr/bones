@@ -1,10 +1,11 @@
 use pubsub_bus::Subscriber;
 use std::sync::{Arc, Mutex, Weak};
 
-use crate::bus::adapter::Adapter;
+use crate::bus::adapter::{topic_matches, Adapter, Patterns};
 use crate::bus::{Endpoint, EndpointBudget, Envelope, Handler};
 
 type BudgetRegistrations = Arc<Mutex<Vec<(Weak<Mutex<Adapter>>, EndpointBudget)>>>;
+type PatternRegistrations = Arc<Mutex<Vec<Weak<Mutex<Vec<String>>>>>>;
 
 /// Cheap to clone: an extension's `publish` import needs to hold a handle
 /// to the same bus it's registered on. `pubsub_bus::EventBus` is `Clone`
@@ -14,6 +15,7 @@ type BudgetRegistrations = Arc<Mutex<Vec<(Weak<Mutex<Adapter>>, EndpointBudget)>
 pub struct Bus {
     inner: pubsub_bus::EventBus<Envelope, ()>,
     budgets: BudgetRegistrations,
+    patterns: PatternRegistrations,
 }
 
 impl Bus {
@@ -21,6 +23,7 @@ impl Bus {
         Self {
             inner: pubsub_bus::EventBus::new(),
             budgets: Arc::new(Mutex::new(Vec::new())),
+            patterns: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -45,8 +48,13 @@ impl Bus {
         budget: Option<EndpointBudget>,
     ) -> Endpoint {
         let name = name.into();
+        let patterns = Patterns::default();
+        self.patterns
+            .lock()
+            .unwrap()
+            .push(Arc::downgrade(&patterns));
         let adapter = Arc::new(Mutex::new(Adapter {
-            patterns: Vec::new(),
+            patterns: patterns.clone(),
             handler: Box::new(handler),
             budget,
         }));
@@ -57,7 +65,11 @@ impl Bus {
                 .push((Arc::downgrade(&adapter), budget));
         }
         self.inner.add_subscriber_shared(adapter.clone());
-        Endpoint { name, adapter }
+        Endpoint {
+            name,
+            adapter,
+            patterns,
+        }
     }
 
     /// Fully removes an endpoint (unlike `Endpoint::release_all`, which
@@ -67,6 +79,25 @@ impl Bus {
         endpoint.release_all();
         let erased: Arc<Mutex<dyn Subscriber<Envelope, ()>>> = endpoint.adapter.clone();
         self.inner.remove_subscriber_shared(&erased);
+    }
+
+    /// Whether any registered endpoint's subscriptions match `topic` now.
+    ///
+    /// Safe to call from inside a handler: it reads only the pattern lists,
+    /// never an adapter, which is locked for the length of a delivery.
+    pub fn has_subscriber(&self, topic: &str) -> bool {
+        let mut registrations = self.patterns.lock().unwrap();
+        registrations.retain(|patterns| patterns.strong_count() > 0);
+        registrations
+            .iter()
+            .filter_map(Weak::upgrade)
+            .any(|patterns| {
+                patterns
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .any(|pattern| topic_matches(pattern, topic))
+            })
     }
 
     /// Enqueues only — safe to call from inside a Handler; delivery waits

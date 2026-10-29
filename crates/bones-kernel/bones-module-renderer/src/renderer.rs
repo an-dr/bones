@@ -4,13 +4,15 @@ use bones_kernel_infra::draw_target::DrawTargetService;
 use bones_kernel_infra::logging::Logger;
 use bones_messages::gfx::Command;
 use bones_messages::lifecycle::{Event, LifecycleEvent};
-use bones_messages::renderer::{DisplayChanged, LogicalCanvas};
+use bones_messages::renderer::{Capture, Captured, DisplayChanged, LogicalCanvas, Scope};
 use bones_messages::{DecodeMessage, EncodeMessage, Message};
 use sdl3::video::Window;
 use send_wrapper::SendWrapper;
 
+use crate::frame_capture::capture_png;
 use crate::inner::Inner;
 use crate::shared_inner::SharedInner;
+use crate::window_capture::{capture_window, WindowImage};
 
 /// Every `gfx/*` command; requested in `init` rather than by the builder,
 /// so what this module listens to travels with the module.
@@ -45,6 +47,8 @@ struct State {
     // the same state out as the `draw-target` service, so a module drawing
     // above this one never needs to name `Renderer` (see `shared_inner`).
     inner: Option<SharedInner>,
+    /// `renderer/capture` requests waiting for the next `present`.
+    pending_captures: Vec<Capture>,
 }
 
 impl State {
@@ -62,11 +66,70 @@ impl Renderer {
             logger,
             bus,
             inner: None,
+            pending_captures: Vec::new(),
         }))
     }
 
+    /// Shows the frame, answering every pending capture around it: the
+    /// canvas is read before the flip, while it still holds the frame, and
+    /// the window after, once the frame is what the window shows.
     pub fn present(&mut self) {
+        let pending = std::mem::take(&mut self.0.pending_captures);
+        // Read for a window capture too: it is the answer when the window
+        // cannot be captured, and after the flip it is gone.
+        let canvas = match pending.is_empty() {
+            true => None,
+            false => Some(self.image(capture_png(&self.0.inner_mut().canvas))),
+        };
         self.0.inner_mut().canvas.present();
+        let window = pending
+            .iter()
+            .any(|capture| capture.scope == Scope::Window)
+            .then(|| capture_window(self.0.inner_mut().canvas.window()));
+        let window = window.and_then(|captured| match captured {
+            Ok(WindowImage::Read(width, height, png)) => Some((width, height, png)),
+            Ok(WindowImage::SameAsCanvas) => canvas.clone(),
+            Err(reason) => {
+                self.0.logger.info(
+                    "renderer",
+                    &format!("window capture unavailable ({reason}); answering with the canvas"),
+                );
+                None
+            }
+        });
+        for capture in pending {
+            let (scope, (width, height, png)) = match (capture.scope, &window) {
+                (Scope::Window, Some(image)) => (Scope::Window, image),
+                _ => (
+                    Scope::Canvas,
+                    canvas.as_ref().expect("read when anything was pending"),
+                ),
+            };
+            self.0.bus.publish(Envelope {
+                topic: Captured::TOPIC.to_string(),
+                sender: "renderer".to_string(),
+                correlation: None,
+                payload: Captured {
+                    request_id: capture.request_id,
+                    scope,
+                    width: *width,
+                    height: *height,
+                    png,
+                }
+                .encode(),
+            });
+        }
+    }
+
+    /// A captured image, or an empty one with the failure logged, so a
+    /// caller waiting on its `request_id` is never left without a reply.
+    fn image(&self, captured: Result<(u32, u32, Vec<u8>), String>) -> (u32, u32, Vec<u8>) {
+        captured.unwrap_or_else(|error| {
+            self.0
+                .logger
+                .error("renderer", &format!("capture: {error}"));
+            (0, 0, Vec::new())
+        })
     }
 
     fn publish_logical_canvas(&mut self) {
@@ -82,6 +145,16 @@ impl Renderer {
 
 impl Handler for Renderer {
     fn handle(&mut self, envelope: &Envelope) {
+        if envelope.topic == Capture::TOPIC {
+            match Capture::decode(&envelope.payload) {
+                Ok(capture) => self.0.pending_captures.push(capture),
+                Err(err) => self.0.logger.error(
+                    "renderer",
+                    &format!("{} from '{}': {err}", envelope.topic, envelope.sender),
+                ),
+            }
+            return;
+        }
         if envelope.topic == LifecycleEvent::TOPIC {
             if envelope.sender != "engine" {
                 return;
@@ -176,6 +249,7 @@ impl Module for Renderer {
 
         ctx.subscribe(GFX_TOPICS);
         ctx.subscribe(LifecycleEvent::TOPIC);
+        ctx.subscribe(Capture::TOPIC);
         Ok(())
     }
 

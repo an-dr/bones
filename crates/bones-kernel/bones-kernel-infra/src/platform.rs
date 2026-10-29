@@ -170,6 +170,20 @@ impl Platform {
         sdl3::hint::set_with_priority("SDL_VIDEO_DRIVER", "x11", &sdl3::hint::Hint::Override);
     }
 
+    /// Makes SDL draw its window into memory rather than on a display, for
+    /// tests and screenshots on a machine with no display at all.
+    ///
+    /// - Selected through an SDL hint at override priority, like
+    ///   [`Platform::select_x11_video_driver`], so the process environment
+    ///   is untouched.
+    /// - The hint is process-wide: every window SDL opens afterwards in this
+    ///   process is offscreen too.
+    /// - Must run before [`Platform::new`]. `renderer/capture` reads the
+    ///   frame back as on any window.
+    pub fn select_offscreen_video_driver() {
+        sdl3::hint::set_with_priority("SDL_VIDEO_DRIVER", "offscreen", &sdl3::hint::Hint::Override);
+    }
+
     /// Takes back an unclaimed `window-surface` service (nothing consumed
     /// it — e.g. `.window(...)` with no `.renderer()` and no custom module
     /// wanting it) so it stays open for the rest of the run, instead of

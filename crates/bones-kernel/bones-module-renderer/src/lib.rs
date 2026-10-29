@@ -5,11 +5,13 @@
 //! provided by whoever configured one — `Kernel::build` today).
 
 mod circle_geometry;
+mod frame_capture;
 mod inner;
 mod renderer;
 mod retained_draw;
 mod shared_inner;
 mod text_alignment;
 mod text_rasterizer;
+mod window_capture;
 
 pub use renderer::Renderer;

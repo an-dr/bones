@@ -41,6 +41,7 @@ fn main() -> wasmtime::Result<()> {
         DisplayInfo::default(),
         EndpointBudget::new(BudgetLimits::default()),
         bones_module_wasm::host::ExtensionTimeouts::default(),
+        bones_module_wasm::Permissions::default(),
     )?;
     let topics = hello.requested_topics();
     let ep = bus.register("hello", hello);

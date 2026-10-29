@@ -440,3 +440,43 @@ fn call_chain_is_clear_again_after_a_cycle_is_rejected() {
 
     assert_eq!(reply, Ok(b"testx".to_vec()));
 }
+
+#[test]
+fn has_subscriber_follows_exact_and_prefix_patterns() {
+    let bus = Bus::new();
+    let (handler, _) = recording_handler();
+    let endpoint = bus.register("listener", handler);
+    assert!(!bus.has_subscriber("gfx/clear"));
+    endpoint.subscribe("gfx/*");
+    assert!(bus.has_subscriber("gfx/clear"));
+    assert!(!bus.has_subscriber("audio/play-sound"));
+    endpoint.release_all();
+    assert!(!bus.has_subscriber("gfx/clear"));
+}
+
+#[test]
+fn has_subscriber_forgets_an_unregistered_endpoint() {
+    let bus = Bus::new();
+    let (handler, _) = recording_handler();
+    let endpoint = bus.register("listener", handler);
+    endpoint.subscribe("gfx/clear");
+    bus.unregister(&endpoint);
+    drop(endpoint);
+    assert!(!bus.has_subscriber("gfx/clear"));
+}
+
+#[test]
+fn has_subscriber_can_be_asked_from_inside_a_delivery() {
+    let bus = Bus::new();
+    let answers = Arc::new(Mutex::new(Vec::new()));
+    let (asking_bus, sink) = (bus.clone(), answers.clone());
+    let endpoint = bus.register("asker", move |e: &Envelope| {
+        sink.lock()
+            .unwrap()
+            .push(asking_bus.has_subscriber(&e.topic));
+    });
+    endpoint.subscribe("ping");
+    bus.publish(envelope("ping", "test"));
+    bus.dispatch();
+    assert_eq!(*answers.lock().unwrap(), [true]);
+}

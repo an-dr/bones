@@ -57,3 +57,15 @@ fn logger_clone_shares_the_same_sink() {
 
     assert_eq!(sink.records().len(), 2);
 }
+
+#[test]
+fn a_teed_logger_writes_to_both_sinks() {
+    let first = RecordingSink::new();
+    let second = RecordingSink::new();
+    let logger = Logger::new(Arc::new(first.clone())).tee(Arc::new(second.clone()));
+
+    logger.warn("engine", "hello");
+
+    assert_eq!(first.records().len(), 1);
+    assert_eq!(second.records().len(), 1);
+}

@@ -2,6 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use bones_kernel_infra::bus::{Envelope, Module};
 use bones_kernel_infra::exit::ExitRequest;
+use bones_kernel_infra::frame_control::FrameControl;
 use bones_messages::window::CloseRequested;
 use bones_messages::{EncodeMessage, Message};
 
@@ -52,6 +53,10 @@ pub struct BuiltKernel {
     /// module through the `exit-request` service; `run`'s loop breaks once it
     /// is set, the same as `Platform::quit_requested()`.
     pub exit_requested: ExitRequest,
+    /// The `frame-control` service: whoever holds a clone can pause the
+    /// simulation and step it. `run` obeys it; a caller driving `step(dt)`
+    /// itself decides whether to.
+    pub frame_control: FrameControl,
     pub(super) shutdown_started: bool,
 }
 

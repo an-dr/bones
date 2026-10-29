@@ -15,6 +15,7 @@ use crate::lifecycle::{self, Event};
 use crate::loading::{
     attach_extension, derive_extension_name, find_wasm_files, read_file_mtime, ENGINE_SENDER,
 };
+use crate::permissions::Permissions;
 use crate::supervisor::{OwnedCommand, Supervisor, TrackedExtension};
 
 /// The bus endpoint the module answers on: runtime commands arrive here on
@@ -38,6 +39,7 @@ pub struct Wasm {
     timeouts: ExtensionTimeouts,
     commands: Arc<Mutex<Vec<OwnedCommand>>>,
     supervisor: Option<Supervisor>,
+    permissions: HashMap<String, Permissions>,
 }
 
 impl Wasm {
@@ -53,6 +55,7 @@ impl Wasm {
             timeouts: ExtensionTimeouts::default(),
             commands: Arc::new(Mutex::new(Vec::new())),
             supervisor: None,
+            permissions: HashMap::new(),
         }
     }
 
@@ -92,6 +95,13 @@ impl Wasm {
     /// The wall-clock budgets for loading and for each call.
     pub fn timeouts(mut self, timeouts: ExtensionTimeouts) -> Self {
         self.timeouts = timeouts;
+        self
+    }
+
+    /// Denies the extension called `name` the topics and endpoints in
+    /// `permissions` (ADR-042), for every instance loaded under that name.
+    pub fn permissions(mut self, name: impl Into<String>, permissions: Permissions) -> Self {
+        self.permissions.insert(name.into(), permissions);
         self
     }
 
@@ -198,6 +208,7 @@ impl Module for Wasm {
                 &display_info,
                 self.budget,
                 self.timeouts,
+                &self.permissions.get(&name).cloned().unwrap_or_default(),
             ) {
                 Ok((endpoint, shared, budget, topics)) => {
                     self.logger.info(
@@ -249,6 +260,7 @@ impl Module for Wasm {
             display_info,
             self.budget,
             self.timeouts,
+            self.permissions.clone(),
         ));
         Ok(())
     }

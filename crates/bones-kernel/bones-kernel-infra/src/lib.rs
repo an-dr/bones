@@ -15,6 +15,7 @@ pub mod display;
 pub mod draw_target;
 pub mod exit;
 pub mod files;
+pub mod frame_control;
 pub mod logging;
 pub mod persistence;
 pub mod runner;

@@ -11,6 +11,7 @@ use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
 use crate::host::{DisplayInfo, ExtensionTimeouts, Host};
+use crate::permissions::Permissions;
 use bones_kernel_infra::bus::{BudgetLimits, Bus, Endpoint, EndpointBudget, Registry};
 use bones_kernel_infra::logging::Logger;
 
@@ -26,7 +27,8 @@ pub const ENGINE_SENDER: &str = "engine";
 /// `request-exit` sets the same flag the caller's own run loop reads.
 /// `load_timeout` bounds `instantiate` + `init`; a component too large for it
 /// traps instead of attaching, so it travels with the budget rather than being
-/// fixed here.
+/// fixed here. `permissions` is the extension's deny-list (ADR-042), enforced
+/// on every call it makes.
 #[allow(clippy::too_many_arguments)]
 pub fn attach_extension(
     wasm_engine: &wasmtime::Engine,
@@ -39,6 +41,7 @@ pub fn attach_extension(
     display_info: &DisplayInfo,
     budget_limits: BudgetLimits,
     timeouts: ExtensionTimeouts,
+    permissions: &Permissions,
 ) -> wasmtime::Result<(Endpoint, SharedHost, EndpointBudget, Vec<String>)> {
     let budget = EndpointBudget::new(budget_limits);
     let mut extension = Host::load(
@@ -52,6 +55,7 @@ pub fn attach_extension(
         display_info.clone(),
         budget.clone(),
         timeouts,
+        permissions.clone(),
     )?;
     let topics = extension.requested_topics();
     let shared = SharedHost(Arc::new(Mutex::new(extension)));

@@ -25,7 +25,7 @@ The surface is curated, not a glob. Adding to it is deliberate: what appears her
 
 ## Constraints worth knowing
 
-Presentation *backends* are absent on purpose. `renderer`, `ui`, and `web` are selected through builder methods — `.renderer()`, `.ui()`, `.web()` — so an embedder composes them without ever naming their types, and they stay private.
+Presentation *backends* are absent on purpose. `renderer`, `ui`, and `web` are selected through builder methods — `.renderer()`, `.ui()`, `.web()` — so an embedder composes them without ever naming their types, and they stay private. `.offscreen()` and `.offscreen_from_env(variable)` open the window in memory instead of on a display, so a renderer runs and captures frames in a test or on a machine without one.
 
 What an embedder must be able to *name*, it can. `bus::PlatformEvent` is the argument of the hook a custom module overrides, `platform::Platform` is a value `BuiltKernel` hands back, and `Error` is what `build` and `run` fail with — so none of them require adding `sdl3`, `wasmtime`, or `bones-kernel-infra` to a consumer's manifest.
 

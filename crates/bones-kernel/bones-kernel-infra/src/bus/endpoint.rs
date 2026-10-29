@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use crate::bus::adapter::Adapter;
+use crate::bus::adapter::{Adapter, Patterns};
 
 /// One persistent adapter per endpoint, for the engine's lifetime (ADR-013);
 /// subscribe/release just mutate its pattern set.
@@ -8,6 +8,7 @@ use crate::bus::adapter::Adapter;
 pub struct Endpoint {
     pub(crate) name: String,
     pub(crate) adapter: Arc<Mutex<Adapter>>,
+    pub(crate) patterns: Patterns,
 }
 
 impl Endpoint {
@@ -16,18 +17,18 @@ impl Endpoint {
     }
 
     pub fn subscribe(&self, pattern: impl Into<String>) {
-        self.adapter.lock().unwrap().patterns.push(pattern.into());
+        self.patterns().lock().unwrap().push(pattern.into());
     }
 
     pub fn release(&self, pattern: &str) {
-        self.adapter
-            .lock()
-            .unwrap()
-            .patterns
-            .retain(|p| p != pattern);
+        self.patterns().lock().unwrap().retain(|p| p != pattern);
     }
 
     pub fn release_all(&self) {
-        self.adapter.lock().unwrap().patterns.clear();
+        self.patterns().lock().unwrap().clear();
+    }
+
+    fn patterns(&self) -> &Patterns {
+        &self.patterns
     }
 }

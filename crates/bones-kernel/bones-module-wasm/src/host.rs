@@ -5,6 +5,7 @@
 //! requested by the extension itself via the `subscribe` import during
 //! `init` (messaging.md).
 
+mod diagnostics;
 mod extension_timeouts;
 
 use bones_kernel_infra::exit::ExitRequest;
@@ -12,12 +13,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 
+use diagnostics::Diagnostics;
 pub use extension_timeouts::ExtensionTimeouts;
 
 use crate::contract::bones::extension::host_api::{
     DisplayMode, Host as HostApiImports, Level, SendError,
 };
 use crate::contract::Extension;
+use crate::permissions::Permissions;
 use bones_kernel_infra::bus::{Bus, EndpointBudget, Envelope, Handler, Registry};
 use bones_kernel_infra::logging::Logger;
 use bones_messages::tick::Tick;
@@ -117,6 +120,10 @@ struct State {
     /// the run loop's job, this only signals the request.
     exit_requested: ExitRequest,
     display_info: DisplayInfo,
+    diagnostics: Diagnostics,
+    /// What this extension may not publish, subscribe to, or send to
+    /// (ADR-042).
+    permissions: Permissions,
 }
 
 impl HostApiImports for State {
@@ -131,13 +138,27 @@ impl HostApiImports for State {
     }
 
     fn subscribe(&mut self, topic: String) {
+        if !self.permissions.allows_subscription(&topic) {
+            self.diagnostics
+                .report_denied(&self.logger, &self.name, "subscribe to", &topic);
+            return;
+        }
+        self.diagnostics
+            .check_subscribe(&self.logger, &self.name, &topic);
         self.requested_topics.push(topic);
     }
 
     fn publish(&mut self, topic: String, payload: Vec<u8>) {
+        if !self.permissions.allows(&topic) {
+            self.diagnostics
+                .report_denied(&self.logger, &self.name, "publish to", &topic);
+            return;
+        }
         if !self.budget.accept_publish() {
             return;
         }
+        self.diagnostics
+            .check_publish(&self.logger, &self.bus, &self.name, &topic, &payload);
         self.bus.publish(Envelope {
             topic,
             sender: self.name.clone(),
@@ -147,6 +168,13 @@ impl HostApiImports for State {
     }
 
     fn send(&mut self, endpoint: String, payload: Vec<u8>) -> Result<Vec<u8>, SendError> {
+        if !self.permissions.allows(&endpoint) {
+            self.diagnostics
+                .report_denied(&self.logger, &self.name, "send to", &endpoint);
+            // As if the endpoint did not exist: the extension learns nothing
+            // about what it was denied (ADR-042).
+            return Err(SendError::UnknownEndpoint);
+        }
         self.registry
             .call(&self.name, &endpoint, &payload)
             .map_err(map_send_error)
@@ -224,6 +252,7 @@ impl Host {
         display_info: DisplayInfo,
         budget: EndpointBudget,
         timeouts: ExtensionTimeouts,
+        permissions: Permissions,
     ) -> wasmtime::Result<Self> {
         let component = Component::from_file(engine, wasm_path)?;
         let mut linker = Linker::new(engine);
@@ -243,6 +272,8 @@ impl Host {
                 budget,
                 exit_requested,
                 display_info,
+                diagnostics: Diagnostics::new(),
+                permissions,
             },
         );
         // Epoch interruption traps immediately on any check once enabled
@@ -289,10 +320,11 @@ impl Host {
         {
             Ok(()) => Ok(()),
             Err(err) => {
-                store
-                    .data()
-                    .logger
-                    .error("host", &format!("shutdown trapped: {err}"));
+                let state = store.data();
+                state.logger.error(
+                    "host",
+                    &format!("'{}' trapped in shutdown: {err}", state.name),
+                );
                 self.faulted.store(true, Ordering::Relaxed);
                 Err(err)
             }
@@ -325,10 +357,14 @@ impl Host {
         {
             Ok(reply) => reply,
             Err(err) => {
-                store
-                    .data()
-                    .logger
-                    .error("host", &format!("handler trapped during send: {err}"));
+                let state = store.data();
+                state.logger.error(
+                    "host",
+                    &format!(
+                        "'{}' trapped in on-message answering a send from '{sender}': {err}",
+                        state.name
+                    ),
+                );
                 self.faulted.store(true, Ordering::Relaxed);
                 None
             }
@@ -368,10 +404,15 @@ impl Handler for Host {
                 ),
         };
         if let Err(err) = result {
-            store
-                .data()
-                .logger
-                .error("host", &format!("handler trapped: {err}"));
+            let call = match envelope.topic == Tick::TOPIC {
+                true => "on-tick".to_string(),
+                false => format!("on-message for '{}'", envelope.topic),
+            };
+            let state = store.data();
+            state.logger.error(
+                "host",
+                &format!("'{}' trapped in {call}: {err}", state.name),
+            );
             self.faulted.store(true, Ordering::Relaxed);
         }
     }
