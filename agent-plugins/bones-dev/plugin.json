@@ -1,0 +1,11 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "bones-dev",
+  "version": "3.1.0",
+  "description": "Work on the bones engine itself: where things live, the gates a change must pass, how the wire format and its vectors move, and the AI-friendliness invariants every change is judged against.",
+  "author": { "name": "Andrei Gramakov" },
+  "homepage": "https://github.com/an-dr/bones",
+  "repository": "https://github.com/an-dr/bones",
+  "license": "MIT",
+  "keywords": ["bones", "game-engine", "rust", "contributing"]
+}

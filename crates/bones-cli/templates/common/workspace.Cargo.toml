@@ -1,0 +1,10 @@
+[workspace]
+resolver = "2"
+members = ["extension", "checks"{{app_member}}]
+# `cargo test` runs the native checks; the extension builds for wasm32-wasip2
+# through `bones-cli build`.
+default-members = ["checks"]
+
+[profile.release]
+# Smaller components load faster and hot-reload sooner.
+opt-level = "s"

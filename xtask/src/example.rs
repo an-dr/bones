@@ -112,16 +112,8 @@ fn print_examples() {
 /// of its .wasm. Every extension crate is its own workspace, so the output
 /// lands in its own target/.
 fn build_wasm(crate_dir: &Path, name: &str) -> Result<PathBuf> {
-    run_step(
-        &format!("Building the {name} extension"),
-        &mut cargo(
-            crate_dir,
-            &["build", "--target", "wasm32-wasip2", "--release"],
-        ),
-    )?;
-    Ok(crate_dir
-        .join("target/wasm32-wasip2/release")
-        .join(format!("{}.wasm", name.replace('-', "_"))))
+    println!("==> Building the {name} extension...");
+    bones_build::Build::new(crate_dir).show_diagnostics().run()
 }
 
 fn build_extension_example(root: &Path, example: &ExtensionExample) -> Result {

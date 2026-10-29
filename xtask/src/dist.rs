@@ -43,7 +43,8 @@ pub fn run(args: &[String]) -> Result {
     let exe = exe_name("bones");
     let dist = root.join("dist");
 
-    let mut build = vec!["build", "-p", "bones", "--release"];
+    // bones-cli ships beside the engine it finds as its sibling (ADR-043).
+    let mut build = vec!["build", "-p", "bones", "-p", "bones-cli", "--release"];
     if let Some(features) = &options.features {
         build.extend(["--features", features]);
     }
@@ -53,6 +54,8 @@ pub fn run(args: &[String]) -> Result {
     // extensions/ ships empty: it is where a user drops their own .wasm files.
     create_dir(&dist.join("extensions"))?;
     copy_file(&root.join("target/release").join(&exe), &dist.join(&exe))?;
+    let cli = exe_name("bones-cli");
+    copy_file(&root.join("target/release").join(&cli), &dist.join(&cli))?;
 
     // The ABI ships with the engine that implements it, so the
     // bones:extension version in it is verifiable rather than advisory --
@@ -61,6 +64,20 @@ pub fn run(args: &[String]) -> Result {
     // and vectors/ to build and check payloads.
     println!("==> Copying the extension ABI...");
     copy_dir(&root.join("wit"), &dist.join("wit"))?;
+
+    // An agent building a product from this archive reads these first; the
+    // archive has no repository beside it to look things up in.
+    // The product's plugin only: bones-dev is for working on this
+    // repository, which an archive does not contain.
+    println!("==> Copying the agent plugin...");
+    copy_dir(
+        &root.join("agent-plugins/bones-user"),
+        &dist.join("agent-plugins/bones-user"),
+    )?;
+    copy_file(
+        &root.join("agent-plugins/README.md"),
+        &dist.join("agent-plugins/README.md"),
+    )?;
 
     // The MIT licence requires its notice to travel with every copy, so a
     // bundle without it is not merely untidy -- it is not licensed.

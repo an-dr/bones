@@ -80,6 +80,35 @@ jobs:
         if: runner.os == 'Linux'
         run: xvfb-run -a cargo xtask test
 
+  # A guest that is not Rust: the TypeScript example's codec against the
+  # conformance vectors, then the built component through the real extension
+  # host. Linux x64 only, because jco's componentizer ships no prebuilt
+  # binary for every platform the engine supports.
+  typescript-guest:
+    name: TypeScript guest
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: typescript-guest
+      - name: Codec against the conformance vectors
+        working-directory: examples/extensions/ts-demo
+        run: |
+          npm ci
+          npm test
+      - name: Component
+        working-directory: examples/extensions/ts-demo
+        run: npm run build
+      - name: Through the extension host
+        run: cargo test -p bones-test --test typescript_guest -- --ignored
+
   # The release archives, built on every push so packaging is exercised as
   # often as the tests; on main they are the downloadable artifacts. Windows
   # ships web panels always (WebView2 is part of the OS). Linux ships both

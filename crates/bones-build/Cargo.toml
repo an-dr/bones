@@ -1,0 +1,12 @@
+[package]
+name = "bones-build"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+readme = "README.md"
+description = "Build a bones extension for wasm32-wasip2 and find the .wasm cargo produced; shared by xtask, bones-cli, and bones-test."
+
+[dependencies]
+serde_json = "1.0"
