@@ -43,6 +43,8 @@ The kernel infrastructure's **runner** owns the loop skeleton. Modules hook name
 | `render` | — | renderer composites gfx batches, then ui draws above them |
 | `present` | — | renderer presents the frame |
 
+While `frame-control` holds the simulation paused, the loop still pumps input, dispatches the bus, and runs `render` and `present`. The window stays responsive, a request such as a capture reaches its module, and a screenshot shows the paused frame. It skips the tick and the `before tick` and `after tick` hooks, so a runtime extension command waits for the next step. Each requested step runs one full frame with `dt` equal to the configured tick period rather than the time measured since the last frame, so a stepped run is repeatable.
+
 Registration order is what layers the frame: `render` runs over every module before `present` runs over any, so the renderer has composited before ui draws, and nothing flips a buffer until both are done. A headless build (no presentation modules) simply has empty phases.
 
 Shutdown has one more hook. On a close request the runner dispatches it, then calls every module's `begin_shutdown` and dispatches again, then every module's `shutdown`. `begin_shutdown` is where a module stops what other modules may still need to hear from: the wasm module calls each extension's own `shutdown` there, so the messages those calls publish reach modules that have not shut down yet. The runner names no module in any of this ([ADR-040](../adr/ADR-040-the-wasm-extension-host-is-an-opt-in-module.md)).
@@ -59,6 +61,7 @@ The bus carries *behavior*; **services** carry in-process plumbing that must not
 | bus | kernel infrastructure, via `Kernel::build` | game-core | `bus::Bus` |
 | draw-target | renderer, via its own `init` | ui | `Box<dyn DrawTarget>`: textures plus `UiMesh` submission |
 | window-control | platform (kernel infrastructure), via `Kernel::build` | instance | `WindowControl`: `raise()` — un-minimise, raise, and focus the window, where the platform allows (ADR-035) |
+| frame-control | kernel infrastructure, via `Kernel::build` | devtools | `FrameControl`: pause the simulation, resume it, or step it a number of frames at the fixed tick period |
 
 `window-surface` is provided by the builder — web borrows it and `renderer`'s `init` consumes it. `bus` is provided by the builder unconditionally: unlike `renderer`/`ui`/`web`, which get a `Bus` handle from their own builder sugar, a module injected via the generic `.module(...)` path (game-core is the first that needs to publish) has no other way to reach one. `window-control` exists because `window-surface` cannot serve a module that only needs to act on the window: the renderer consumes the window outright, and the window cannot leave the frame thread. `window-control` is a cloneable handle that carries the capability without the window, read with `get` and never consumed, so any number of modules can hold one; its calls run on the frame thread, which is where every module hook already runs. `draw-target` is the first service one *module* provides to another: `renderer` registers it during its own `init`, and `ui` consumes it during its, so neither builder nor consumer names the other's crate (ADR-031).
 

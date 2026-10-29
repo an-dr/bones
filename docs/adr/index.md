@@ -48,6 +48,10 @@ Most readers want the [architecture chapter](../architecture/index.md) instead. 
 | [038](ADR-038-the-assembled-system-is-the-kernel-built-on-kernel-infrastructure.md) | The assembled system is the kernel, built on the kernel infrastructure | active |
 | [039](ADR-039-versioning-is-pure-the-launcher-launches-and-the-upgrade-module-owns-installation.md) | Pure versioning, a launch-only launcher, and module-owned upgrading | active |
 | [040](ADR-040-the-wasm-extension-host-is-an-opt-in-module.md) | The WASM extension host is an opt-in module | active — supersedes extension hosting in [011](ADR-011-native-core-modules.md) |
+| [041](ADR-041-the-wire-format-is-specified-as-structured-data.md) | The wire format is specified as structured data | active |
+| [042](ADR-042-extension-permissions-are-deny-lists-the-composition-root-declares.md) | Extension permissions are deny-lists the composition root declares | active |
+| [043](ADR-043-developer-tooling-is-a-separate-bones-cli-binary-shipped-beside-the-engine.md) | Developer tooling is a separate bones-cli binary shipped beside the engine | active |
+| [044](ADR-044-bones-is-built-for-ai-assisted-product-development.md) | bones is built for AI-assisted product development | active |
 
 ## The two reversals
 

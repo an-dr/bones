@@ -108,6 +108,19 @@ The split exists because a `.wasm` file outlives the engine build that loaded it
 
 The ABI is enforced structurally, not by semver range — a guest built against a different version of the contract is refused at instantiation, and so is one whose shape differs without a version change. What that costs and how to avoid paying it is in [wit/README.md](../../wit/README.md); the payload encoding, specified for every language rather than only Rust, is in [wit/wire-format.md](../../wit/wire-format.md).
 
+## Built for AI-assisted development
+
+Products on bones are written more and more by AI agents working without the engine's source, so the system guarantees what such an agent needs ([ADR-044](../adr/ADR-044-bones-is-built-for-ai-assisted-product-development.md)):
+
+- the message contract is data;
+- the running engine is observable from outside the process without pixels;
+- an extension's behaviour can be proven headless and repeatably;
+- every mistake an extension makes is reported with its cause and fix;
+- the rules an agent cannot infer ship with every release and project;
+- untrusted code can be bounded by the composition root.
+
+These hold across components. The wire format as data, the devtools channel, `bones-test`, the extension host's diagnostics and permissions, `bones-cli`, and the agent plugins are their parts, and a change to any component keeps them true.
+
 ## What an extension gets
 
 The contract is small on purpose. An extension exports lifecycle and message handlers and imports a handful of host calls — publish, send, subscribe, log, and the capabilities a module grants over the bus. It owns no thread and no loop: the engine calls it ([ADR-004](../adr/ADR-004-event-driven-execution.md)).

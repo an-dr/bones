@@ -20,6 +20,7 @@ One extension may use several backends at once (e.g. a game on `gfx/*` with a se
 - `renderer/logical-canvas` announces the renderer's fixed coordinate space whenever an extension loads or reloads.
 - A single world-to-screen camera transform (position + zoom) applies to every draw — one viewport for the whole scene, not per-extension or per-layer.
 - The command vocabulary (clear, sprite, shapes, text, …) is a versioned core API; its exact set is an implementation-increment concern.
+- `renderer/capture` asks for the next presented frame, and the renderer answers on `renderer/captured` with a PNG. The canvas scope is what it composited, egui included, read back before the frame is shown. The window scope is the whole window once shown, web panels included, read from the system: `PrintWindow` on Windows, `GetImage` on X11 and Xwayland. A native Wayland window has no web panels, so its canvas is its window. Where the window cannot be read, the reply carries the canvas and says so. A window opened with `Kernel::offscreen` draws into memory through SDL's offscreen video driver, so capture works with no display at all: in tests (`bones-test`'s `render` feature) and on a CI machine. It cannot have web panels, which need a visible parent window, so `build` refuses `.offscreen()` with `.web()`.
 - WASM guests may use the optional `game_ui` module of `bones-wasm-sdk` for logical-canvas menu layout, selection, hit-testing, and owned `gfx/*` command generation. It is theme-free and adds no native backend or bus protocol (ADR-025).
 
 ## ui — widgets
