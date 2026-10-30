@@ -128,3 +128,32 @@ fn topics_are_the_documented_names() {
     assert_eq!(Request::TOPIC, "os/request");
     assert_eq!(Result::TOPIC, "os/result");
 }
+
+#[test]
+fn caller_aware_replies_round_trip_and_reject_malformed_payloads() {
+    use super::Reply;
+    for (accepted, value, error) in [(true, "copied", ""), (false, "", ""), (false, "", "busy")] {
+        let reply = Reply {
+            requester: "editor",
+            request_id: 7,
+            accepted,
+            value,
+            error,
+        };
+        let bytes = reply.encode();
+        assert_eq!(Reply::decode(&bytes).unwrap(), reply);
+        for len in 0..bytes.len() {
+            assert!(Reply::decode(&bytes[..len]).is_err());
+        }
+        let mut trailing = bytes.clone();
+        trailing.push(0);
+        assert_eq!(Reply::decode(&trailing), Err(DecodeError::TrailingBytes));
+        let mut invalid_bool = bytes;
+        invalid_bool[2 + "editor".len() + 4] = 2;
+        assert!(matches!(
+            Reply::decode(&invalid_bool),
+            Err(DecodeError::InvalidTag { .. })
+        ));
+    }
+    assert_eq!(Reply::TOPIC, "os/reply");
+}

@@ -330,10 +330,11 @@ The extension host reports the mistakes an extension can make without faulting, 
 
 ## Hot reload
 
-Reload = call `shutdown`, drop the old instance, instantiate the new binary, run `init`, and re-register subscriptions. Two consequences extension authors must know:
+File changes and runtime reload commands use the same replacement sequence: instantiate and initialise the replacement, attach its subscriptions, call the old running instance's `shutdown` once, then release the old instance. If replacement loading fails, the old instance stays running and its shutdown hook is not called. Three consequences extension authors must know:
 
-- **In-memory state does not survive reload.** Persistence is the extension's own concern (e.g. writing state out on `shutdown` or on demand). A state hand-off mechanism, if ever needed, is a future ADR.
-- Messages published toward the extension during the gap are dropped (at-most-once, ADR-009); senders relying on a reply get an error reply.
+- **In-memory state does not survive reload.** Persist state during normal operation if replacement `init` must read it. The old instance's shutdown runs after replacement init, so shutdown-only persistence is available to a later load, not that replacement's init.
+- **Shutdown is cleanup, not a state hand-off.** Its published messages remain queued for dispatch after replacement. A dedicated state hand-off mechanism, if needed, requires a separate contract.
+- The old instance remains attached while the replacement initialises. Queued deliveries addressed to the old endpoint can be dropped when it is released (at-most-once, ADR-009); no replay into the replacement is promised.
 
 
 # crates/bones-kernel/bones-module-devtools/README.md
@@ -1026,7 +1027,7 @@ Request and result for registering one application with the desktop (ADR-036). W
 
 ## `os/*`
 
-Request and result for the desktop capabilities a sandboxed extension cannot reach itself: the clipboard, the browser, native file dialogs, revealing a folder, and a small HTTPS fetch. The `os` module answers off the frame thread, so replies arrive in the order the work finishes, and `request_id` pairs each result with its request. A host that does not offer an action answers with `error` rather than staying silent.
+Desktop OS capabilities. Every completion is broadcast on os/reply with host-stamped requester and caller-chosen request_id; match both. The same completion is also sent on legacy os/result, whose IDs need application-wide coordination. Replies may arrive out of order. At most 16 requests run at once, with no queue; excess requests receive an actionable busy error. Shutdown suppresses late replies without waiting for native operations.
 
 ### `os/request`
 
@@ -1040,6 +1041,16 @@ Request and result for the desktop capabilities a sandboxed extension cannot rea
 
 | Field | Type | Meaning |
 | --- | --- | --- |
+| `request_id` | `u32` | the request this answers |
+| `accepted` | `bool` | whether the action produced an answer; a cancelled dialog is `false` with an empty `error` |
+| `value` | `str` | the answer: clipboard text, a chosen path, or for a fetch `{content-type};base64,{data}` |
+| `error` | `str` | why the action failed; empty unless it did |
+
+### `os/reply`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `requester` | `str` | host-stamped sender of the request; match this and request_id |
 | `request_id` | `u32` | the request this answers |
 | `accepted` | `bool` | whether the action produced an answer; a cancelled dialog is `false` with an empty `error` |
 | `value` | `str` | the answer: clipboard text, a chosen path, or for a fetch `{content-type};base64,{data}` |

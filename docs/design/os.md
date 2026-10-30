@@ -14,11 +14,19 @@ Four capabilities: clipboard access, opening a URL in the user's browser, native
 
 ## Request and answer
 
-One request topic, one result topic. A request carries a **caller-chosen id**, and the answer carries it back; that pairing is the whole correlation mechanism, and it exists because the alternative — matching answers to questions by order — would be wrong here.
+Requests use `os/request`. Each completion is published on `os/reply` with the **host-stamped requester** and **caller-chosen request id**. Callers subscribe to `os/reply`, filter by their extension name, and match their own outstanding id. IDs must be unique among that caller's outstanding requests; different callers may reuse an id. The reply remains a broadcast, not private delivery.
+
+For compatibility the same completion is also published on `os/result` with its original payload. That legacy topic has no requester field and requires application-wide ID coordination. New callers use `os/reply` and ignore `os/result`; the request payload is unchanged. See [ADR-045](../adr/ADR-045-os-replies-identify-the-caller-and-outstanding-work-is-bounded.md).
 
 **Answers arrive out of order, by design.** A file dialog blocks until the user chooses; a fetch blocks until the remote answers. Neither may stall the frame, so each request runs off the frame thread and its answer is published when the work finishes. A caller that issues three requests may see the third answered first. A caller that assumes ordering will break, and nothing in the protocol hides that from it.
 
 This is the same reasoning behind the bus's per-sender ordering guarantee ([ADR-009](../adr/ADR-009-delivery-semantics.md)) stopping where it does: ordering is promised where it is cheap and honest, not where it would be a fiction.
+
+## Outstanding work and shutdown
+
+The module admits at most 16 active requests across all callers, with no waiting queue. A request above the limit receives an immediate error naming the requester, the limit, and the remedy: wait for an outstanding request to complete before retrying. Worker creation failures and backend panics also produce errors and release capacity. These outcomes use both reply topics.
+
+Shutdown closes admission and suppresses replies from work that finishes afterwards. It does not wait for or cancel an already-running backend operation: a native dialog may remain blocked on the user, and a fetch retains its normal timeout. Dropping the module also closes admission. There is no completion guarantee after shutdown begins.
 
 ## The backend seam
 

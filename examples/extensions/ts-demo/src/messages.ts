@@ -351,6 +351,15 @@ export interface OsResult {
   error: string;
 }
 
+/** `os/reply` */
+export interface OsReply {
+  requester: string;
+  request_id: number;
+  accepted: boolean;
+  value: string;
+  error: string;
+}
+
 /** `upgrader/request` */
 export interface UpgraderRequest {
   request_id: number;
@@ -412,6 +421,7 @@ export interface Messages {
   "desktop/request": DesktopRequest;
   "os/request": OsRequest;
   "os/result": OsResult;
+  "os/reply": OsReply;
   "upgrader/request": UpgraderRequest;
   "persistence/save": PersistenceSave;
 }
@@ -466,6 +476,7 @@ export const FIELDS: { [T in keyof Messages]: ReadonlyArray<readonly [string, Fi
   "desktop/request": [["request_id", "u32"], ["action", "u8"]],
   "os/request": [["request_id", "u32"], ["action", "u8"], ["value", "str"]],
   "os/result": [["request_id", "u32"], ["accepted", "bool"], ["value", "str"], ["error", "str"]],
+  "os/reply": [["requester", "str"], ["request_id", "u32"], ["accepted", "bool"], ["value", "str"], ["error", "str"]],
   "upgrader/request": [["request_id", "u32"], ["action", "u8"]],
   "persistence/save": [["bytes", "rest"]],
 };

@@ -43,3 +43,19 @@ fn a_direct_send_has_an_empty_topic_and_is_other() {
 fn a_malformed_core_payload_is_an_error_not_other() {
     assert!(Inbound::decode(Tick::TOPIC, b"\x01").is_err());
 }
+
+#[test]
+fn os_reply_preserves_the_caller_identity() {
+    let reply = OsReply {
+        requester: "editor",
+        request_id: 7,
+        accepted: true,
+        value: "text",
+        error: "",
+    };
+    let bytes = reply.encode();
+    assert_eq!(
+        Inbound::decode(OsReply::TOPIC, &bytes),
+        Ok(Inbound::OsReply(reply))
+    );
+}

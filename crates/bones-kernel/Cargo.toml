@@ -52,6 +52,7 @@ bones-kernel-launch = { path = "./bones-kernel-launch", optional = true }
 bones-kernel-watch = { path = "./bones-kernel-watch", optional = true }
 
 [dev-dependencies]
+tempfile = "3.20"
 # test-mode: cargo test runs tests on worker threads, not the process's
 # main thread; SDL refuses to init anywhere else unless this is set. Reaches
 # bones-kernel-infra's platform module through this crate's own default features.

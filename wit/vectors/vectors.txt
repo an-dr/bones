@@ -1,5 +1,5 @@
 # bones core message wire format -- conformance vectors
-# ABI line 1.3.0, the version of bones-messages that generated this file
+# ABI line 1.4.0, the version of bones-messages that generated this file
 #
 # Generated from bones-messages. Do not edit by hand: crates/bones-messages/
 # tests/conformance.rs fails when this file and the encoder disagree.
@@ -153,6 +153,10 @@ os/request 0400000002130068747470733a2f2f6578616d706c652e636f6d request_id=4;act
 os/request 05000000000000 request_id=5;action=0;value=
 
 os/result 05000000010600636f706965640000 request_id=5;accepted=1;value=copied;error=
+
+os/reply 0600656469746f7205000000010600636f706965640000 requester=editor;request_id=5;accepted=1;value=copied;error=
+
+os/reply 060076696577657205000000000000040062757379 requester=viewer;request_id=5;accepted=0;value=;error=busy
 
 upgrader/request 0100000000 request_id=1;action=0
 

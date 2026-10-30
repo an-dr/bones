@@ -92,7 +92,8 @@ The extension host reports the mistakes an extension can make without faulting, 
 
 ## Hot reload
 
-Reload = call `shutdown`, drop the old instance, instantiate the new binary, run `init`, and re-register subscriptions. Two consequences extension authors must know:
+File changes and runtime reload commands use the same replacement sequence: instantiate and initialise the replacement, attach its subscriptions, call the old running instance's `shutdown` once, then release the old instance. If replacement loading fails, the old instance stays running and its shutdown hook is not called. Three consequences extension authors must know:
 
-- **In-memory state does not survive reload.** Persistence is the extension's own concern (e.g. writing state out on `shutdown` or on demand). A state hand-off mechanism, if ever needed, is a future ADR.
-- Messages published toward the extension during the gap are dropped (at-most-once, ADR-009); senders relying on a reply get an error reply.
+- **In-memory state does not survive reload.** Persist state during normal operation if replacement `init` must read it. The old instance's shutdown runs after replacement init, so shutdown-only persistence is available to a later load, not that replacement's init.
+- **Shutdown is cleanup, not a state hand-off.** Its published messages remain queued for dispatch after replacement. A dedicated state hand-off mechanism, if needed, requires a separate contract.
+- The old instance remains attached while the replacement initialises. Queued deliveries addressed to the old endpoint can be dropped when it is released (at-most-once, ADR-009); no replay into the replacement is promised.

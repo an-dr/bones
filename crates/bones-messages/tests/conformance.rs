@@ -40,7 +40,9 @@ use bones_messages::input::{
 };
 use bones_messages::instance::Launched;
 use bones_messages::lifecycle::{Event, LifecycleEvent};
-use bones_messages::os::{Action as OsAction, Request as OsRequest, Result as OsResult};
+use bones_messages::os::{
+    Action as OsAction, Reply as OsReply, Request as OsRequest, Result as OsResult,
+};
 use bones_messages::persistence::Save;
 use bones_messages::renderer::{Capture, Captured, DisplayChanged, LogicalCanvas, Scope};
 use bones_messages::tick::Tick;
@@ -603,6 +605,14 @@ fn vectors() -> Vec<Vector> {
                 error: "",
             },
             "request_id=5;accepted=1;value=copied;error=",
+        ),
+        vector(
+            &OsReply { requester: "editor", request_id: 5, accepted: true, value: "copied", error: "" },
+            "requester=editor;request_id=5;accepted=1;value=copied;error=",
+        ),
+        vector(
+            &OsReply { requester: "viewer", request_id: 5, accepted: false, value: "", error: "busy" },
+            "requester=viewer;request_id=5;accepted=0;value=;error=busy",
         ),
         // -- upgrader -----------------------------------------------------
         vector(

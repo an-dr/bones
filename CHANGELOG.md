@@ -7,7 +7,18 @@ Two independent version lines (ADR-029), so each entry says which one it belongs
 
 An ABI entry concerns every extension in existence, in any language. An engine entry concerns only projects that link the library.
 
+## Unreleased (ABI 1.4.0)
+
+### Added
+
+- Caller-aware OS completions on `os/reply` carry the host-stamped requester and request ID. Existing `os/request` and `os/result` bytes and the WIT interface version are unchanged.
+
 ## Unreleased (engine)
+
+### Fixed
+
+- File-triggered reload calls the old extension's shutdown hook exactly once, through the same replacement path as commanded reload. Replacement init precedes old shutdown; state needed during init must be persisted during normal operation.
+- OS work is bounded to 16 active requests without a waiting queue. Busy, worker-creation and backend-panic errors name the caller and remedy. Shutdown suppresses late replies without waiting for blocked native operations.
 
 ### Added
 

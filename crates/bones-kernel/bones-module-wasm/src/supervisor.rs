@@ -33,8 +33,8 @@ pub use tracked_extension::TrackedExtension;
 const MTIME_SWEEP_INTERVAL: Duration = Duration::from_millis(250);
 
 /// Quarantines a newly-faulted extension (drops its bus registration,
-/// publishes `Faulted`) or hot-swaps one whose file changed (drop old,
-/// load new, publish `Reloading`/`Reloaded`). The engine, and every other
+/// publishes `Faulted`) or hot-swaps one whose file changed (attach new,
+/// shut down old, publish `Reloading`/`Reloaded`). The engine, and every other
 /// extension, keeps running regardless.
 pub struct Supervisor {
     wasm_engine: wasmtime::Engine,
@@ -143,51 +143,14 @@ impl Supervisor {
         }
         self.last_mtime_sweep = Some(Instant::now());
 
-        for extension in self.tracked.iter_mut() {
-            let mtime = read_file_mtime(&extension.path);
-            if mtime <= extension.mtime {
-                continue;
-            }
-
-            lifecycle::publish(&self.bus, ENGINE_SENDER, &extension.name, Event::Reloading);
-            match attach_extension(
-                &self.wasm_engine,
-                &self.bus,
-                &self.registry,
-                &self.logger,
-                &extension.path,
-                &extension.name,
-                &self.exit_requested,
-                &self.display_info,
-                self.budget_limits,
-                self.timeouts,
-                &permissions_of(&self.permissions, &extension.name),
-            ) {
-                Ok((ep, shared, budget, topics)) => {
-                    if !extension.quarantined {
-                        self.bus.unregister(&extension.endpoint);
-                    }
-                    extension.endpoint = ep;
-                    extension.shared = shared;
-                    extension.budget = budget;
-                    extension.mtime = mtime;
-                    extension.quarantined = false;
-                    self.logger.info(
-                        "engine",
-                        &format!("reloaded '{}' (subscribed: {topics:?})", extension.name),
-                    );
-                    lifecycle::publish(&self.bus, ENGINE_SENDER, &extension.name, Event::Reloaded);
-                }
-                Err(err) => {
-                    self.logger.error(
-                        "engine",
-                        &format!(
-                            "reload of '{}' failed, keeping the running instance: {err}",
-                            extension.name
-                        ),
-                    );
-                }
-            }
+        let changed: Vec<String> = self
+            .tracked
+            .iter()
+            .filter(|extension| read_file_mtime(&extension.path) > extension.mtime)
+            .map(|extension| extension.name.clone())
+            .collect();
+        for name in changed {
+            self.reload(&name);
         }
     }
 

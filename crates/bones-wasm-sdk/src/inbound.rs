@@ -6,7 +6,7 @@ use bones_messages::input::{
 };
 use bones_messages::instance::Launched;
 use bones_messages::lifecycle::LifecycleEvent;
-use bones_messages::os::Result as OsResult;
+use bones_messages::os::{Reply as OsReply, Result as OsResult};
 use bones_messages::renderer::{Captured, DisplayChanged, LogicalCanvas};
 use bones_messages::tick::Tick;
 use bones_messages::ui::{Changed, Clicked};
@@ -79,6 +79,8 @@ pub enum Inbound<'a> {
     DesktopResult(DesktopResult<'a>),
     /// `os/result`.
     OsResult(OsResult<'a>),
+    /// Caller-aware OS completion on os/reply.
+    OsReply(OsReply<'a>),
     /// `upgrader/result`.
     UpgraderResult(UpgraderResult<'a>),
     /// Any other topic, or a direct send (empty topic), as delivered.
@@ -129,6 +131,7 @@ impl<'a> Inbound<'a> {
             Launched::TOPIC => as_(payload, Self::Launched),
             DesktopResult::TOPIC => as_(payload, Self::DesktopResult),
             OsResult::TOPIC => as_(payload, Self::OsResult),
+            OsReply::TOPIC => as_(payload, Self::OsReply),
             UpgraderResult::TOPIC => as_(payload, Self::UpgraderResult),
             _ => Ok(Self::Other { topic, payload }),
         }

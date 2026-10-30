@@ -689,7 +689,7 @@
     },
     {
       "name": "os/*",
-      "description": "Request and result for the desktop capabilities a sandboxed extension cannot reach itself: the clipboard, the browser, native file dialogs, revealing a folder, and a small HTTPS fetch. The `os` module answers off the frame thread, so replies arrive in the order the work finishes, and `request_id` pairs each result with its request. A host that does not offer an action answers with `error` rather than staying silent.",
+      "description": "Desktop OS capabilities. Every completion is broadcast on os/reply with host-stamped requester and caller-chosen request_id; match both. The same completion is also sent on legacy os/result, whose IDs need application-wide coordination. Replies may arrive out of order. At most 16 requests run at once, with no queue; excess requests receive an actionable busy error. Shutdown suppresses late replies without waiting for native operations.",
       "entries": [
         {
           "topics": ["os/request"],
@@ -721,6 +721,40 @@
               { "name": "accepted", "type": "bool", "meaning": "whether the action produced an answer; a cancelled dialog is `false` with an empty `error`" },
               { "name": "value", "type": "str", "meaning": "the answer: clipboard text, a chosen path, or for a fetch `{content-type};base64,{data}`" },
               { "name": "error", "type": "str", "meaning": "why the action failed; empty unless it did" }
+            ]
+          }
+        },
+        {
+          "topics": [
+            "os/reply"
+          ],
+          "payload": {
+            "fields": [
+              {
+                "name": "requester",
+                "type": "str",
+                "meaning": "host-stamped sender of the request; match this and request_id"
+              },
+              {
+                "name": "request_id",
+                "type": "u32",
+                "meaning": "the request this answers"
+              },
+              {
+                "name": "accepted",
+                "type": "bool",
+                "meaning": "whether the action produced an answer; a cancelled dialog is `false` with an empty `error`"
+              },
+              {
+                "name": "value",
+                "type": "str",
+                "meaning": "the answer: clipboard text, a chosen path, or for a fetch `{content-type};base64,{data}`"
+              },
+              {
+                "name": "error",
+                "type": "str",
+                "meaning": "why the action failed; empty unless it did"
+              }
             ]
           }
         }
