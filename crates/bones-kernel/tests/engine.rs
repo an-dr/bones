@@ -1447,6 +1447,7 @@ fn a_changed_wasm_file_is_hot_reloaded_in_place() {
         sink_events.lock().unwrap().push(e.clone());
     });
     watcher.subscribe(LifecycleEvent::TOPIC);
+    watcher.subscribe("hello/cleanup");
     runner.step(1.0 / 60.0);
 
     // "Edit" the file: same bytes, but a deliberately later mtime so the
@@ -1475,6 +1476,14 @@ fn a_changed_wasm_file_is_hot_reloaded_in_place() {
         init_count, 2,
         "expected init to run again for the reloaded instance, got {records:?}"
     );
+    assert_eq!(
+        records
+            .iter()
+            .filter(|(_, category, msg)| category == "level" && msg.contains("shutdown"))
+            .count(),
+        1,
+        "file reload must shut down the old instance exactly once: {records:?}"
+    );
     assert!(
         records
             .iter()
@@ -1482,10 +1491,21 @@ fn a_changed_wasm_file_is_hot_reloaded_in_place() {
         "expected a reload confirmation, got {records:?}"
     );
 
+    assert_eq!(
+        bus_events
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|e| e.topic == "hello/cleanup" && e.payload == b"complete")
+            .count(),
+        1,
+        "file reload must preserve cleanup publications"
+    );
     let events: Vec<_> = bus_events
         .lock()
         .unwrap()
         .iter()
+        .filter(|e| e.topic == LifecycleEvent::TOPIC)
         .map(|e| {
             let message = LifecycleEvent::decode(&e.payload).unwrap();
             (message.event, message.extension.to_string())

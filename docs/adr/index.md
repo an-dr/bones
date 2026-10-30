@@ -52,6 +52,7 @@ Most readers want the [architecture chapter](../architecture/index.md) instead. 
 | [042](ADR-042-extension-permissions-are-deny-lists-the-composition-root-declares.md) | Extension permissions are deny-lists the composition root declares | active |
 | [043](ADR-043-developer-tooling-is-a-separate-bones-cli-binary-shipped-beside-the-engine.md) | Developer tooling is a separate bones-cli binary shipped beside the engine | active |
 | [044](ADR-044-bones-is-built-for-ai-assisted-product-development.md) | bones is built for AI-assisted product development | active |
+| [045](ADR-045-os-replies-identify-the-caller-and-outstanding-work-is-bounded.md) | OS replies identify the caller and outstanding work is bounded | active |
 
 ## The two reversals
 

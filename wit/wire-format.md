@@ -538,7 +538,7 @@ Request and result for registering one application with the desktop (ADR-036). W
 
 ## `os/*`
 
-Request and result for the desktop capabilities a sandboxed extension cannot reach itself: the clipboard, the browser, native file dialogs, revealing a folder, and a small HTTPS fetch. The `os` module answers off the frame thread, so replies arrive in the order the work finishes, and `request_id` pairs each result with its request. A host that does not offer an action answers with `error` rather than staying silent.
+Desktop OS capabilities. Every completion is broadcast on os/reply with host-stamped requester and caller-chosen request_id; match both. The same completion is also sent on legacy os/result, whose IDs need application-wide coordination. Replies may arrive out of order. At most 16 requests run at once, with no queue; excess requests receive an actionable busy error. Shutdown suppresses late replies without waiting for native operations.
 
 ### `os/request`
 
@@ -552,6 +552,16 @@ Request and result for the desktop capabilities a sandboxed extension cannot rea
 
 | Field | Type | Meaning |
 | --- | --- | --- |
+| `request_id` | `u32` | the request this answers |
+| `accepted` | `bool` | whether the action produced an answer; a cancelled dialog is `false` with an empty `error` |
+| `value` | `str` | the answer: clipboard text, a chosen path, or for a fetch `{content-type};base64,{data}` |
+| `error` | `str` | why the action failed; empty unless it did |
+
+### `os/reply`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `requester` | `str` | host-stamped sender of the request; match this and request_id |
 | `request_id` | `u32` | the request this answers |
 | `accepted` | `bool` | whether the action produced an answer; a cancelled dialog is `false` with an empty `error` |
 | `value` | `str` | the answer: clipboard text, a chosen path, or for a fetch `{content-type};base64,{data}` |
