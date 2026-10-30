@@ -43,6 +43,7 @@ fn the_paddle_moves_up() {
 - `frame_text()` is the last frame as text: a `[sender]` line, then that sender's most recent `gfx/*` batch, one `Debug`-formatted command per line, such as `DrawRect(DrawRect { x: 20, … })`. That is what the renderer would composite. Compare it with a snapshot to catch any visual change.
 - `is_running()` is `false` once the extension was quarantined.
 - `logs()` returns every log line so far, the extension's own included, as `LEVEL category: message`.
+- `Stub::new(name).reply(bytes)` is a native module that answers every direct send to `name` with `bytes`, for an extension whose `init` sends a module the test does not compose, such as `web`. Register it with `Kernel::module` before `App::with_kernel`; a clone kept by the test reads `received()`, the `(sender, payload)` of every send.
 
 `published` collects every message since the last `clear()`, across all the frames in between. For one frame's output, `clear()`, `step(1)`, then read.
 

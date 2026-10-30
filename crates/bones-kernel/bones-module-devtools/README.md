@@ -54,6 +54,6 @@ The recording keeps the last 500 envelopes. The frame tick is kept once a second
 
 The window must be visible: an offscreen engine cannot have web panels at all. Where the window cannot be read, the canvas is returned instead, and the log says why. The `X-Bones-Capture-Scope` header says which one the image shows, `canvas` or `window`.
 
-Off by default. Enable the kernel's `devtools` feature, then `.devtools_from_env("MYAPP_DEVTOOLS_PORT")` on the builder, or `.module(Devtools::from_env(..).redacting(..))` for redaction.
+Off by default. Enable the kernel's `devtools` feature, then `.devtools_from_env("MYAPP_DEVTOOLS_PORT")` on the builder, adding `.devtools_redacting(predicate)` to keep secrets out of the recording. A composition that builds the module itself gets `Devtools` and `LogHistory` from `bones_kernel::devtools`.
 
 The shipped `bones` executable has the channel built in and reads `BONES_DEVTOOLS_PORT`. With it set, the engine also makes `devtools` its extension controller, so the `/extensions` routes can load, unload, and reload extensions.

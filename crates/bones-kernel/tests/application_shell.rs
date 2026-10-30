@@ -79,6 +79,53 @@ fn the_devtools_channel_exists_only_when_its_variable_names_a_port() {
     set.shutdown();
 }
 
+#[cfg(feature = "devtools")]
+#[test]
+fn devtools_redacting_keeps_a_matching_payload_out_of_the_env_built_channel() {
+    use bones_kernel::bus::Envelope;
+    use bones_kernel::Kernel;
+    use std::io::{Read, Write};
+
+    let port = std::net::TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
+    std::env::set_var("BONES_ENGINE_TEST_DEVTOOLS_REDACT_PORT", port.to_string());
+    let mut engine = Kernel::new()
+        .devtools_from_env("BONES_ENGINE_TEST_DEVTOOLS_REDACT_PORT")
+        .devtools_redacting(|envelope| envelope.topic == "test/secret")
+        .build()
+        .unwrap();
+    engine.runner.bus().publish(Envelope {
+        topic: "test/secret".into(),
+        sender: "test".into(),
+        correlation: None,
+        payload: b"hunter2".to_vec(),
+    });
+    engine.step(0.016);
+
+    // Answered while the engine keeps stepping, whichever thread serves it.
+    let reader = std::thread::spawn(move || {
+        let mut stream = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+        stream
+            .write_all(b"GET /messages?topic=test/ HTTP/1.1\r\n\r\n")
+            .unwrap();
+        let mut response = String::new();
+        stream.read_to_string(&mut response).unwrap();
+        response
+    });
+    while !reader.is_finished() {
+        engine.step(0.016);
+    }
+    let response = reader.join().unwrap();
+    engine.shutdown();
+
+    assert!(response.contains("test/secret"), "{response}");
+    assert!(response.contains("redacted"), "{response}");
+    assert!(!response.contains("hunter2"), "{response}");
+}
+
 #[cfg(feature = "desktop")]
 #[test]
 fn desktop_registers_its_endpoint() {

@@ -286,11 +286,12 @@ pub mod watch {
     pub use bones_kernel_watch::{Change, ChangeKind, WatchId, Watcher, DEFAULT_QUIET};
 }
 
-/// The loopback devtools channel, for a composition that redacts secrets
-/// from its recording; [`Kernel::devtools_from_env`] covers the rest.
+/// The loopback devtools channel and its log history, for a composition
+/// that builds the module itself; [`Kernel::devtools_from_env`] with
+/// [`Kernel::devtools_redacting`] covers the rest.
 #[cfg(feature = "devtools")]
 pub mod devtools {
-    pub use bones_module_devtools::Devtools;
+    pub use bones_module_devtools::{Devtools, LogHistory};
 }
 
 /// The `draw-target` service (ADR-031): what a module owning a drawing

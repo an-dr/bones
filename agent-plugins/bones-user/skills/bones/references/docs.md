@@ -123,6 +123,7 @@ fn the_paddle_moves_up() {
 - `frame_text()` is the last frame as text: a `[sender]` line, then that sender's most recent `gfx/*` batch, one `Debug`-formatted command per line, such as `DrawRect(DrawRect { x: 20, … })`. That is what the renderer would composite. Compare it with a snapshot to catch any visual change.
 - `is_running()` is `false` once the extension was quarantined.
 - `logs()` returns every log line so far, the extension's own included, as `LEVEL category: message`.
+- `Stub::new(name).reply(bytes)` is a native module that answers every direct send to `name` with `bytes`, for an extension whose `init` sends a module the test does not compose, such as `web`. Register it with `Kernel::module` before `App::with_kernel`; a clone kept by the test reads `received()`, the `(sender, payload)` of every send.
 
 `published` collects every message since the last `clear()`, across all the frames in between. For one frame's output, `clear()`, `step(1)`, then read.
 
@@ -298,7 +299,7 @@ Every transition is published on `core/lifecycle`, so tooling and other extensio
 
 ## Runtime activation
 
-`extensions_dir` is scanned recursively into a catalog. Directory names organize distributions but extension identity remains the globally unique file stem. An embedder with an already validated, multi-root catalog may add explicit `(name, path)` entries instead of copying components beneath one directory. Embedders either retain load-all startup behavior or provide a startup allow-list; other catalog entries remain uninstantiated.
+`extensions_dir` is scanned recursively into a catalog. Directory names organize distributions but extension identity remains the globally unique file stem. An embedder with an already validated, multi-root catalog may add explicit `(name, path)` entries instead of copying components beneath one directory. Embedders either retain load-all startup behavior or provide a startup allow-list; other catalog entries remain uninstantiated. A startup extension that is missing or fails to load is logged and skipped, and the engine runs on; one named with `required_extension` is loaded at startup too, and its absence or failure fails `build` instead, for an application that is nothing without it.
 
 The embedder may authorize one host-stamped extension sender as the runtime controller. Its typed `core/extensions/load`, `unload`, or `reload` commands are applied after bus dispatch; commands from every other sender are rejected and logged. State changes appear on `core/lifecycle`. A reload attaches its replacement before shutting down the current instance; a failed replacement is logged and leaves the current instance running. Unload calls `shutdown`, preserves messages the hook published for later dispatch, then releases the bus endpoint, direct-send registration, and component instance.
 
@@ -393,7 +394,7 @@ The recording keeps the last 500 envelopes. The frame tick is kept once a second
 
 The window must be visible: an offscreen engine cannot have web panels at all. Where the window cannot be read, the canvas is returned instead, and the log says why. The `X-Bones-Capture-Scope` header says which one the image shows, `canvas` or `window`.
 
-Off by default. Enable the kernel's `devtools` feature, then `.devtools_from_env("MYAPP_DEVTOOLS_PORT")` on the builder, or `.module(Devtools::from_env(..).redacting(..))` for redaction.
+Off by default. Enable the kernel's `devtools` feature, then `.devtools_from_env("MYAPP_DEVTOOLS_PORT")` on the builder, adding `.devtools_redacting(predicate)` to keep secrets out of the recording. A composition that builds the module itself gets `Devtools` and `LogHistory` from `bones_kernel::devtools`.
 
 The shipped `bones` executable has the channel built in and reads `BONES_DEVTOOLS_PORT`. With it set, the engine also makes `devtools` its extension controller, so the `/extensions` routes can load, unload, and reload extensions.
 

@@ -34,6 +34,7 @@ pub struct Wasm {
     extensions_dir: Option<PathBuf>,
     catalog_entries: Vec<(String, PathBuf)>,
     startup: Vec<String>,
+    required: Vec<String>,
     controller: Option<String>,
     budget: BudgetLimits,
     timeouts: ExtensionTimeouts,
@@ -50,6 +51,7 @@ impl Wasm {
             extensions_dir: None,
             catalog_entries: Vec::new(),
             startup: Vec::new(),
+            required: Vec::new(),
             controller: None,
             budget: BudgetLimits::default(),
             timeouts: ExtensionTimeouts::default(),
@@ -76,6 +78,16 @@ impl Wasm {
     /// to `core/extensions/load`. Empty, the default, loads everything.
     pub fn startup_extensions(mut self, names: impl IntoIterator<Item = String>) -> Self {
         self.startup = names.into_iter().collect();
+        self
+    }
+
+    /// Loads these at startup like [`startup_extensions`](Self::startup_extensions),
+    /// and fails `init` -- so the kernel's `build` -- when any of them is not
+    /// in the catalog or does not load. Without it a failed startup load is
+    /// only logged, and an app whose window that extension drives shows
+    /// nothing at all.
+    pub fn required_extensions(mut self, names: impl IntoIterator<Item = String>) -> Self {
+        self.required = names.into_iter().collect();
         self
     }
 
@@ -180,8 +192,14 @@ impl Module for Wasm {
         }
         entries.append(&mut self.catalog_entries);
 
+        for name in &self.required {
+            if !self.startup.is_empty() && !self.startup.contains(name) {
+                self.startup.push(name.clone());
+            }
+        }
         let mut catalog = HashMap::new();
         let mut tracked = Vec::new();
+        let mut failed = Vec::new();
         for (name, path) in entries {
             if catalog.contains_key(&name) {
                 self.logger.error(
@@ -235,6 +253,9 @@ impl Module for Wasm {
                         &format!("failed to load {}: {err}", path.display()),
                     );
                     lifecycle::publish(&bus, ENGINE_SENDER, &name, Event::Faulted);
+                    if self.required.contains(&name) {
+                        failed.push(format!("required extension '{name}' failed to load: {err}"));
+                    }
                 }
             }
         }
@@ -244,6 +265,11 @@ impl Module for Wasm {
                     "engine",
                     &format!("startup extension '{name}' is not in the catalog"),
                 );
+            }
+        }
+        for name in &self.required {
+            if !catalog.contains_key(name) {
+                failed.push(format!("required extension '{name}' is not in the catalog"));
             }
         }
 
@@ -262,6 +288,13 @@ impl Module for Wasm {
             self.timeouts,
             self.permissions.clone(),
         ));
+        if !failed.is_empty() {
+            // Stops what did load, since the engine will not run to stop it.
+            if let Some(supervisor) = &mut self.supervisor {
+                supervisor.shutdown_all();
+            }
+            return Err(failed.join("; "));
+        }
         Ok(())
     }
 
