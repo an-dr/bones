@@ -7,6 +7,14 @@ Two independent version lines (ADR-029), so each entry says which one it belongs
 
 An ABI entry concerns every extension in existence, in any language. An engine entry concerns only projects that link the library.
 
+## Unreleased (engine)
+
+### Added
+
+- **`Kernel::devtools_redacting(predicate)`** keeps matching envelopes' payloads out of the channel `devtools_from_env` opens, and **`bones_kernel::devtools::LogHistory`** is re-exported, so an application that redacts secrets no longer builds the channel by hand or depends on `bones-module-devtools` directly.
+- **`bones_test::Stub`** answers the direct sends an extension makes in `init` with a fixed reply and records them, so a test no longer writes a native module for each endpoint it does not compose.
+- **`Kernel::required_extension(name)`** loads that extension at startup and fails `build` when it is not in the catalog or does not load, so an app whose window the extension drives reports the error instead of opening blank.
+
 ## engine 3.1.0 / ABI 1.3.0
 
 bones becomes an engine an AI agent can build a product on by itself (ADR-044). Everything is additive: `bones:extension` stays at 1.0.0, no existing message changes its bytes, and every existing extension and embedder builds and loads unmodified.

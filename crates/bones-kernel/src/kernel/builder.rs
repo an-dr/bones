@@ -12,6 +12,10 @@ use std::path::{Path, PathBuf};
 
 use std::time::Duration;
 
+/// The predicate `devtools_redacting` stores until `build` hands it on.
+#[cfg(feature = "devtools")]
+type DevtoolsRedact = Box<dyn Fn(&bones_kernel_infra::bus::Envelope) -> bool + Send + Sync>;
+
 #[cfg(feature = "wasm")]
 use bones_kernel_infra::bus::BudgetLimits;
 use bones_kernel_infra::bus::{Module, Registry, ServiceRegistry};
@@ -96,6 +100,8 @@ pub struct Kernel {
     #[cfg(feature = "wasm")]
     startup_extensions: Vec<String>,
     #[cfg(feature = "wasm")]
+    required_extensions: Vec<String>,
+    #[cfg(feature = "wasm")]
     extension_controller: Option<String>,
     logger: Logger,
     tick_hz: f64,
@@ -117,6 +123,8 @@ pub struct Kernel {
     instance: Option<bones_module_single_instance::Primary>,
     #[cfg(feature = "devtools")]
     devtools_variable: Option<String>,
+    #[cfg(feature = "devtools")]
+    devtools_redact: Option<DevtoolsRedact>,
     modules: Vec<Box<dyn Module>>,
     saves_dir: PathBuf,
     persistence_read_only: bool,
@@ -145,6 +153,8 @@ impl Kernel {
             #[cfg(feature = "wasm")]
             startup_extensions: Vec::new(),
             #[cfg(feature = "wasm")]
+            required_extensions: Vec::new(),
+            #[cfg(feature = "wasm")]
             extension_controller: None,
             logger: Logger::default(),
             tick_hz: DEFAULT_TICK_HZ,
@@ -166,6 +176,8 @@ impl Kernel {
             instance: None,
             #[cfg(feature = "devtools")]
             devtools_variable: None,
+            #[cfg(feature = "devtools")]
+            devtools_redact: None,
             modules: Vec::new(),
             saves_dir: PathBuf::from("states"),
             persistence_read_only: false,
@@ -206,6 +218,17 @@ impl Kernel {
     /// With no names configured, every discovered extension loads as before.
     pub fn startup_extension(mut self, name: impl Into<String>) -> Self {
         self.startup_extensions.push(name.into());
+        self
+    }
+
+    #[cfg(feature = "wasm")]
+    /// Loads the named catalog entry at startup, as [`startup_extension`](Self::startup_extension)
+    /// does, and makes `build` fail when it is not in the catalog or does
+    /// not load. Otherwise such a failure is only logged and the engine runs
+    /// on without it -- for an app whose window that extension drives, a
+    /// blank window with no error.
+    pub fn required_extension(mut self, name: impl Into<String>) -> Self {
+        self.required_extensions.push(name.into());
         self
     }
 
@@ -362,6 +385,19 @@ impl Kernel {
     #[cfg(feature = "devtools")]
     pub fn devtools_from_env(mut self, variable: &str) -> Self {
         self.devtools_variable = Some(variable.to_string());
+        self
+    }
+
+    /// Records only the topic, sender, and length of every envelope
+    /// `redact` matches on the channel `devtools_from_env` opens -- for
+    /// payloads that can carry credentials. Without `devtools_from_env`, or
+    /// with its variable unset, it does nothing.
+    #[cfg(feature = "devtools")]
+    pub fn devtools_redacting(
+        mut self,
+        redact: impl Fn(&bones_kernel_infra::bus::Envelope) -> bool + Send + Sync + 'static,
+    ) -> Self {
+        self.devtools_redact = Some(Box::new(redact));
         self
     }
 
@@ -699,6 +735,9 @@ impl Kernel {
                 if let Some(history) = devtools_logs {
                     devtools = devtools.log_history(history);
                 }
+                if let Some(redact) = self.devtools_redact.take() {
+                    devtools = devtools.redacting(redact);
+                }
                 register_module(
                     &bus,
                     &registry,
@@ -752,10 +791,12 @@ impl Kernel {
         if self.extensions_dir.is_some()
             || !self.catalog_extensions.is_empty()
             || !self.startup_extensions.is_empty()
+            || !self.required_extensions.is_empty()
             || self.extension_controller.is_some()
         {
             let mut wasm = bones_module_wasm::Wasm::new(self.logger.clone())
                 .startup_extensions(self.startup_extensions.drain(..))
+                .required_extensions(self.required_extensions.drain(..))
                 .budget(self.extension_budget)
                 .timeouts(self.extension_timeouts);
             for (name, permissions) in self.extension_permissions.drain(..) {

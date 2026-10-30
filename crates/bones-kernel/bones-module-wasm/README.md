@@ -21,4 +21,4 @@ The module's own endpoint is `extension-manager`, where runtime commands arrive 
 
 ## Composing it
 
-`Kernel`'s extension methods — `extensions_dir`, `catalog_extension`, `startup_extension`, `extension_controller`, and the budgets — build and register it, after every other module so an extension's own `init` can call any of them. Register it by hand with `.module(Wasm::new(logger)...)` only when composing without those methods, and then register it last for the same reason.
+`Kernel`'s extension methods — `extensions_dir`, `catalog_extension`, `startup_extension`, `required_extension`, `extension_controller`, and the budgets — build and register it, after every other module so an extension's own `init` can call any of them. Register it by hand with `.module(Wasm::new(logger)...)` only when composing without those methods, and then register it last for the same reason.

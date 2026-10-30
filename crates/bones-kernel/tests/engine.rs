@@ -436,6 +436,68 @@ fn build_skips_a_component_that_fails_to_load_without_failing_the_engine() {
     );
 }
 
+#[test]
+fn a_required_extension_that_fails_to_load_fails_build() {
+    let dir = std::env::temp_dir().join("bones-kernel-test-required-bad");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("bad.wasm"), b"not a real component").unwrap();
+
+    let result = Kernel::new()
+        .extensions_dir(&dir)
+        .required_extension("bad")
+        .build();
+
+    std::fs::remove_dir_all(&dir).ok();
+    let err = result
+        .err()
+        .expect("a required load failure must fail build");
+    assert!(
+        err.to_string()
+            .contains("required extension 'bad' failed to load"),
+        "{err}"
+    );
+}
+
+#[test]
+fn a_required_extension_missing_from_the_catalog_fails_build() {
+    let result = Kernel::new()
+        .extensions_dir(HELLO_DIR)
+        .required_extension("typo")
+        .build();
+
+    let err = result
+        .err()
+        .expect("a missing required extension must fail build");
+    assert!(
+        err.to_string()
+            .contains("required extension 'typo' is not in the catalog"),
+        "{err}"
+    );
+}
+
+#[test]
+fn a_required_extension_loads_alongside_the_startup_allow_list() {
+    let dir = std::env::temp_dir().join("bones-kernel-test-required-loads");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::copy(format!("{HELLO_DIR}/hello_demo.wasm"), dir.join("app.wasm")).unwrap();
+    std::fs::copy(
+        format!("{HELLO_DIR}/hello_demo.wasm"),
+        dir.join("menu.wasm"),
+    )
+    .unwrap();
+
+    let BuiltKernel { registry, .. } = Kernel::new()
+        .extensions_dir(&dir)
+        .startup_extension("menu")
+        .required_extension("app")
+        .build()
+        .unwrap();
+
+    assert!(registry.call("test", "menu", &[]).is_ok());
+    assert!(registry.call("test", "app", &[]).is_ok());
+    std::fs::remove_dir_all(&dir).ok();
+}
+
 sdl_test! { fn a_key_down_envelope_reaches_an_extension_through_a_real_window() {
     // Real SDL event *pumping* (Platform::poll_events) asserts on the
     // OS-level main thread inside SDL's own C code — a check test-mode
