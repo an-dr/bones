@@ -16,7 +16,9 @@ Almost every other term is positioned by this one distinction.
 
 **Extension** — a WASM guest that adds product behaviour, hosted by the opt-in `wasm` module (ADR-040). It is a build artifact, not a place in this repository: build it anywhere and drop the `.wasm` beside the engine binary. [`examples/extensions/hello-demo`](../examples/extensions/hello-demo/README.md) is the place to start; a distribution ships none.
 
-**Embedder** — someone writing their *own* host: they depend on `bones-kernel`, compose the modules they want, and produce their own binary. The three known embedders are listed in the root [README](../README.md). Note that embedder and extension author are roles one project plays at once, not two populations — all three write extensions too.
+**Stock engine** — the `bones` executable as built from a release tag, unmodified: its native modules chosen at build time and its product behaviour supplied entirely by the extensions it loads. `bones-develop` builds and runs it for a project. An embedder's program is the alternative.
+
+**Embedder** — someone writing their *own* host: they depend on `bones-kernel`, compose the modules they want, and produce their own binary. The three known embedders are listed in the root [README](../README.md). The use cases call this role the *application developer*. Note that embedder and extension author are roles one project plays at once, not two populations — all three write extensions too.
 
 **Native module** — host-side, optional, and consumer-composed (ADR-011, ADR-017). It owns a native resource — a GPU surface, an egui context, a webview — or a simulation the engine runs, and it joins the frame loop by implementing the `Module` trait and being injected with `.module(...)`. `renderer`, `ui`, `audio`, `game-core`, `web`, and `os` are the shipped ones.
 

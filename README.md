@@ -16,7 +16,7 @@ The core owns windows, the tray icon, input (SDL), logging, and a message bus. E
 
 Every part talks to every other over that one bus, and none can tell whether the other is native or WASM. Extensions are optional. When used, they never touch the OS and never render directly: they publish draw commands, widget specs, or web-panel JSON, and the engine presents. That boundary is what makes an extension **hot-reloadable**, **sandboxed**, and **language-agnostic**.
 
-The same boundary makes bones **AI-friendly** by design. Every effect is a message an agent can look up, send, record, and replay; an extension's picture is draw commands it can read as text; and every mistake an extension makes is reported with its fix. An agent builds, runs, observes, and tests a product through `bones-cli` and its MCP server, with no window and no engine source. [Building with an AI agent](#building-with-an-ai-agent) says how.
+The same boundary makes bones **AI-friendly** by design. Every effect is a message an agent can look up, send, record, and replay; an extension's picture is draw commands it can read as text; and every mistake an extension makes is reported with its fix. An agent builds, runs, observes, and tests a product through `bones-develop` and its MCP server, with no window and no engine source. [Building with an AI agent](#building-with-an-ai-agent) says how.
 
 ```mermaid
 flowchart LR
@@ -45,7 +45,7 @@ bones is designed for AI-assisted product development, as an architectural prope
 
 - **Context, as plugins.** [agent-plugins/](agent-plugins/README.md) holds everything bones offers an agent as [Agent Plugins](https://agent-plugins.org/): `bones-user` for building a product, with the rules an agent cannot guess, a skill, the documentation, and the MCP server, and `bones-dev` for working on the engine. Every archive carries `bones-user`, and every new project gets an `AGENTS.md` and `.mcp.json` generated from it.
 - **A contract to look up.** [wit/wire-format.json](wit/README.md) specifies every core topic and its payload as data, tagged unions and lists included, and is checked against the codec.
-- **Eyes on the running engine.** `bones-cli mcp` gives an agent tools to launch the engine, send input, pause and step frames, and read the bus, the log, the frame as text, and a screenshot ([bones-cli](crates/bones-cli/README.md)).
+- **Eyes on the running engine.** `bones-develop mcp` gives an agent tools to launch the engine, send input, pause and step frames, and read the bus, the log, the frame as text, and a screenshot ([bones-develop](docs/manual/bones-develop.md)).
 - **Proof without a window.** [bones-test](crates/bones-test/README.md) runs a built extension headless and records what it drew as text, so a check can show that a change works.
 - **Errors that name the fix.** The engine reports misspelt topics, malformed payloads, refused permissions, and the cause of every quarantine, once each, under the extension's name.
 - **Guardrails.** A `[deny]` table keeps an extension nobody has reviewed away from topics such as `os/*` ([ADR-042](docs/adr/ADR-042-extension-permissions-are-deny-lists-the-composition-root-declares.md)).
@@ -54,13 +54,13 @@ bones is designed for AI-assisted product development, as an architectural prope
 
 Three ways in, from least to most code of your own. The first needs no Rust at all; the other two are for applications that own their binary, with or without extensions.
 
-### 1. Write extensions for the released engine
+### 1. Write extensions for the stock engine
 
-You ship the engine binary unchanged and write your product — a game, a tool, a GUI — as one or more WASM extensions.
+You ship the [stock engine](docs/glossary.md) — the `bones` executable as built from a release, unmodified — and write your product — a game, a tool, a GUI — as one or more WASM extensions.
 
-1. **Build the engine** at the [latest release](https://github.com/an-dr/bones/releases/latest) tag; [Building the engine](#building-the-engine) says how.
-2. **Create a project** with the built `bones-cli new my-game --kind game` (or `egui`, `web`, `embed`). It builds and passes its own headless checks from the first command. In a language other than Rust, generate bindings from the [ABI](wit/README.md) in `dist/wit/` instead.
-3. **Run `bones-cli dev`** in the project. It builds the extension for `wasm32-wasip2`, starts the engine, and hot-reloads on every save. `cargo test` runs the checks.
+1. **Install the tools** once: `cargo install --git https://github.com/an-dr/bones bones-develop`. The [bones-develop manual](docs/manual/bones-develop.md) lists what the machine needs and covers every command.
+2. **Create a project** with `bones-develop new my-game --kind game` (or `egui`, `web`, `embed`). It pins the newest release tag and builds and passes its own headless checks from the first command; add `--submodule` to vendor bones in the project instead of the shared cache in `~/.bones`. In a language other than Rust, generate bindings from the [ABI](wit/README.md) in the engine's `wit/` instead.
+3. **Run `bones-develop dev`** in the project. It builds the engine for the pinned tag on first use, builds the extension for `wasm32-wasip2`, starts the engine, and hot-reloads on every save. `cargo test` runs the checks.
 
 [examples/README.md](examples/README.md#your-own-extension-project) walks through the project setup and picks the example closest to what you are building: a game, an egui tool, a web-panel app, persistent state. Start with the [hello-demo tutorial](examples/extensions/hello-demo/README.md).
 
@@ -71,10 +71,10 @@ Your application owns `main` and builds the engine with the `Kernel` builder —
 ```toml
 [dependencies]
 # Drop "wasm" for a purely native application: no extensions, and no WASM runtime in the build.
-bones-kernel = { git = "https://github.com/an-dr/bones", tag = "v3.1.0", features = ["wasm"] }
+bones-kernel = { git = "https://github.com/an-dr/bones", tag = "v4.0.0", features = ["wasm"] }
 ```
 
-Distributed by git tag, not crates.io; [docs/architecture/structure.md](docs/architecture/structure.md#how-each-one-is-obtained) says what a tag promises. Opt-in modules cover what a desktop application needs around the engine: single instance, self-update, desktop registration, OS access.
+`bones-develop add` writes that line into an existing crate, pinned to the newest tag. Distributed by git tag, not crates.io; [docs/architecture/structure.md](docs/architecture/structure.md#how-each-one-is-obtained) says what a tag promises. Opt-in modules cover what a desktop application needs around the engine: single instance, self-update, desktop registration, OS access.
 
 ### 3. Extend the engine with native modules
 
@@ -82,15 +82,13 @@ When you need a capability the sandbox cannot reach — a device, a native libra
 
 ## Building the engine
 
-A [release](https://github.com/an-dr/bones/releases) is a tag and its notes; it carries no binaries ([ADR-046](docs/adr/ADR-046-releases-publish-source-not-binary-archives.md)). Build at the tag:
+A [release](https://github.com/an-dr/bones/releases) is a tag and its notes; it carries no binaries ([ADR-046](docs/adr/ADR-046-releases-publish-source-not-binary-archives.md)). `bones-develop` builds the engine at a tag and caches it in `~/.bones` ([ADR-047](docs/adr/ADR-047-bones-develop-installs-engines-by-tag.md)); a project's commands do this on first use, and you can do it ahead:
 
 ```sh
-git clone --recursive --branch v3.1.0 https://github.com/an-dr/bones
-cd bones
-cargo xtask dist --features web   # or without --features for the plain build
+bones-develop engine install v4.0.0 --web   # or without --web for the plain build
 ```
 
-`dist/` then holds the engine, `bones-cli`, an empty `extensions/` folder, the ABI (`wit/`), the `bones-user` agent plugin, a sample `bones.toml` with every default spelled out, the licence, and third-party notices; a zip of it lands beside the repository root. [docs/contributing/building.md](docs/contributing/building.md) lists the prerequisites. Builds differ by platform and by whether they include [web panels](docs/examples/web-app.md) — HTML interfaces for extensions — which need the operating system's web view at runtime. CI builds each of these on every push:
+It needs `git`, a C compiler, and CMake, and on Linux the packages `cargo xtask linux-packages` prints; [docs/contributing/building.md](docs/contributing/building.md) has the details. Without `bones-develop`, clone the tag with `--recursive` and run `cargo xtask dist [--features web]`: `dist/` then holds the engine, `bones-develop`, an empty `extensions/` folder, the ABI (`wit/`), the `bones-user` agent plugin, a sample `bones.toml` with every default spelled out, the licence, and third-party notices; a zip of it lands beside the repository root. Builds differ by platform and by whether they include [web panels](docs/examples/web-app.md) — HTML interfaces for extensions — which need the operating system's web view at runtime. CI builds each of these with `bones-develop engine install` on every push:
 
 | Build | Web panels | Your machine needs |
 | --- | --- | --- |
