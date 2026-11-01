@@ -8,6 +8,8 @@ Map of the documentation in this repository.
 
 **Each layer has an altitude, and the layers do not overlap.**
 
+- [use-cases/](use-cases/index.md) — goals: who uses bones for what, and what they observe when it works. What must keep working.
+- [manual/](manual/bones-develop.md) — how a user works with the tools: install, commands, troubleshooting. Exact commands are its subject, as file layout is code-style.md's.
 - [architecture/](architecture/index.md) — concepts: what the parts are, where the boundaries fall, what the system guarantees.
 - `design/` — behaviour contracts for one subsystem: semantics, guarantees, state machines. Never exact signatures or file layout.
 - `adr/` — decisions with rationale. Immutable; superseded by later ADRs, never edited.
@@ -18,13 +20,15 @@ The altitude test: **an ordinary refactoring must not require a documentation up
 
 **Stated exception**: [code-style.md](code-style.md) documents file-layout conventions themselves. It is code-level by definition and changes only when the conventions change, never as a side effect of applying them.
 
-**Tutorials are not here.** Getting started, writing an extension, and embedding are code-level by nature — exact commands, exact paths — so they live in READMEs beside the code they describe, which is what keeps the altitude rule above intact rather than carving another exception into it.
+**Tutorials are not here, with one exception.** Writing an extension and embedding are code-level by nature — exact commands, exact paths — so they live in READMEs beside the code they describe. The [bones-develop manual](manual/bones-develop.md) is the stated exception: it is what a user reads after installing the tool, with no repository beside them, and a crate's README is for people working on that crate.
 
 ## Start here
 
 - [README](../README.md) — what bones is, prerequisites, quickstart.
 - [architecture/](architecture/index.md) — the system: parts, structure, messaging, upgrading.
 - [glossary.md](glossary.md) — host, guest, embedder, native module, service, and where new code goes.
+- [use-cases/](use-cases/index.md) — what bones is used for, starting with [bones-develop](use-cases/bones-develop.md).
+- [manual/bones-develop.md](manual/bones-develop.md) — installing and using the tools.
 - [CONTRIBUTING](../CONTRIBUTING.md) — how to build, test, and land a change.
 - [agent-plugins/](../agent-plugins/README.md) — everything bones offers an AI agent, as Agent Plugins packages; `bones-user` ships in every release ([ADR-044](adr/ADR-044-bones-is-built-for-ai-assisted-product-development.md)).
 - [tests/agent/](../tests/agent/README.md) — the benchmark that measures how well agents build on each release.
