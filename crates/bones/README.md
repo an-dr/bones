@@ -38,7 +38,7 @@ untrusted_plugin = ["os/*", "files"]
 
 Set `BONES_DEVTOOLS_PORT=<port>` to open the loopback devtools channel, which lets a test or an agent drive the running engine and read back what happened: publish any message, read the bus traffic and the log, see each extension's state, and reload one ([bones-module-devtools](../bones-kernel/bones-module-devtools/README.md)). It is unauthenticated and listens on `127.0.0.1` only. Never set it in a shipped launch.
 
-Set `BONES_OFFSCREEN=1` to open the window in memory instead of on a display, through SDL's offscreen video driver. Everything runs as usual, and the devtools `/screenshot` route returns what the renderer drew; `bones-cli screenshot` uses it. Nothing appears on screen, and no display is needed.
+Set `BONES_OFFSCREEN=1` to open the window in memory instead of on a display, through SDL's offscreen video driver. Everything runs as usual, and the devtools `/screenshot` route returns what the renderer drew; `bones-develop screenshot` uses it. Nothing appears on screen, and no display is needed.
 
 Set `BONES_LOG_LEVEL` to `debug`, `info`, `warn`, or `error` to choose the quietest level written; the default is `info`. At `debug` the runner logs every tick.
 

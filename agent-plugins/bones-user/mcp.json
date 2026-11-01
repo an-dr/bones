@@ -3,7 +3,7 @@
   "mcpServers": {
     "bones": {
       "type": "stdio",
-      "command": "bones-cli",
+      "command": "bones-develop",
       "args": ["mcp"]
     }
   }

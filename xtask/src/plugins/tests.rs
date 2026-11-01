@@ -44,7 +44,8 @@ fn the_manifest_schema_is_closed() {
 #[test]
 fn a_stdio_command_is_one_bare_name_or_a_relative_path() {
     assert!(
-        check_server(&json!({ "type": "stdio", "command": "bones-cli", "args": ["mcp"] })).is_ok()
+        check_server(&json!({ "type": "stdio", "command": "bones-develop", "args": ["mcp"] }))
+            .is_ok()
     );
     assert!(check_server(&json!({ "type": "stdio", "command": "./bin/tool" })).is_ok());
     assert!(check_server(&json!({ "type": "stdio", "command": "/usr/bin/tool" })).is_err());

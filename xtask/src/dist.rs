@@ -43,8 +43,8 @@ pub fn run(args: &[String]) -> Result {
     let exe = exe_name("bones");
     let dist = root.join("dist");
 
-    // bones-cli ships beside the engine it finds as its sibling (ADR-043).
-    let mut build = vec!["build", "-p", "bones", "-p", "bones-cli", "--release"];
+    // bones-develop ships beside the engine it finds as its sibling (ADR-043).
+    let mut build = vec!["build", "-p", "bones", "-p", "bones-develop", "--release"];
     if let Some(features) = &options.features {
         build.extend(["--features", features]);
     }
@@ -54,7 +54,7 @@ pub fn run(args: &[String]) -> Result {
     // extensions/ ships empty: it is where a user drops their own .wasm files.
     create_dir(&dist.join("extensions"))?;
     copy_file(&root.join("target/release").join(&exe), &dist.join(&exe))?;
-    let cli = exe_name("bones-cli");
+    let cli = exe_name("bones-develop");
     copy_file(&root.join("target/release").join(&cli), &dist.join(&cli))?;
 
     // The ABI ships with the engine that implements it, so the

@@ -21,4 +21,4 @@ A major change costs every extension in existence. Look for an additive alternat
 5. **Use it** where the engine publishes or consumes it, through the typed message, never hand-built bytes.
 6. **Record it** in `CHANGELOG.md` under the ABI line, and in `bones-wasm-sdk`'s typed calls if a guest sends it.
 
-`bones-cli` encodes and decodes the new topic from JSON fields with no code of its own, because it reads `wire-format.json` directly.
+`bones-develop` encodes and decodes the new topic from JSON fields with no code of its own, because it reads `wire-format.json` directly.

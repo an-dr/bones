@@ -10,7 +10,7 @@ The two version lines are released independently ([ADR-029](../adr/ADR-029-the-t
 
 A pushed `v*` tag is the whole manual release step: [CI](../../.github/workflows/ci.yml) tests the tagged commit on every platform, builds all six variants — Windows x64 and ARM64 with web panels, Linux x64 and ARM64 each with and without — and publishes a GitHub Release whose notes are the tag's `## engine <version>` section of `CHANGELOG.md`. It uploads no binaries; GitHub attaches the source archives. An `abi-v*` tag publishes nothing.
 
-A user builds a release with `cargo xtask dist` at its tag, adding `--features web` for the web variant; it builds only for the machine it runs on.
+A user gets a release through `bones-develop`, which builds the engine at its tag ([ADR-047](../adr/ADR-047-bones-develop-installs-engines-by-tag.md)); `cargo xtask dist` at the tag, adding `--features web` for the web variant, builds the same for the machine it runs on.
 
 ## Two things that will bite
 

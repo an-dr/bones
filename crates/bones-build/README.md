@@ -1,6 +1,6 @@
 # bones-build
 
-Builds a bones extension for `wasm32-wasip2` and finds the `.wasm` it produced. `cargo xtask`, `bones-cli`, and `bones-test` all build extensions; this crate is the one place that knows how (ADR-043).
+Builds a bones extension for `wasm32-wasip2` and finds the `.wasm` it produced. `cargo xtask`, `bones-develop`, and `bones-test` all build extensions; this crate is the one place that knows how (ADR-043).
 
 ## Public shape
 

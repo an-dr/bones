@@ -14,7 +14,7 @@ bones is a native core with a message bus and optional sandboxed WebAssembly ext
 | `crates/bones-kernel/` | the embedder's one crate, its modules (`bones-module-*`), and `bones-kernel-infra` (bus, runner, platform, logging) |
 | `crates/bones-messages/`, `crates/bones-wasm-sdk/` | the ABI line: the message codec and the guest SDK, outside the root workspace so they build for `wasm32-wasip2` |
 | `crates/bones/` | the shipped engine executable |
-| `crates/bones-cli/`, `crates/bones-test/`, `crates/bones-build/` | the developer tools, the test harness, and the extension build they share (ADR-043) |
+| `crates/bones-develop/`, `crates/bones-test/`, `crates/bones-build/` | the developer tools, the test harness, and the extension build they share (ADR-043) |
 | `wit/` | the extension ABI: `extension.wit`, `wire-format.json`, and the conformance vectors |
 | `xtask/` | every build, gate, and generator, as `cargo xtask <command>` |
 | `examples/`, `tests/agent/` | runnable examples, and the agent benchmark |
@@ -24,7 +24,7 @@ bones is a native core with a message bus and optional sandboxed WebAssembly ext
 
 - `cargo xtask doctor` names a missing prerequisite and how to install it. SDL builds from source, so cmake and a C compiler are needed.
 - For code or build changes, run focused tests while working, then `cargo xtask test` once at the end: formatting, clippy with warnings denied, both feature sets, the kernel without `wasm`, the standalone crates, and the rustdoc build ([docs/contributing/testing.md](../../../../docs/contributing/testing.md)).
-- For documentation-only changes, run the relevant Markdown and link checks; skip the workspace unit tests. Agent instructions are not documentation: a change to `agent-plugins/` also runs `cargo xtask plugins` and, when it changes the rules or MCP configuration a new project receives, the `bones-cli` tests.
+- For documentation-only changes, run the relevant Markdown and link checks; skip the workspace unit tests. Agent instructions are not documentation: a change to `agent-plugins/` also runs `cargo xtask plugins` and, when it changes the rules or MCP configuration a new project receives, the `bones-develop` tests.
 - Generated files are checked for staleness by tests. After changing a source, run its generator and commit both: `wire-format`, `vectors`, `ts-codec`, and `plugin-docs`. `cargo xtask plugins` checks the agent plugins.
 
 ## Change a message

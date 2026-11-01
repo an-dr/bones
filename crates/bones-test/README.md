@@ -6,7 +6,7 @@ It runs the real extension host on a headless kernel, so the extension under tes
 
 ## Use
 
-A product keeps its extension (a `cdylib` built for `wasm32-wasip2`) and its tests (a native crate) side by side, because one crate cannot be both. `bones-cli new` lays them out this way. The test crate depends on this one:
+A product keeps its extension (a `cdylib` built for `wasm32-wasip2`) and its tests (a native crate) side by side, because one crate cannot be both. `bones-develop new` lays them out this way. The test crate depends on this one:
 
 ```toml
 [dev-dependencies]

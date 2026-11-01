@@ -49,11 +49,11 @@ Nested beside `bones-kernel-infra`, not inside it: each is its own crate, so a d
 
 ## Developer tools
 
-[bones-cli](bones-cli/README.md) is the console program built beside `bones` by `cargo xtask dist` (ADR-043, ADR-046): `new` writes a product project, `doctor` checks the machine, `build` and `dev` build and hot-reload the extension against the engine, and `mcp` serves the devtools channel to an AI agent. It depends on `bones-messages` only, never on the kernel.
+[bones-develop](bones-develop/README.md) is the tool a user installs (ADR-047): it builds engines by tag, creates and upgrades product projects, runs the hot-reload loop, and serves the devtools channel to an AI agent over MCP. It depends on `bones-messages` and `bones-build`, never on the kernel. Using it is in the [manual](../docs/manual/bones-develop.md).
 
 ## Building an extension
 
-[bones-build](bones-build/README.md) builds an extension crate for `wasm32-wasip2` and finds its `.wasm` in cargo's output. `cargo xtask`, `bones-cli`, and `bones-test` all use it, so the build is implemented once (ADR-043). It depends on no bones crate.
+[bones-build](bones-build/README.md) builds an extension crate for `wasm32-wasip2` and finds its `.wasm` in cargo's output. `cargo xtask`, `bones-develop`, and `bones-test` all use it, so the build is implemented once (ADR-043). It depends on no bones crate.
 
 ## Testing an extension
 

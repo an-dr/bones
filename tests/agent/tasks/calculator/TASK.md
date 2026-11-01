@@ -2,10 +2,10 @@
 
 Build a calculator service as a bones product in this folder: an extension other extensions call with a direct `send` and get an answer from.
 
-A bones release is unpacked at `{{engine}}`: the engine, `bones-cli`, the `bones-user` agent plugin in `agent-plugins/`, and the extension ABI in `wit/`. Create the project with:
+A bones release is unpacked at `{{engine}}`: the engine, `bones-develop`, the `bones-user` agent plugin in `agent-plugins/`, and the extension ABI in `wit/`. Create the project with:
 
 ```sh
-{{engine}}/bones-cli new calculator --kind game{{bones_path}}
+{{engine}}/bones-develop new calculator --kind game{{bones_path}}
 ```
 
 It needs no drawing; remove what the template draws. You are done when `cargo test` passes in the project and the service below works. Do not ask a person for help; the release's documentation and tools are all you have.

@@ -1,5 +1,5 @@
 //! Builds a bones extension for `wasm32-wasip2` and finds the `.wasm` it
-//! produced (ADR-043). `cargo xtask`, `bones-cli`, and `bones-test` all
+//! produced (ADR-043). `cargo xtask`, `bones-develop`, and `bones-test` all
 //! build extensions; this is the one place that knows how.
 
 #![warn(missing_docs)]
