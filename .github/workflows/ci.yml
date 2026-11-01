@@ -109,10 +109,11 @@ jobs:
       - name: Through the extension host
         run: cargo test -p bones-test --test typescript_guest -- --ignored
 
-  # A release build of every platform and variant, on every push, so packaging
-  # is exercised as often as the tests. Nothing is uploaded: a release is
-  # source, and the binaries are built where they are used. Windows builds web
-  # panels always (WebView2 is part of the OS); Linux builds both variants.
+  # The engine built the way a user gets it, on every platform and variant:
+  # bones-develop engine install from this commit, which clones it and runs a
+  # release build (ADR-047). Nothing is uploaded: a release is source.
+  # Windows builds web panels always (WebView2 is part of the OS); Linux
+  # builds both variants, because a web build needs webkit2gtk and GTK.
   build:
     name: Build (${{ matrix.name }})
     needs: test
@@ -135,22 +136,30 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: build-${{ matrix.features }}
+          # engine install builds in the shared target under BONES_HOME.
+          cache-directories: ~/.bones/target
       - name: Linux packages
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends $(cargo xtask linux-packages)
-      - name: Release build
+      - name: bones-develop engine install of this commit
         shell: bash
+        env:
+          # Clone this checkout rather than GitHub: the commit under test.
+          BONES_REPOSITORY: ${{ github.workspace }}
         run: |
-          if [ -n "${{ matrix.features }}" ]; then
-            cargo xtask dist --no-archive --features "${{ matrix.features }}"
-          else
-            cargo xtask dist --no-archive
-          fi
+          git tag -f vci HEAD
+          cargo build -p bones-develop
+          flag=""
+          if [ "${{ matrix.features }}" = web ]; then flag=--web; fi
+          engine=$(./target/debug/bones-develop engine install vci $flag)
+          test -f "$engine" && test -f "$(dirname "$engine")/wit/vectors/vectors.txt"
+          echo "Built $engine"
 
   # A v* tag publishes a GitHub Release of its source: the tag's notes from
-  # CHANGELOG.md, and the source archives GitHub attaches to every release.
+  # CHANGELOG.md, then .github/release-notes.md with the tag filled in (how to
+  # install this release's bones-develop), and GitHub's source archives.
   release:
     name: GitHub Release
     if: startsWith(github.ref, 'refs/tags/v')
@@ -170,4 +179,6 @@ jobs:
             /^## / { if (found) exit; found = ($0 ~ "^## engine " v "( |$)") ; next }
             found' CHANGELOG.md > notes.md
           [ -s notes.md ] || { echo "CHANGELOG.md has no '## engine $version' section"; exit 1; }
+          manual="https://github.com/an-dr/bones/blob/$GITHUB_REF_NAME/docs/manual/bones-develop.md"
+          sed -e "s|{tag}|$GITHUB_REF_NAME|g" -e "s|{manual}|$manual|g" .github/release-notes.md >> notes.md
           gh release create "$GITHUB_REF_NAME" --verify-tag --title "bones $GITHUB_REF_NAME" --notes-file notes.md
