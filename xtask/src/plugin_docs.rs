@@ -17,7 +17,7 @@ pub const OUTPUT: &str = "agent-plugins/bones-user/skills/bones/references/docs.
 /// The documents, in reading order: the tools, then the contract they rest
 /// on. The rules and the skill are in the plugin already.
 const SOURCES: [&str; 7] = [
-    "crates/bones-cli/README.md",
+    "docs/manual/bones-develop.md",
     "crates/bones-test/README.md",
     "crates/bones-wasm-sdk/README.md",
     "docs/design/extensions.md",

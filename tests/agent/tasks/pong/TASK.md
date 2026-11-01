@@ -2,10 +2,10 @@
 
 Build a two-player Pong game as a bones product in this folder.
 
-A bones release is unpacked at `{{engine}}`: the engine, `bones-cli`, the `bones-user` agent plugin in `agent-plugins/`, and the extension ABI in `wit/`. Create the project with:
+A bones release is unpacked at `{{engine}}`: the engine, `bones-develop`, the `bones-user` agent plugin in `agent-plugins/`, and the extension ABI in `wit/`. Create the project with:
 
 ```sh
-{{engine}}/bones-cli new pong --kind game{{bones_path}}
+{{engine}}/bones-develop new pong --kind game{{bones_path}}
 ```
 
 You are done when `cargo test` passes in the project and the game below works. Do not ask a person for help; the release's documentation and tools are all you have.

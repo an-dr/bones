@@ -20,19 +20,19 @@ a terminal.
 
 ## Start a product
 
-    ./bones-cli new my-game --kind game
+    ./bones-develop new my-game --kind game
     cd my-game
-    ../bones-cli dev
+    ../bones-develop dev
 
-bones-cli finds this engine as its sibling. See its --help.
+bones-develop finds this engine as its sibling. See its --help.
 
 ## Contents
 
     {exe}                  the engine
-    bones-cli                 developer tools: new, doctor, build, dev, screenshot, mcp
+    bones-develop                 developer tools: new, doctor, build, dev, screenshot, mcp
     agent-plugins/bones-user/ the Agent Plugins package for an AI agent building a product:
                               rules, the bones skill with the documentation, and the
-                              bones-cli MCP server
+                              bones-develop MCP server
     bones.toml                configuration; every value is the default
     extensions/               extensions loaded at startup
     wit/extension.wit         the extension ABI: the calls

@@ -69,8 +69,10 @@ fn task_and_workspace(root: &Path, args: &[String]) -> Result<(String, PathBuf)>
 
 fn prepare(root: &Path, task: &str, workspace: &Path, local: bool) -> Result {
     let dist = root.join("dist");
-    if !dist.join(exe_name("bones-cli")).is_file() {
-        return Err("no dist/ with bones-cli; run cargo xtask dist --no-archive first".to_string());
+    if !dist.join(exe_name("bones-develop")).is_file() {
+        return Err(
+            "no dist/ with bones-develop; run cargo xtask dist --no-archive first".to_string(),
+        );
     }
     if workspace.exists()
         && std::fs::read_dir(workspace)
@@ -97,7 +99,7 @@ fn prepare(root: &Path, task: &str, workspace: &Path, local: bool) -> Result {
     write_file(&workspace.join("TASK.md"), &prompt)?;
 
     if let Some((_, name)) = STARTERS.iter().find(|(starter, _)| *starter == task) {
-        let mut new = Command::new(engine.join(exe_name("bones-cli")));
+        let mut new = Command::new(engine.join(exe_name("bones-develop")));
         new.current_dir(workspace)
             .args(["new", name, "--kind", "game"]);
         if local {
@@ -105,9 +107,9 @@ fn prepare(root: &Path, task: &str, workspace: &Path, local: bool) -> Result {
         }
         let status = new
             .status()
-            .map_err(|error| format!("running bones-cli: {error}"))?;
+            .map_err(|error| format!("running bones-develop: {error}"))?;
         if !status.success() {
-            return Err("bones-cli new failed for the starter".to_string());
+            return Err("bones-develop new failed for the starter".to_string());
         }
         copy_file(
             &root

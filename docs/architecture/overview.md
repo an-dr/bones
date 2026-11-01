@@ -119,7 +119,7 @@ Products on bones are written more and more by AI agents working without the eng
 - the rules an agent cannot infer ship with every release and project;
 - untrusted code can be bounded by the composition root.
 
-These hold across components. The wire format as data, the devtools channel, `bones-test`, the extension host's diagnostics and permissions, `bones-cli`, and the agent plugins are their parts, and a change to any component keeps them true.
+These hold across components. The wire format as data, the devtools channel, `bones-test`, the extension host's diagnostics and permissions, `bones-develop`, and the agent plugins are their parts, and a change to any component keeps them true.
 
 ## What an extension gets
 

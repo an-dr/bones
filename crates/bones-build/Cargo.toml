@@ -6,7 +6,7 @@ license.workspace = true
 repository.workspace = true
 publish.workspace = true
 readme = "README.md"
-description = "Build a bones extension for wasm32-wasip2 and find the .wasm cargo produced; shared by xtask, bones-cli, and bones-test."
+description = "Build a bones extension for wasm32-wasip2 and find the .wasm cargo produced; shared by xtask, bones-develop, and bones-test."
 
 [dependencies]
 serde_json = "1.0"

@@ -2,10 +2,10 @@
 
 Build a notes tool as a bones product in this folder: type a note, add it to a list, and find the list again after a restart.
 
-A bones release is unpacked at `{{engine}}`: the engine, `bones-cli`, the `bones-user` agent plugin in `agent-plugins/`, and the extension ABI in `wit/`. Create the project with:
+A bones release is unpacked at `{{engine}}`: the engine, `bones-develop`, the `bones-user` agent plugin in `agent-plugins/`, and the extension ABI in `wit/`. Create the project with:
 
 ```sh
-{{engine}}/bones-cli new notes --kind egui{{bones_path}}
+{{engine}}/bones-develop new notes --kind egui{{bones_path}}
 ```
 
 You are done when `cargo test` passes in the project and the tool below works. Do not ask a person for help; the release's documentation and tools are all you have.

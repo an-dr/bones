@@ -4,12 +4,12 @@ This product runs on the bones engine. The product's logic is a WebAssembly exte
 
 ## The loop
 
-- `bones-cli new <name> --kind game|egui|web|embed` starts a project that builds and passes its checks.
-- `bones-cli dev` builds the extension, runs the engine, and hot-reloads on every save.
+- `bones-develop new <name> --kind game|egui|web|embed` starts a project that builds and passes its checks.
+- `bones-develop dev` builds the extension, runs the engine, and hot-reloads on every save.
 - `cargo test` builds the extension and runs the headless checks in `checks/` through `bones-test`. `App::request(payload)` makes a direct send to your extension and returns its reply.
-- `bones-cli screenshot --press <key> --frames <n> --out <file>.png` builds, runs the engine offscreen, and saves what it draws: for a documentation image or to judge a design. With the `render` feature, `bones-test`'s `App::rendered` and `screenshot()` do the same inside a check, and `pixel(x, y)` reads the result.
-- `bones-cli doctor` names anything missing on the machine and how to fix it.
-- The `bones` MCP server (`bones-cli mcp`, registered by `.mcp.json`) lets you launch the engine, send input, step frames, and read messages, logs, the frame as text, and a screenshot.
+- `bones-develop screenshot --press <key> --frames <n> --out <file>.png` builds, runs the engine offscreen, and saves what it draws: for a documentation image or to judge a design. With the `render` feature, `bones-test`'s `App::rendered` and `screenshot()` do the same inside a check, and `pixel(x, y)` reads the result.
+- `bones-develop doctor` names anything missing on the machine and how to fix it.
+- The `bones` MCP server (`bones-develop mcp`, registered by `.mcp.json`) lets you launch the engine, send input, step frames, and read messages, logs, the frame as text, and a screenshot.
 
 A change is done when `cargo test` passes and includes a check for the behaviour you added. To see the result, take a screenshot or read the frame through MCP rather than asking a person. Compare draw commands in checks; look at pixels when the question is how it looks.
 
@@ -24,6 +24,6 @@ A change is done when `cargo test` passes and includes a check for the behaviour
 7. **Stay inside the budgets.** By default an extension may publish and receive 1024 messages per frame each. Going over quarantines it, and the log names the limit and the `bones.toml` key that raises it.
 8. **There is no OS in the sandbox.** No files, network, clipboard, or threads. Save state with `bus::save_state` and load it with `bus::load_state`. Read granted files with `bus::read_file`. Clipboard, browser, dialogs, and HTTPS go through `os/request` when the application enables the `os` module. Subscribe to `os/reply` and match both `requester` (your extension name) and `request_id`; ignore the duplicate legacy `os/result`. On a busy error, wait for outstanding work to complete before retrying.
 9. **Read the warnings.** The engine reports a malformed core payload, a topic nobody subscribes to, a subscription to a topic that is not a core one but nearly is (with the core topic you probably meant), a refused permission, and the cause of a quarantine. Each comes once per extension and topic, under your extension's name, in `logs` and the terminal. Make your checks fail on them: assert `app.is_running()` and that `app.logs()` holds no `WARN` or `ERROR` line.
-10. **Keep the pins matched.** The extension depends on `bones-wasm-sdk` at an `abi-v*` tag, and the engine refuses a component built for another ABI. `bones-cli doctor` compares the two. Web panels need a `-web` engine and `web = true` in `bones.toml`.
+10. **Keep the pins matched.** The extension depends on `bones-wasm-sdk` at an `abi-v*` tag, and the engine refuses a component built for another ABI. `bones-develop doctor` compares the two. Web panels need a `-web` engine and `web = true` in `bones.toml`.
 11. **Persist before reload.** Save state during normal operation when replacement `init` needs it. Replacement init runs before the old instance's `shutdown`, so shutdown-only persistence cannot initialise that replacement.
 12. **Recommend reusable improvements upstream.** When a feature or fix would help other bones products, recommend contributing it to bones and describe the reusable behavior. Keep product-specific behavior in the extension.

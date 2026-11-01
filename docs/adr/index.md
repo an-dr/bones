@@ -50,10 +50,11 @@ Most readers want the [architecture chapter](../architecture/index.md) instead. 
 | [040](ADR-040-the-wasm-extension-host-is-an-opt-in-module.md) | The WASM extension host is an opt-in module | active — supersedes extension hosting in [011](ADR-011-native-core-modules.md) |
 | [041](ADR-041-the-wire-format-is-specified-as-structured-data.md) | The wire format is specified as structured data | active |
 | [042](ADR-042-extension-permissions-are-deny-lists-the-composition-root-declares.md) | Extension permissions are deny-lists the composition root declares | active |
-| [043](ADR-043-developer-tooling-is-a-separate-bones-cli-binary-shipped-beside-the-engine.md) | Developer tooling is a separate bones-cli binary shipped beside the engine | active; release archive superseded by 046 |
+| [043](ADR-043-developer-tooling-is-a-separate-bones-cli-binary-shipped-beside-the-engine.md) | Developer tooling is a separate bones-cli binary shipped beside the engine | tooling separation active; release archive superseded by 046, shipping and pinning by 047 |
 | [044](ADR-044-bones-is-built-for-ai-assisted-product-development.md) | bones is built for AI-assisted product development | active |
 | [045](ADR-045-os-replies-identify-the-caller-and-outstanding-work-is-bounded.md) | OS replies identify the caller and outstanding work is bounded | active |
 | [046](ADR-046-releases-publish-source-not-binary-archives.md) | Releases publish source, not binary archives | active |
+| [047](ADR-047-bones-develop-installs-engines-by-tag.md) | bones-develop installs engines by tag | active — supersedes the rest of 043 |
 
 ## The two reversals
 

@@ -14,5 +14,5 @@ ADR-044 makes AI-assisted product development an architectural property of bones
 ## How to tell
 
 - **Headless and repeatable.** Behaviour a product depends on can be proved in `bones-test` with a fixed frame rate: the same steps give the same frames.
-- **Nothing to read but the build.** An agent with only a `dist/` build and a product repository can find it: in the plugin, in `wit/`, or through `bones-cli`.
+- **Nothing to read but the build.** An agent with only a `dist/` build and a product repository can find it: in the plugin, in `wit/`, or through `bones-develop`.
 - **Measured.** A change that makes the agent benchmark (`tests/agent/`) worse is a regression.
