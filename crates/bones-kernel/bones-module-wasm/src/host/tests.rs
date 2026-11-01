@@ -367,3 +367,21 @@ fn a_subscription_that_could_reach_a_denied_topic_is_not_requested() {
 
     assert_eq!(state.requested_topics, ["core/tick"]);
 }
+
+#[test]
+fn a_missed_load_deadline_is_named_with_its_fix() {
+    let interrupted = wasmtime::Error::from(wasmtime::Trap::Interrupt);
+    let message = name_load_timeout(interrupted, Duration::from_millis(1_000)).to_string();
+    assert!(
+        message.contains("extension load timeout of 1000 ms")
+            && message.contains("extension_load_timeout_ms"),
+        "{message}"
+    );
+}
+
+#[test]
+fn another_load_failure_keeps_its_own_message() {
+    let other = wasmtime::Error::msg("the component imports an unknown interface");
+    let message = name_load_timeout(other, Duration::from_millis(1_000)).to_string();
+    assert_eq!(message, "the component imports an unknown interface");
+}

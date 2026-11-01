@@ -564,7 +564,7 @@ impl Kernel {
         if offscreen && self.web_enabled {
             return Err(crate::Error::msg(
                 "web panels need a visible window, so this engine cannot run offscreen; \
-                 capture the visible window instead (bones-cli screenshot --window)",
+                 capture the visible window instead (bones-develop screenshot --window)",
             ));
         }
         #[cfg(feature = "presentation")]

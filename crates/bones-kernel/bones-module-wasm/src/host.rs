@@ -84,6 +84,23 @@ fn enable_compilation_cache(config: &mut Config) {
     }
 }
 
+/// Names a missed load deadline as the cause, with its fix.
+///
+/// - What: wasmtime reports the epoch interrupt as a trap at whatever host
+///   call the guest was in, such as `subscribe`, which reads as a bug there.
+/// - Why: a slow machine or a large component needs a longer deadline, and
+///   the log must say so rather than send the reader into the guest.
+fn name_load_timeout(error: wasmtime::Error, load: Duration) -> wasmtime::Error {
+    match error.downcast_ref::<wasmtime::Trap>() {
+        Some(wasmtime::Trap::Interrupt) => error.context(format!(
+            "instantiate and init took longer than the extension load timeout of {} ms; \
+             raise extension_load_timeout_ms in bones.toml, or Kernel::extension_load_timeout",
+            load.as_millis()
+        )),
+        _ => error,
+    }
+}
+
 /// Converts a wall-clock budget into the epoch ticks
 /// `Store::set_epoch_deadline` counts.
 ///
@@ -280,10 +297,12 @@ impl Host {
         // (Config::epoch_interruption) until a deadline is set — must be
         // set before instantiate, which can itself run guest code.
         store.set_epoch_deadline(timeout_ticks(timeouts.load));
-        let bindings = Extension::instantiate(&mut store, &component, &linker)?;
+        let bindings = Extension::instantiate(&mut store, &component, &linker)
+            .map_err(|error| name_load_timeout(error, timeouts.load))?;
         bindings
             .bones_extension_extension_api()
-            .call_init(&mut store)?;
+            .call_init(&mut store)
+            .map_err(|error| name_load_timeout(error, timeouts.load))?;
 
         Ok(Self {
             store: Mutex::new(store),

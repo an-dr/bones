@@ -28,6 +28,16 @@ use bones_messages::extension_control::{Load, Reload, Unload};
 use bones_messages::lifecycle::{Event, LifecycleEvent};
 use bones_messages::{DecodeMessage, EncodeMessage, Message};
 
+/// The kernel every test here starts from.
+///
+/// - What: the product's extension load deadline (1 s) raised to 60 s.
+/// - Why: the default is for one engine on a user's machine; here dozens of
+///   tests share a CI runner's CPU, and a load that misses the deadline fails
+///   a test that is not about deadlines. A test of the deadline sets its own.
+fn kernel() -> Kernel {
+    Kernel::new().extension_load_timeout(Duration::from_secs(60))
+}
+
 /// One long-lived thread that owns SDL for this whole test binary.
 ///
 /// SDL3 stamps whichever thread first calls `SDL_Init` as its main thread
@@ -159,7 +169,7 @@ fn build_discovers_loads_and_registers_a_real_extension() {
         platform,
         modules,
         ..
-    } = Kernel::new()
+    } = kernel()
         .extensions_dir(HELLO_DIR)
         .logger(logger)
         .build()
@@ -197,7 +207,7 @@ fn shutdown_all_calls_cleanup_unregisters_and_publishes_stopped() {
         registry,
         modules,
         ..
-    } = Kernel::new()
+    } = kernel()
         .extensions_dir(HELLO_DIR)
         .logger(Logger::new(Arc::new(sink.clone())))
         .build()
@@ -241,7 +251,7 @@ fn shutdown_all_calls_cleanup_unregisters_and_publishes_stopped() {
 #[test]
 fn orderly_shutdown_dispatches_close_cleanup_and_stopped_in_order() {
     let module = RecordingModule::default();
-    let mut engine = Kernel::new()
+    let mut engine = kernel()
         .extensions_dir(HELLO_DIR)
         .module(module.clone())
         .build()
@@ -318,7 +328,7 @@ fn startup_allow_list_and_runtime_commands_control_activation() {
         registry,
         modules,
         ..
-    } = Kernel::new()
+    } = kernel()
         .extensions_dir(&dir)
         .startup_extension("menu")
         .extension_controller("menu")
@@ -397,7 +407,7 @@ fn startup_allow_list_and_runtime_commands_control_activation() {
 #[test]
 fn a_missing_startup_extension_is_logged() {
     let sink = RecordingSink::new();
-    let _engine = Kernel::new()
+    let _engine = kernel()
         .extensions_dir(HELLO_DIR)
         .startup_extension("typo")
         .logger(Logger::new(Arc::new(sink.clone())))
@@ -418,7 +428,7 @@ fn build_skips_a_component_that_fails_to_load_without_failing_the_engine() {
     let sink = RecordingSink::new();
     let logger = Logger::new(Arc::new(sink.clone()));
 
-    let BuiltKernel { runner, .. } = Kernel::new()
+    let BuiltKernel { runner, .. } = kernel()
         .extensions_dir(&dir)
         .logger(logger)
         .build()
@@ -442,7 +452,7 @@ fn a_required_extension_that_fails_to_load_fails_build() {
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("bad.wasm"), b"not a real component").unwrap();
 
-    let result = Kernel::new()
+    let result = kernel()
         .extensions_dir(&dir)
         .required_extension("bad")
         .build();
@@ -460,7 +470,7 @@ fn a_required_extension_that_fails_to_load_fails_build() {
 
 #[test]
 fn a_required_extension_missing_from_the_catalog_fails_build() {
-    let result = Kernel::new()
+    let result = kernel()
         .extensions_dir(HELLO_DIR)
         .required_extension("typo")
         .build();
@@ -486,7 +496,7 @@ fn a_required_extension_loads_alongside_the_startup_allow_list() {
     )
     .unwrap();
 
-    let BuiltKernel { registry, .. } = Kernel::new()
+    let BuiltKernel { registry, .. } = kernel()
         .extensions_dir(&dir)
         .startup_extension("menu")
         .required_extension("app")
@@ -510,7 +520,7 @@ sdl_test! { fn a_key_down_envelope_reaches_an_extension_through_a_real_window() 
 
     let BuiltKernel {
         runner, platform, ..
-    } = Kernel::new()
+    } = kernel()
         .extensions_dir(KEYECHO_DEMO_DIR)
         .logger(logger)
         .window("test", 64, 64)
@@ -544,7 +554,7 @@ sdl_test! { fn a_mouse_down_envelope_reaches_an_extension_through_a_real_window(
 
     let BuiltKernel {
         runner, platform, ..
-    } = Kernel::new()
+    } = kernel()
         .extensions_dir(KEYECHO_DEMO_DIR)
         .logger(logger)
         .window("test", 64, 64)
@@ -580,7 +590,7 @@ fn audio_demo_loads_plays_music_and_reacts_to_a_key_press_through_a_real_audio_m
     let sink = RecordingSink::new();
     let logger = Logger::new(Arc::new(sink.clone()));
 
-    let built = Kernel::new()
+    let built = kernel()
         .extensions_dir(AUDIO_DEMO_DIR)
         .logger(logger)
         .module(bones_module_audio::Audio::new())
@@ -638,7 +648,7 @@ fn persistence_demo_state_survives_a_full_engine_rebuild() {
     let sink_a = RecordingSink::new();
     let BuiltKernel {
         runner: runner_a, ..
-    } = Kernel::new()
+    } = kernel()
         .extensions_dir(PERSISTENCE_DEMO_DIR)
         .logger(Logger::new(Arc::new(sink_a.clone())))
         .saves_dir(&dir)
@@ -672,7 +682,7 @@ fn persistence_demo_state_survives_a_full_engine_rebuild() {
     let sink_b = RecordingSink::new();
     let BuiltKernel {
         runner: runner_b, ..
-    } = Kernel::new()
+    } = kernel()
         .extensions_dir(PERSISTENCE_DEMO_DIR)
         .logger(Logger::new(Arc::new(sink_b.clone())))
         .saves_dir(&dir)
@@ -696,7 +706,7 @@ sdl_test! { fn a_window_with_no_renderer_or_module_is_not_dropped_with_the_servi
     // just .renderer()) — this proves an unclaimed one is handed back to
     // `platform` instead of being dropped (and closing the window) with
     // the registry it briefly lived in.
-    let BuiltKernel { mut platform, .. } = Kernel::new().window("test", 64, 64).build().unwrap();
+    let BuiltKernel { mut platform, .. } = kernel().window("test", 64, 64).build().unwrap();
 
     assert!(
         platform.as_mut().unwrap().take_window().is_some(),
@@ -705,7 +715,7 @@ sdl_test! { fn a_window_with_no_renderer_or_module_is_not_dropped_with_the_servi
 }}
 
 sdl_test! { fn min_window_size_is_applied_to_the_built_platform_window() {
-    let BuiltKernel { mut platform, .. } = Kernel::new()
+    let BuiltKernel { mut platform, .. } = kernel()
         .window("test", 64, 64)
         .min_window_size(32, 16)
         .build()
@@ -739,7 +749,7 @@ sdl_test! { fn a_custom_module_can_consume_window_surface_without_renderer() {
     }
 
     let got_window = Arc::new(Mutex::new(false));
-    let BuiltKernel { .. } = Kernel::new()
+    let BuiltKernel { .. } = kernel()
         .window("test", 64, 64)
         .module(WantsWindow(got_window.clone()))
         .build()
@@ -755,7 +765,7 @@ sdl_test! { fn a_real_extension_draws_a_sprite_through_a_real_renderer() {
     let sink = RecordingSink::new();
     let logger = Logger::new(Arc::new(sink.clone()));
 
-    let engine = Kernel::new()
+    let engine = kernel()
         .extensions_dir(SPRITE_DEMO_DIR)
         .logger(logger)
         .window("test", 400, 300)
@@ -818,7 +828,7 @@ fn a_runaway_extension_is_quarantined_while_the_engine_keeps_running() {
         registry,
         modules,
         ..
-    } = Kernel::new()
+    } = kernel()
         .extensions_dir(&dir)
         .logger(logger)
         .build()
@@ -885,7 +895,7 @@ fn a_runaway_extension_is_quarantined_while_the_engine_keeps_running() {
 sdl_test! { fn web_and_renderer_share_a_real_window_and_register_the_web_endpoint() {
     use bones_messages::web::{Command, OpenPanel, PanelOpened, PanelSource};
 
-    let mut engine = Kernel::new()
+    let mut engine = kernel()
         .window("bones web composition", 160, 120)
         .renderer()
         .web()
@@ -930,7 +940,7 @@ sdl_test! { fn a_headless_engine_can_repeatedly_attach_and_close_wry_presentatio
     use bones_messages::web::{Command, OpenPanel, PanelSource, ENDPOINT};
     use bones_module_web::WryPresentation;
 
-    let mut engine = Kernel::new().build().unwrap();
+    let mut engine = kernel().build().unwrap();
     assert!(engine.is_headless());
 
     for cycle in 0..2 {
@@ -971,7 +981,7 @@ sdl_test! { fn a_headless_engine_can_repeatedly_attach_and_close_wry_presentatio
 #[cfg(feature = "web")]
 #[test]
 fn web_without_a_window_is_a_build_error() {
-    let error = match Kernel::new().web().build() {
+    let error = match kernel().web().build() {
         Ok(_) => panic!("web must not build without a parent window"),
         Err(error) => error,
     };
@@ -989,7 +999,7 @@ sdl_test! { fn dashboard_and_metrics_exchange_push_pull_and_page_ipc() {
         .expect("build examples/extensions/metrics-demo for wasm32-wasip2 first");
 
     let sink = RecordingSink::new();
-    let mut engine = Kernel::new()
+    let mut engine = kernel()
         .extensions_dir(&dir)
         .logger(Logger::new(Arc::new(sink.clone())))
         .window("bones dashboard integration", 800, 600)
@@ -1071,7 +1081,7 @@ fn a_flooding_extension_is_faulted_without_starving_its_peer() {
         registry,
         modules,
         ..
-    } = Kernel::new()
+    } = kernel()
         .extensions_dir(&dir)
         .extension_budget(bones_kernel::bus::BudgetLimits {
             max_inbound: 8,
@@ -1121,7 +1131,7 @@ fn exceeding_the_publish_allowance_quarantines_with_drop_counters() {
         registry,
         modules,
         ..
-    } = Kernel::new()
+    } = kernel()
         .extensions_dir(HELLO_DIR)
         .extension_budget(bones_kernel::bus::BudgetLimits {
             max_inbound: 4,
@@ -1160,7 +1170,7 @@ fn exceeding_the_inbound_allowance_quarantines_with_drop_counters() {
         registry,
         modules,
         ..
-    } = Kernel::new()
+    } = kernel()
         .extensions_dir(HELLO_DIR)
         .extension_budget(bones_kernel::bus::BudgetLimits {
             max_inbound: 1,
@@ -1249,7 +1259,7 @@ fn a_custom_module_is_initialized_subscribed_and_hooked() {
     let dir = std::env::temp_dir().join("bones-runner-test-custom-module-hooks");
     let BuiltKernel {
         runner, modules, ..
-    } = Kernel::new()
+    } = kernel()
         .module(module.clone())
         .saves_dir(&dir)
         .build()
@@ -1331,7 +1341,7 @@ fn the_module_registered_last_is_offered_input_first() {
     // so it is the one that gets the click. Registering them the other way
     // round is how an embedder puts one underneath the other.
     let offered = Arc::new(Mutex::new(Vec::new()));
-    let BuiltKernel { modules, .. } = Kernel::new()
+    let BuiltKernel { modules, .. } = kernel()
         .module(Overlay {
             name: "underneath",
             claims: true,
@@ -1359,7 +1369,7 @@ sdl_test! { fn an_injected_overlay_claims_a_click_above_ui_and_the_gfx_bus() {
     // after them is above them, and a click it claims reaches neither the
     // egui layer nor `input/*`.
     let offered = Arc::new(Mutex::new(Vec::new()));
-    let BuiltKernel { modules, .. } = Kernel::new()
+    let BuiltKernel { modules, .. } = kernel()
         .window("test", 64, 64)
         .renderer()
         .ui()
@@ -1388,7 +1398,7 @@ fn an_overlay_that_declines_lets_the_click_fall_through_to_input() {
     // event must not swallow it, so the gfx scene underneath still
     // receives it on `input/*`.
     let offered = Arc::new(Mutex::new(Vec::new()));
-    let BuiltKernel { modules, .. } = Kernel::new()
+    let BuiltKernel { modules, .. } = kernel()
         .module(Overlay {
             name: "declines",
             claims: false,
@@ -1407,7 +1417,7 @@ fn an_overlay_that_declines_lets_the_click_fall_through_to_input() {
 #[test]
 fn a_custom_module_answers_a_direct_send_through_the_call_registry() {
     let module = RecordingModule::default();
-    let BuiltKernel { registry, .. } = Kernel::new().module(module.clone()).build().unwrap();
+    let BuiltKernel { registry, .. } = kernel().module(module.clone()).build().unwrap();
 
     let reply = registry
         .call("caller", "recording", b"abc")
@@ -1438,7 +1448,7 @@ fn a_changed_wasm_file_is_hot_reloaded_in_place() {
         registry: _,
         modules,
         ..
-    } = Kernel::new()
+    } = kernel()
         .extensions_dir(&dir)
         .logger(logger)
         .build()
