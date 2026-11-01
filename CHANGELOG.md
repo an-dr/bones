@@ -7,16 +7,19 @@ Two independent version lines (ADR-029), so each entry says which one it belongs
 
 An ABI entry concerns every extension in existence, in any language. An engine entry concerns only projects that link the library.
 
-## Unreleased (ABI 1.4.0)
+## Unreleased (engine)
 
-### Added
+## engine 4.0.0 / ABI 1.4.0
+
+Releases are source, and `bones-develop` is how bones is installed and used (ADR-046, ADR-047). A major version because `bones-cli` is renamed `bones-develop` with no alias and releases no longer carry binary archives; `bones:extension` stays at 1.0.0.
+
+### Added (ABI)
 
 - Caller-aware OS completions on `os/reply` carry the host-stamped requester and request ID. Existing `os/request` and `os/result` bytes and the WIT interface version are unchanged.
 
-## Unreleased (engine)
-
 ### Fixed
 
+- An extension that misses its load deadline is reported as exactly that, with the fix: raise `extension_load_timeout_ms` in `bones.toml` or `Kernel::extension_load_timeout`. It used to read as a trap in whatever host call `init` was making, such as `subscribe`.
 - File-triggered reload calls the old extension's shutdown hook exactly once, through the same replacement path as commanded reload. Replacement init precedes old shutdown; state needed during init must be persisted during normal operation.
 - OS work is bounded to 16 active requests without a waiting queue. Busy, worker-creation and backend-panic errors name the caller and remedy. Shutdown suppresses late replies without waiting for blocked native operations.
 
@@ -24,6 +27,9 @@ An ABI entry concerns every extension in existence, in any language. An engine e
 
 ### Changed
 
+- **`bones-develop` installs the engine** (ADR-047). `cargo install --git https://github.com/an-dr/bones bones-develop` is the one install step: `engine install/list/remove` builds engines from a tag into `~/.bones`; `dev`, `screenshot`, and MCP's `launch` run the engine the project pins, building it on first use; `new --tag` writes a project from that tag's templates and agent files, and `--submodule` vendors bones in it instead; `upgrade <tag>` moves a project, and its agent files, to another tag; `add` makes an existing program an embedder; `self-update` reinstalls the tool. CI checks the engine builds through `engine install` on every platform.
+- **A bones-develop manual and a standard release footer.** [docs/manual/bones-develop.md](docs/manual/bones-develop.md) is the user manual; every GitHub Release ends with this release's install command and a link to the manual at its tag. The crate README is now for working on the tool.
+- **`bones-cli` is now `bones-develop`.** The crate, the binary, and the `command` in a new project's `.mcp.json` are renamed; there is no `bones-cli` alias. Edit `bones-cli` to `bones-develop` in an existing project's `.mcp.json`.
 - **Releases publish source, not binary archives** (ADR-046). A GitHub Release carries the tag's changelog section and GitHub's source archives. Build the engine and `bones-cli` at a tag with `cargo xtask dist`; CI still builds every platform and variant on every push and uploads nothing.
 - **`Kernel::devtools_redacting(predicate)`** keeps matching envelopes' payloads out of the channel `devtools_from_env` opens, and **`bones_kernel::devtools::LogHistory`** is re-exported, so an application that redacts secrets no longer builds the channel by hand or depends on `bones-module-devtools` directly.
 - **`bones_test::Stub`** answers the direct sends an extension makes in `init` with a fixed reply and records them, so a test no longer writes a native module for each endpoint it does not compose.
