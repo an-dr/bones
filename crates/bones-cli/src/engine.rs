@@ -8,7 +8,7 @@ use crate::Result;
 pub const ENGINE_VAR: &str = "BONES_ENGINE";
 
 /// The engine: `explicit` when given, else `BONES_ENGINE`, else the `bones`
-/// executable beside this one, as a release archive lays them out.
+/// executable beside this one, as `cargo xtask dist` lays them out.
 pub fn locate(explicit: Option<&str>) -> Result<PathBuf> {
     if let Some(path) = explicit {
         return existing(PathBuf::from(path), "--engine");
@@ -22,14 +22,14 @@ pub fn locate(explicit: Option<&str>) -> Result<PathBuf> {
     match beside {
         Some(path) if path.is_file() => Ok(path),
         _ => Err(format!(
-            "no engine found beside bones-cli; unpack a release archive and run its bones-cli, \
+            "no engine found beside bones-cli; run the bones-cli that `cargo xtask dist` built, \
              or set {ENGINE_VAR} to the path of a bones executable"
         )),
     }
 }
 
 /// The ABI line of the engine at `engine`, from the conformance vectors a
-/// release archive ships beside it.
+/// `dist/` build holds beside it.
 pub fn abi(engine: &Path) -> Option<String> {
     let vectors = engine.parent()?.join("wit/vectors/vectors.txt");
     abi_from_vectors(&std::fs::read_to_string(vectors).ok()?)

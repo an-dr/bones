@@ -52,7 +52,7 @@ crate-type = ["cdylib"]
 bones-wasm-sdk = { git = "https://github.com/an-dr/bones", tag = "abi-v1.3.0" }
 ```
 
-Build it with `cargo build --target wasm32-wasip2 --release` (after `rustup target add wasm32-wasip2` once), and copy `target/wasm32-wasip2/release/my_extension.wasm` into the `extensions/` folder of a [release archive](../README.md#release-archives). The file's stem is the extension's bus name, so choose one no native module uses.
+Build it with `cargo build --target wasm32-wasip2 --release` (after `rustup target add wasm32-wasip2` once), and copy `target/wasm32-wasip2/release/my_extension.wasm` into the `extensions/` folder of a [built engine](../README.md#building-the-engine). The file's stem is the extension's bus name, so choose one no native module uses.
 
 Then copy from the example closest to what you are building:
 
@@ -61,7 +61,7 @@ Then copy from the example closest to what you are building:
 | Anything — the smallest complete extension | [hello-demo](extensions/hello-demo/README.md) |
 | A game | [sprite-demo](extensions/sprite-demo/README.md), then [game-core-demo](extensions/game-core-demo/README.md) |
 | A tool with native widgets | [notes-demo](extensions/notes-demo/README.md) |
-| An app with an HTML interface | [dashboard-demo](extensions/dashboard-demo/README.md) — needs a `-web` archive |
+| An app with an HTML interface | [dashboard-demo](extensions/dashboard-demo/README.md) — needs a `-web` build |
 | Something that remembers state | [persistence-demo](extensions/persistence-demo/README.md) |
 
 ## Why every name ends in -demo

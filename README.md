@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/an-dr/bones/actions/workflows/ci.yml/badge.svg)](https://github.com/an-dr/bones/actions/workflows/ci.yml) [![engine](https://img.shields.io/github/v/tag/an-dr/bones?filter=v*&label=engine&color=2f6f5e)](CHANGELOG.md) [![ABI](https://img.shields.io/github/v/tag/an-dr/bones?filter=abi-v*&label=ABI&color=4a6fa5)](wit/README.md) [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE) [![AI Level 3](https://ai-level.dev/badge/standard/3.svg)](https://ai-level.dev/level-3)
 
-[Building with an AI agent](#building-with-an-ai-agent) · [How to use it](#how-to-use-bones) · [Release archives](#release-archives) · [Examples](examples/README.md) · [Documentation](docs/index.md) · [Changelog](CHANGELOG.md)
+[Building with an AI agent](#building-with-an-ai-agent) · [How to use it](#how-to-use-bones) · [Building the engine](#building-the-engine) · [Examples](examples/README.md) · [Documentation](docs/index.md) · [Changelog](CHANGELOG.md)
 
 </div>
 
@@ -58,8 +58,8 @@ Three ways in, from least to most code of your own. The first needs no Rust at a
 
 You ship the engine binary unchanged and write your product — a game, a tool, a GUI — as one or more WASM extensions.
 
-1. **Download the engine** for your platform from the [latest release](https://github.com/an-dr/bones/releases/latest); [Release archives](#release-archives) says which one.
-2. **Create a project** with the archive's `bones-cli new my-game --kind game` (or `egui`, `web`, `embed`). It builds and passes its own headless checks from the first command. In a language other than Rust, generate bindings from the [ABI](wit/README.md) shipped in the archive instead.
+1. **Build the engine** at the [latest release](https://github.com/an-dr/bones/releases/latest) tag; [Building the engine](#building-the-engine) says how.
+2. **Create a project** with the built `bones-cli new my-game --kind game` (or `egui`, `web`, `embed`). It builds and passes its own headless checks from the first command. In a language other than Rust, generate bindings from the [ABI](wit/README.md) in `dist/wit/` instead.
 3. **Run `bones-cli dev`** in the project. It builds the extension for `wasm32-wasip2`, starts the engine, and hot-reloads on every save. `cargo test` runs the checks.
 
 [examples/README.md](examples/README.md#your-own-extension-project) walks through the project setup and picks the example closest to what you are building: a game, an egui tool, a web-panel app, persistent state. Start with the [hello-demo tutorial](examples/extensions/hello-demo/README.md).
@@ -80,11 +80,19 @@ Distributed by git tag, not crates.io; [docs/architecture/structure.md](docs/arc
 
 When you need a capability the sandbox cannot reach — a device, a native library, an OS service — or code your application calls on a hot path, write a native module in Rust and inject it with `.module(...)`. It joins the same bus and can define its own message vocabulary, which extensions then reach like any other. [docs/design/extensions.md](docs/design/extensions.md#extension-or-native-module) says when to choose a module over an extension. [custom-engine](examples/embedding/custom-engine/README.md) is the worked example.
 
-## Release archives
+## Building the engine
 
-Every [release](https://github.com/an-dr/bones/releases) carries six archives, each with a `.sha256` beside it. They differ by platform and by whether they include [web panels](docs/examples/web-app.md) — HTML interfaces for extensions — which need the operating system's web view at runtime. Each contains the engine, an empty `extensions/` folder, the ABI (`wit/`), a sample `bones.toml` with every default spelled out, the licence, and third-party notices.
+A [release](https://github.com/an-dr/bones/releases) is a tag and its notes; it carries no binaries ([ADR-046](docs/adr/ADR-046-releases-publish-source-not-binary-archives.md)). Build at the tag:
 
-| Archive | Web panels | Your machine needs |
+```sh
+git clone --recursive --branch v3.1.0 https://github.com/an-dr/bones
+cd bones
+cargo xtask dist --features web   # or without --features for the plain build
+```
+
+`dist/` then holds the engine, `bones-cli`, an empty `extensions/` folder, the ABI (`wit/`), the `bones-user` agent plugin, a sample `bones.toml` with every default spelled out, the licence, and third-party notices; a zip of it lands beside the repository root. [docs/contributing/building.md](docs/contributing/building.md) lists the prerequisites. Builds differ by platform and by whether they include [web panels](docs/examples/web-app.md) — HTML interfaces for extensions — which need the operating system's web view at runtime. CI builds each of these on every push:
+
+| Build | Web panels | Your machine needs |
 | --- | --- | --- |
 | `bones-<version>-windows-x64-web.zip` | ✅ | Windows 10 or 11 — WebView2 is part of the OS |
 | `bones-<version>-windows-arm64-web.zip` | ✅ | Windows 10 or 11 on ARM |
@@ -93,9 +101,7 @@ Every [release](https://github.com/an-dr/bones/releases) carries six archives, e
 | `bones-<version>-linux-arm64.zip` | — | As linux-x64, on ARM64 |
 | `bones-<version>-linux-arm64-web.zip` | ✅ | As linux-x64-web, on ARM64 |
 
-**Which Linux archive?** Take `-web` if your extensions open web panels and you can install webkit2gtk (`sudo apt install libwebkit2gtk-4.1-0` on Debian and Ubuntu). A `-web` build will not start at all where that library is missing; the plain build has no such dependency, and refuses `web = true` in `bones.toml` with an error instead.
-
-Every push to `main` also uploads the same six as CI artifacts, for trying a change before it is released. To build one yourself: `cargo xtask dist`, adding `--features web` for the web variant.
+**Which Linux build?** Take `-web` if your extensions open web panels and you can install webkit2gtk (`sudo apt install libwebkit2gtk-4.1-0` on Debian and Ubuntu). A `-web` build will not start at all where that library is missing; the plain build has no such dependency, and refuses `web = true` in `bones.toml` with an error instead.
 
 ## Two version lines
 

@@ -5,7 +5,7 @@ description: Change the bones engine itself — its crates, the wire format, the
 
 # bones-dev
 
-bones is a native core with a message bus and optional sandboxed WebAssembly extensions. This skill is for working on the engine. The repository's `AGENTS.md` holds its conventions and commit scopes, and [docs/index.md](../../../../docs/index.md) maps the documentation. The documentation is the authority: a design changes in `docs/` before its code does.
+bones is a native core with a message bus and optional sandboxed WebAssembly extensions. This skill is for working on the engine. The repository's `AGENTS.md` lists commit scopes, and [docs/index.md](../../../../docs/index.md) maps the documentation. The documentation is the authority: a design changes in `docs/` before its code does.
 
 ## Find your way
 
@@ -23,7 +23,8 @@ bones is a native core with a message bus and optional sandboxed WebAssembly ext
 ## Check a change
 
 - `cargo xtask doctor` names a missing prerequisite and how to install it. SDL builds from source, so cmake and a C compiler are needed.
-- Run the tests of what you touched while working, then `cargo xtask test` once at the end: formatting, clippy with warnings denied, both feature sets, the kernel without `wasm`, the standalone crates, and the rustdoc build ([docs/contributing/testing.md](../../../../docs/contributing/testing.md)).
+- For code or build changes, run focused tests while working, then `cargo xtask test` once at the end: formatting, clippy with warnings denied, both feature sets, the kernel without `wasm`, the standalone crates, and the rustdoc build ([docs/contributing/testing.md](../../../../docs/contributing/testing.md)).
+- For documentation-only changes, run the relevant Markdown and link checks; skip the workspace unit tests. Agent instructions are not documentation: a change to `agent-plugins/` also runs `cargo xtask plugins` and, when it changes the rules or MCP configuration a new project receives, the `bones-cli` tests.
 - Generated files are checked for staleness by tests. After changing a source, run its generator and commit both: `wire-format`, `vectors`, `ts-codec`, and `plugin-docs`. `cargo xtask plugins` checks the agent plugins.
 
 ## Change a message
@@ -33,6 +34,11 @@ The steps are in [references/wire-format.md](references/wire-format.md). In shor
 ## Keep the invariants
 
 bones is built for AI-assisted product development (ADR-044). Read [references/invariants.md](references/invariants.md) before adding a topic, a failure path, a capability, or a tool, and say in your summary how the change keeps each invariant it touches.
+
+## Code conventions
+
+- Follow [docs/code-style.md](../../../../docs/code-style.md) for one type per file, tests in their own files, and a README in every crate. Apply its file-layout rules to new code and code being substantially touched; leave untouched files alone.
+- Write doc comments as short bullets or a couple of tight sentences. Separate what a piece does from why when both need explaining.
 
 ## Traps
 

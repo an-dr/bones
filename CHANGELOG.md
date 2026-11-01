@@ -22,6 +22,9 @@ An ABI entry concerns every extension in existence, in any language. An engine e
 
 ### Added
 
+### Changed
+
+- **Releases publish source, not binary archives** (ADR-046). A GitHub Release carries the tag's changelog section and GitHub's source archives. Build the engine and `bones-cli` at a tag with `cargo xtask dist`; CI still builds every platform and variant on every push and uploads nothing.
 - **`Kernel::devtools_redacting(predicate)`** keeps matching envelopes' payloads out of the channel `devtools_from_env` opens, and **`bones_kernel::devtools::LogHistory`** is re-exported, so an application that redacts secrets no longer builds the channel by hand or depends on `bones-module-devtools` directly.
 - **`bones_test::Stub`** answers the direct sends an extension makes in `init` with a fixed reply and records them, so a test no longer writes a native module for each endpoint it does not compose.
 - **`Kernel::required_extension(name)`** loads that extension at startup and fails `build` when it is not in the catalog or does not load, so an app whose window the extension drives reports the error instead of opening blank.

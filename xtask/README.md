@@ -19,7 +19,7 @@ Each command checks its prerequisites before doing any work and stops at the fir
 - `process.rs` — running cargo and probing `PATH`.
 - `commits.rs`, `dist.rs`, `example.rs`, `test.rs`, `ts_codec.rs`, `vectors.rs`, `wire_format.rs` — one file per command; `example.rs` holds the example table.
 - `metadata.rs` — versions and facts read from cargo and `wit/`, never repeated.
-- `archive.rs`, `files.rs` — zip, checksum, and copy steps the packaging commands share.
+- `archive.rs`, `files.rs`, `reuse_archive.rs` — zip, checksum, and copy steps the packaging commands share.
 - `templates/` — the sample `bones.toml` and release README that `dist` ships.
 
 Not part of either version line: it ships in no release and nothing depends on it. [docs/contributing/building.md](../docs/contributing/building.md) is the user-facing guide.

@@ -49,7 +49,7 @@ Nested beside `bones-kernel-infra`, not inside it: each is its own crate, so a d
 
 ## Developer tools
 
-[bones-cli](bones-cli/README.md) is the console program that ships beside `bones` in every release archive (ADR-043): `new` writes a product project, `doctor` checks the machine, `build` and `dev` build and hot-reload the extension against the engine, and `mcp` serves the devtools channel to an AI agent. It depends on `bones-messages` only, never on the kernel.
+[bones-cli](bones-cli/README.md) is the console program built beside `bones` by `cargo xtask dist` (ADR-043, ADR-046): `new` writes a product project, `doctor` checks the machine, `build` and `dev` build and hot-reload the extension against the engine, and `mcp` serves the devtools channel to an AI agent. It depends on `bones-messages` only, never on the kernel.
 
 ## Building an extension
 

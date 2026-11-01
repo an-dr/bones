@@ -109,10 +109,10 @@ jobs:
       - name: Through the extension host
         run: cargo test -p bones-test --test typescript_guest -- --ignored
 
-  # The release archives, built on every push so packaging is exercised as
-  # often as the tests; on main they are the downloadable artifacts. Windows
-  # ships web panels always (WebView2 is part of the OS). Linux ships both
-  # variants, because a web build will not start without webkit2gtk and GTK.
+  # A release build of every platform and variant, on every push, so packaging
+  # is exercised as often as the tests. Nothing is uploaded: a release is
+  # source, and the binaries are built where they are used. Windows builds web
+  # panels always (WebView2 is part of the OS); Linux builds both variants.
   build:
     name: Build (${{ matrix.name }})
     needs: test
@@ -140,24 +140,17 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends $(cargo xtask linux-packages)
-      - name: Release archive
+      - name: Release build
         shell: bash
         run: |
           if [ -n "${{ matrix.features }}" ]; then
-            cargo xtask dist --features "${{ matrix.features }}"
+            cargo xtask dist --no-archive --features "${{ matrix.features }}"
           else
-            cargo xtask dist
+            cargo xtask dist --no-archive
           fi
-      - uses: actions/upload-artifact@v4
-        with:
-          name: bones-${{ matrix.name }}
-          path: |
-            bones-*.zip
-            bones-*.zip.sha256
-          if-no-files-found: error
 
-  # A v* tag publishes its archives as a GitHub Release. The tag is the
-  # release decision; CI only assembles what that commit already built.
+  # A v* tag publishes a GitHub Release of its source: the tag's notes from
+  # CHANGELOG.md, and the source archives GitHub attaches to every release.
   release:
     name: GitHub Release
     if: startsWith(github.ref, 'refs/tags/v')
@@ -166,13 +159,15 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: bones-*
-          merge-multiple: true
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            bones-*.zip
-            bones-*.zip.sha256
-          fail_on_unmatched_files: true
+      - uses: actions/checkout@v5
+      - name: Publish the tag's changelog section
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          awk -v v="$version" '
+            /^## / { if (found) exit; found = ($0 ~ "^## engine " v "( |$)") ; next }
+            found' CHANGELOG.md > notes.md
+          [ -s notes.md ] || { echo "CHANGELOG.md has no '## engine $version' section"; exit 1; }
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "bones $GITHUB_REF_NAME" --notes-file notes.md

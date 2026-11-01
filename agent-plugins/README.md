@@ -9,7 +9,7 @@ Everything bones offers an AI agent, as [Agent Plugins](https://agent-plugins.or
 
 ## Use
 
-- **A client that loads Agent Plugins** — install the plugin directory the way the client does; every release archive carries `agent-plugins/bones-user/`.
+- **A client that loads Agent Plugins** — install the plugin directory the way the client does; every `cargo xtask dist` build carries `agent-plugins/bones-user/`.
 - **A client that only reads skills** — copy a plugin's `skills/<name>/` folder into the client's skills directory, such as `~/.claude/skills/` for Claude Code.
 - **A client that reads `AGENTS.md` and `.mcp.json`** — `bones-cli new` writes both into every project, generated from `bones-user`: `AGENTS.md` is its rules reference, and `.mcp.json` its MCP server with the path of the `bones-cli` that wrote it.
 

@@ -1,6 +1,6 @@
 # Agent benchmark
 
-Measures how well an AI agent builds a product on bones, given only a release archive and an empty folder. Each release runs it, so a change to the engine, its tools, or its documentation can be judged by whether agents do better.
+Measures how well an AI agent builds a product on bones, given only a `cargo xtask dist` build and an empty folder. Each release runs it, so a change to the engine, its tools, or its documentation can be judged by whether agents do better.
 
 ## The tasks
 

@@ -2,6 +2,20 @@
 
 Add future work here only when it has a demonstrable completion artifact; completed work belongs in git history.
 
+## bones-develop: the way to install bones and add it to a project
+
+Releases carry no binaries ([ADR-046](adr/ADR-046-releases-publish-source-not-binary-archives.md)), so today a user clones a tag and runs `cargo xtask dist`. `bones-cli` becomes `bones-develop`, the one tool a user installs, and it gets the engine for them:
+
+- **Install once.** `cargo install --git https://github.com/an-dr/bones bones-develop` is the only manual step. Nothing else needs a clone of this repository.
+- **Engines by tag.** `bones-develop engine install <tag> [--features web]` shallow-clones that tag, builds `bones` in release mode, and caches the binary with that tag's `wit/` and `agent-plugins/bones-user/` in a per-user folder. `engine list` shows cached engines and the remote `v*` tags (`git ls-remote`); `engine remove` deletes one. The prerequisite checks `doctor` already runs gate the build.
+- **The project picks the engine.** `dev`, `screenshot`, `mcp`, and `doctor` read the engine tag a project pins and use that cached engine, building it on first use. The project and the engine cannot drift apart, so the ABI check becomes a guarantee rather than a warning.
+- **New projects at any tag.** `new <name> [--tag <tag>]` pins the newest `v*` tag unless told otherwise, and writes `AGENTS.md` and `.mcp.json` from that tag's plugin rather than from a copy compiled into the tool.
+- **Agent material without a release.** Agent plugin changes have no release of their own ([ADR-046](adr/ADR-046-releases-publish-source-not-binary-archives.md)). `bones-develop agents update [--tag <tag>|--main]` rewrites a project's `AGENTS.md` and `.mcp.json` from the chosen ref's `bones-user` plugin and says what changed, so a product picks up improved guidance without moving its engine pin.
+- **Adding bones to an existing project.** `bones-develop add` adds the pinned dependency lines to an existing Cargo project, for an embedder (`bones-kernel`) or for an extension crate (`bones-wasm-sdk`, `bones-test`), and its `bones.toml` when the project runs the released engine.
+- **Its own version.** One `bones-develop` drives engines of several versions, so it reads `wire-format.json` and the devtools routes from the engine's tag and states the oldest engine it supports. A new ADR records this and supersedes the rest of ADR-043; the README's getting-started path becomes the install command above.
+
+Completion artifact: on a clean machine with Rust and the build prerequisites, `cargo install` of `bones-develop`, then `bones-develop new pong` and `bones-develop dev` in it, start the engine of the newest tag with no clone of this repository; `bones-develop add` makes an empty `cargo new` crate build against a pinned bones tag.
+
 ## Android
 
 bones runs on Android as a library inside an application's own APK: arm64-v8a, API level 26 and up. There is no Android release of the `bones` executable. An Android user installs apps rather than dropping files into a folder, and since extensions are optional ([ADR-040](adr/ADR-040-the-wasm-extension-host-is-an-opt-in-module.md)), the binary-plus-extensions model is not one the engine has to offer there. Other ABIs and Play Store signing are out of scope for the first version.
@@ -21,19 +35,13 @@ Completion artifact: the example APK on an arm64 device, adding an extension at 
 
 ## Supply-chain checks and the rest of the platform matrix
 
-[CI](../.github/workflows/ci.yml) runs `cargo xtask test` on Windows and Linux, x64 and ARM64, and builds the release archives there. Three gaps remain, and they are separable:
+[CI](../.github/workflows/ci.yml) runs `cargo xtask test` on Windows and Linux, x64 and ARM64, and builds every release variant there. Three gaps remain, and they are separable:
 
 - **A dependency advisory and licence scan.** It matters more than usual here because the engine links its whole dependency tree statically and ships generated third-party notices.
 - **An MSRV policy**, or an explicit, documented decision that the policy is current-stable-only. Today there is neither.
-- **Web panels on Linux, and macOS.** The wry web-panel tests are gated to Windows, so the Linux `-web` archives are built but their panels have never been exercised by a test. macOS has no runner at all.
+- **Web panels on Linux, and macOS.** The wry web-panel tests are gated to Windows, so the Linux `-web` builds are compiled but their panels have never been exercised by a test. macOS has no runner at all.
 
 Completion artifact: CI running an advisory and licence scan on every push, the wry tests running on Linux, and a `rust-version` in `[workspace.package]` or a documented policy that CI enforces.
-
-## Reproducible release archives
-
-`cargo xtask dist` writes a SHA256 beside each archive, which verifies a download but not a build: zip entries carry modification times, so two runs over identical inputs produce different hashes. A consumer cannot check that the archive they downloaded is the one this repository's source produces.
-
-Completion artifact: two runs of the CI build job over the same commit producing byte-identical archives, and the checksum published from source rather than from the upload.
 
 ## Message rustdoc checked against the specification
 

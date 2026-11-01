@@ -2,7 +2,7 @@
 
 <!-- Generated from wire-format.json by `cargo xtask wire-format`. Do not edit. -->
 
-This specification and [extension.wit](extension.wit) are the two halves of the extension ABI: `extension.wit` defines the calls, this defines the bytes those calls carry on core-owned topics. It describes the ABI line of the `abi-v*` tag or release archive you took it from; `bones-messages` carries the same version number.
+This specification and [extension.wit](extension.wit) are the two halves of the extension ABI: `extension.wit` defines the calls, this defines the bytes those calls carry on core-owned topics. It describes the ABI line of the `abi-v*` tag or build you took it from; `bones-messages` carries the same version number.
 
 Written so an extension author in any language can produce and consume core messages without reading Rust. The Rust implementation lives in `bones-messages`; where the two ever disagree, the [conformance vectors](vectors/README.md) decide, because both this specification and that crate are checked against them.
 

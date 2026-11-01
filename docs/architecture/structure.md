@@ -66,7 +66,7 @@ Both are first-class products; the app is the common case.
 | Rust SDK | `bones-wasm-sdk`: the WIT, its generated bindings, and the message vocabulary | Extension authors writing Rust |
 | launcher | `bones-launcher`: selects and starts an installed application | Applications shipping version folders |
 | versioning | `bones-versioning`: pure version and folder-name semantics | Launcher and upgrade module |
-| developer tools | `bones-cli`: new projects, doctor, build, the hot-reload dev loop, and an MCP server over the devtools channel (ADR-043); ships beside `bones` in every archive | Product developers and their AI agents |
+| developer tools | `bones-cli`: new projects, doctor, build, the hot-reload dev loop, and an MCP server over the devtools channel (ADR-043); built beside `bones` by `cargo xtask dist` | Product developers and their AI agents |
 | test harness | `bones-test`: one built extension on a headless kernel, driven frame by frame and recorded | Products testing their extensions, and the agents writing them |
 | ABI | `bones:extension` and the message wire format | Extension authors in any other language |
 
@@ -93,7 +93,7 @@ What the tag promises:
 - **The two version lines mean what ADR-029 says.** An engine tag moves when the Rust API changes; an ABI tag moves only when the guest contract does. They start equal at 1.0.0 (ADR-029) and are expected to diverge.
 - **A tag is immutable.** Fixes arrive as a new tag, never by moving an old one, because a git dependency has no checksum a consumer can verify against.
 - **`bones-kernel` is the supported library surface.** Reaching past it into `bones-kernel-infra` or a `bones-module-*` crate is possible in a git dependency in a way it would not be on a registry, and is not covered by the version line.
-- **Support covers the platforms CI tests.** The root [README](../../README.md#platform-support) lists them and which release archive each gets.
+- **Support covers the platforms CI tests.** The root [README](../../README.md#platform-support) lists them and which build each gets.
 
 ## Dependency rules
 

@@ -7,7 +7,7 @@ Generated from the files named below by `cargo xtask plugin-docs`. Do not edit b
 
 # bones-cli
 
-The developer tools for a product built on bones (ADR-043). They ship in every release archive beside the `bones` engine, which they find as their sibling.
+The developer tools for a product built on bones (ADR-043). `cargo xtask dist` builds them beside the `bones` engine, which they find as their sibling.
 
 ```sh
 bones-cli new pong --kind game     # a project that builds and passes its check
@@ -491,7 +491,7 @@ The practical consequence is that a bump costs every extension in existence, so 
 
 <!-- Generated from wire-format.json by `cargo xtask wire-format`. Do not edit. -->
 
-This specification and [extension.wit](extension.wit) are the two halves of the extension ABI: `extension.wit` defines the calls, this defines the bytes those calls carry on core-owned topics. It describes the ABI line of the `abi-v*` tag or release archive you took it from; `bones-messages` carries the same version number.
+This specification and [extension.wit](extension.wit) are the two halves of the extension ABI: `extension.wit` defines the calls, this defines the bytes those calls carry on core-owned topics. It describes the ABI line of the `abi-v*` tag or build you took it from; `bones-messages` carries the same version number.
 
 Written so an extension author in any language can produce and consume core messages without reading Rust. The Rust implementation lives in `bones-messages`; where the two ever disagree, the [conformance vectors](vectors/README.md) decide, because both this specification and that crate are checked against them.
 

@@ -1,6 +1,6 @@
 # bones-cli
 
-The developer tools for a product built on bones (ADR-043). They ship in every release archive beside the `bones` engine, which they find as their sibling.
+The developer tools for a product built on bones (ADR-043). `cargo xtask dist` builds them beside the `bones` engine, which they find as their sibling.
 
 ```sh
 bones-cli new pong --kind game     # a project that builds and passes its check
