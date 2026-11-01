@@ -8,6 +8,17 @@ use bones_kernel::{
 };
 use bones_messages::{extension_control::Reload, EncodeMessage, Message};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+/// The kernel every test here starts from.
+///
+/// - What: the product's extension load deadline (1 s) raised to 60 s.
+/// - Why: the default is for one engine on a user's machine; here dozens of
+///   tests share a CI runner's CPU, and a load that misses the deadline fails
+///   a test that is not about deadlines. A test of the deadline sets its own.
+fn kernel() -> Kernel {
+    Kernel::new().extension_load_timeout(Duration::from_secs(60))
+}
 
 const HELLO: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -20,7 +31,7 @@ fn failed_file_replacement_keeps_the_old_instance_without_shutdown() {
     let path = dir.path().join("app.wasm");
     std::fs::copy(HELLO, &path).unwrap();
     let sink = RecordingSink::new();
-    let mut engine = Kernel::new()
+    let mut engine = kernel()
         .extensions_dir(dir.path())
         .logger(Logger::new(Arc::new(sink.clone())))
         .build()
@@ -52,7 +63,7 @@ fn commanded_reload_initialises_then_cleans_up_once_and_preserves_cleanup_messag
     let dir = tempfile::tempdir().unwrap();
     std::fs::copy(HELLO, dir.path().join("app.wasm")).unwrap();
     let sink = RecordingSink::new();
-    let mut engine = Kernel::new()
+    let mut engine = kernel()
         .extensions_dir(dir.path())
         .extension_controller("app")
         .logger(Logger::new(Arc::new(sink.clone())))
