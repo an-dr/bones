@@ -141,11 +141,12 @@ It needs a Rust toolchain and a C compiler with CMake, since the kernel infrastr
 
 ## Projects using bones
 
-| Project | What it is |
-| --- | --- |
-| [commits](https://github.com/an-dr/commits) | A desktop Git client. Embeds bones and runs its Git Graph view in a wry web panel |
-| [artificial-will-game-v2](https://github.com/an-dr/artificial-will-game-v2) | A game about a robot named Will. Embeds bones and ships its gameplay as extensions |
-| [copper](https://github.com/an-dr-vibe/an-dr-copper) | A manifest-first automation host for AI-generated extensions. Embeds bones for its settings UI and tray |
+| Project | What it is | Screenshot |
+| --- | --- | --- |
+| [commits](https://github.com/an-dr/commits) | A desktop Git client. Embeds bones and runs its Git Graph view in a wry web panel | <img src="https://raw.githubusercontent.com/an-dr/commits/main/docs/README/screenshot.jpg" alt="Commits browsing a repository with branches, a commit graph, and changed files" width="320"> |
+| [crossWall](https://github.com/an-dr/cross-wall) | A cross-platform wallpaper manager that syncs across devices. Embeds bones as its engine | <img src="https://raw.githubusercontent.com/an-dr/cross-wall/main/docs/media/library.png" alt="The crossWall Library showing wallpapers as a gallery" width="320"> |
+| [artificial-will-game-v2](https://github.com/an-dr/artificial-will-game-v2) | A game about a robot named Will. Embeds bones and ships its gameplay as extensions | |
+| [copper](https://github.com/an-dr-vibe/an-dr-copper) | A manifest-first automation host for AI-generated extensions. Embeds bones for its settings UI and tray | |
 
 Built something on bones? Add the badge to your README, and open a pull request to list it here:
 
