@@ -824,8 +824,11 @@ impl Module for GameCore {
     fn init(&mut self, ctx: &mut ModuleContext) -> Result<(), String> {
         ctx.subscribe("game-core/*");
         ctx.subscribe(Tick::TOPIC);
+        // Cloned, not consumed: the bus is shared, and the extension host
+        // registers after `.module(...)` modules and needs it too.
         self.bus = Some(
-            ctx.consume_service::<Bus>()
+            ctx.get_service::<Bus>()
+                .cloned()
                 .ok_or("no Bus service available")?,
         );
         Ok(())
