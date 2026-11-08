@@ -30,12 +30,16 @@ use bones_messages::{DecodeMessage, EncodeMessage, Message};
 
 /// The kernel every test here starts from.
 ///
-/// - What: the product's extension load deadline (1 s) raised to 60 s.
-/// - Why: the default is for one engine on a user's machine; here dozens of
-///   tests share a CI runner's CPU, and a load that misses the deadline fails
-///   a test that is not about deadlines. A test of the deadline sets its own.
+/// - What: the product's extension deadlines raised, load from 1 s to 60 s
+///   and each call from 50 ms to 10 s.
+/// - Why: the defaults are for one engine on a user's machine; here dozens of
+///   tests share a CI runner's CPU, and a load or call that misses its
+///   deadline fails a test that is not about deadlines. A test of a deadline
+///   sets its own.
 fn kernel() -> Kernel {
-    Kernel::new().extension_load_timeout(Duration::from_secs(60))
+    Kernel::new()
+        .extension_load_timeout(Duration::from_secs(60))
+        .extension_call_timeout(Duration::from_secs(10))
 }
 
 /// One long-lived thread that owns SDL for this whole test binary.
@@ -830,6 +834,9 @@ fn a_runaway_extension_is_quarantined_while_the_engine_keeps_running() {
         ..
     } = kernel()
         .extensions_dir(&dir)
+        // Short enough to keep the test quick, long enough that hello's
+        // tick fits on a busy runner.
+        .extension_call_timeout(Duration::from_secs(1))
         .logger(logger)
         .build()
         .unwrap();
@@ -839,7 +846,7 @@ fn a_runaway_extension_is_quarantined_while_the_engine_keeps_running() {
     watcher.subscribe(LifecycleEvent::TOPIC);
 
     // hello ticks fine; runaway_demo hangs for its whole time budget
-    // (~50ms) before trapping — this call blocks that long, same as a real
+    // (1 s here) before trapping — this call blocks that long, same as a real
     // runaway extension would stall one frame before the supervisor
     // catches it.
     runner.step(1.0 / 60.0);

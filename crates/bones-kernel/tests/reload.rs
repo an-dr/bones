@@ -12,12 +12,16 @@ use std::time::Duration;
 
 /// The kernel every test here starts from.
 ///
-/// - What: the product's extension load deadline (1 s) raised to 60 s.
-/// - Why: the default is for one engine on a user's machine; here dozens of
-///   tests share a CI runner's CPU, and a load that misses the deadline fails
-///   a test that is not about deadlines. A test of the deadline sets its own.
+/// - What: the product's extension deadlines raised, load from 1 s to 60 s
+///   and each call from 50 ms to 10 s.
+/// - Why: the defaults are for one engine on a user's machine; here dozens of
+///   tests share a CI runner's CPU, and a load or call that misses its
+///   deadline fails a test that is not about deadlines. A test of a deadline
+///   sets its own.
 fn kernel() -> Kernel {
-    Kernel::new().extension_load_timeout(Duration::from_secs(60))
+    Kernel::new()
+        .extension_load_timeout(Duration::from_secs(60))
+        .extension_call_timeout(Duration::from_secs(10))
 }
 
 const HELLO: &str = concat!(
