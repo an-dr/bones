@@ -60,6 +60,22 @@ fn screen_with_every_layout_round_trips() {
         Layout::Panel {
             side: PanelSide::Central,
         },
+        Layout::Draggable,
+        Layout::DropTarget,
+        Layout::ContextMenu,
+        Layout::Tooltip,
+        Layout::Fade,
+        Layout::Tile {
+            image: 3,
+            width: 240,
+            height: 160,
+            badge: 0x2665,
+        },
+        Layout::Stage {
+            image: 3,
+            previous: false,
+            next: true,
+        },
     ];
     let spec = Spec {
         root: Root::Screen,
@@ -206,6 +222,11 @@ fn every_event_publishes_as_its_own_topic() {
         Event::Selected { id: 1, index: 0 },
         Event::Toggled { id: 1, on: true },
         Event::ValueChanged { id: 1, value: 0.0 },
+        Event::Dropped { id: 1, payload: 2 },
+        Event::Submitted { id: 1 },
+        Event::KeyPressed {
+            key: "Escape".into(),
+        },
     ]
     .iter()
     .map(|event| event.to_message().0)
@@ -217,7 +238,10 @@ fn every_event_publishes_as_its_own_topic() {
             "ui/changed",
             "ui/selected",
             "ui/toggled",
-            "ui/value"
+            "ui/value",
+            "ui/dropped",
+            "ui/submitted",
+            "ui/key"
         ]
     );
 }

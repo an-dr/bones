@@ -11,8 +11,12 @@ impl Kind for TextEditKind {
 
     fn draw(&self, ui: &mut egui::Ui, id: u32, props: TextEdit, cx: &mut DrawContext<'_>) {
         let mut text = props.text;
-        if ui.text_edit_singleline(&mut text).changed() {
+        let response = ui.text_edit_singleline(&mut text);
+        if response.changed() {
             cx.emit(Event::Changed { id, text });
+        }
+        if response.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+            cx.emit(Event::Submitted { id });
         }
     }
 }

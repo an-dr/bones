@@ -23,6 +23,16 @@ A bones product is a WebAssembly extension the engine loads. The extension never
    - `app.logs()` holds the engine's diagnostics.
 4. Run `cargo test`. Fix every failure and every warning the logs show before going on.
 
+## Build an interface
+
+Every frame the interface should show, publish one `ui/spec`: a `Root` (`Window` for a floating panel, `Screen` for the whole window with `Panel` containers) over a tree of `Node`s. Never draw widgets yourself.
+
+- Widgets are `bones_wasm_sdk::messages::ui::kinds::*` (`Label`, `Button`, `TextEdit`, `Select`, `Checkbox`, `Image`, `IconButton`, `Progress`, `Toast`, `TitleBar`, …), placed with `.node(id)`; containers are `Node::container(Layout::…, children)`.
+- Events come back as `ui/clicked`, `ui/changed`, `ui/selected`, `ui/toggled`, `ui/value`, `ui/submitted`, `ui/dropped`, and `ui/key`, each naming the widget id you gave.
+- Icons are Lucide, by lucide.dev name: the `Icon` and `IconButton` kinds take the name, and `ui::icons::TRASH_2` and its siblings go straight into any text.
+- Images are uploaded once with `ui/image` and shown by handle.
+- In a check, `spec.body.widgets_of::<Label>()` lists what a frame showed.
+
 ## See it run
 
 With the MCP server (`.mcp.json` registers it):

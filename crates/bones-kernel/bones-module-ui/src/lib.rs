@@ -21,6 +21,7 @@ mod fonts;
 mod input_translation;
 mod kind;
 mod look;
+mod media;
 mod native_door;
 mod output_translation;
 mod platform_output;

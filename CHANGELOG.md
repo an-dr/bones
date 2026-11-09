@@ -9,6 +9,23 @@ An ABI entry concerns every extension in existence, in any language. An engine e
 
 ## Unreleased (engine)
 
+### Added
+
+- **Bones ships the widgets desktop applications need** (ADR-048): text, buttons, inputs, selection, images, icons, cards, progress, toasts, media tiles, a full-window image stage, drag and drop, context menus, tooltips, fades, and the window's own title bar. A native module shows them through the new `ui` service (`bones_kernel::ui::ViewModule` runs a view described from state); `Kernel::ui_kind` adds a widget kind of the product's own.
+- **The ui module follows the desktop's look** (ADR-049): system font, light or dark mode, accent colour, and each desktop's spacing on Windows, KDE, GNOME, and COSMIC, followed while running. `Kernel::ui_native_look(false)` keeps egui's look.
+- Lucide icons are bundled; `cargo xtask lucide` brings in a newer release.
+- The ui draws at the display's scale, forwards the mouse wheel, opens links, and uses the clipboard.
+
+## Unreleased (ABI)
+
+### Changed
+
+- **`ui/spec` is a widget tree** (ADR-048): a root, `Window` or `Screen`, over layout containers and widgets named by kind with their own properties. The flat label, text-edit, and button list is gone; extensions publishing `ui/spec` need rebuilding against the new `bones-messages`.
+
+### Added
+
+- `ui/selected`, `ui/toggled`, `ui/value`, `ui/submitted`, `ui/dropped`, and `ui/key` events; `ui/image` and `ui/image-free` to upload images once; the standard widget kinds in `ui::kinds` and every Lucide icon in `ui::icons`.
+
 ## engine 4.0.0 / ABI 1.4.0
 
 Releases are source, and `bones-develop` is how bones is installed and used (ADR-046, ADR-047). A major version because `bones-cli` is renamed `bones-develop` with no alias and releases no longer carry binary archives; `bones:extension` stays at 1.0.0.

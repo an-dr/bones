@@ -9,7 +9,9 @@ use bones_messages::lifecycle::LifecycleEvent;
 use bones_messages::os::{Reply as OsReply, Result as OsResult};
 use bones_messages::renderer::{Captured, DisplayChanged, LogicalCanvas};
 use bones_messages::tick::Tick;
-use bones_messages::ui::{Changed, Clicked, Selected, Toggled, ValueChanged};
+use bones_messages::ui::{
+    Changed, Clicked, Dropped, KeyPressed, Selected, Submitted, Toggled, ValueChanged,
+};
 use bones_messages::upgrader::Result as UpgraderResult;
 use bones_messages::web::{PageMessage, PanelClosed, PanelFailed, PanelOpened};
 use bones_messages::window::CloseRequested;
@@ -61,6 +63,12 @@ pub enum Inbound<'a> {
     Toggled(Toggled),
     /// `ui/value`: a `slider` widget was dragged.
     ValueChanged(ValueChanged),
+    /// `ui/dropped`: a `draggable` was dropped on a `drop-target`.
+    Dropped(Dropped),
+    /// `ui/submitted`: Enter was pressed in a `text-edit` widget.
+    Submitted(Submitted),
+    /// `ui/key`: a key no widget took, for the `Screen` owner.
+    KeyPressed(KeyPressed<'a>),
     /// `web/panel-opened`.
     PanelOpened(PanelOpened<'a>),
     /// `web/panel-closed`.
@@ -128,6 +136,9 @@ impl<'a> Inbound<'a> {
             Selected::TOPIC => as_(payload, Self::Selected),
             Toggled::TOPIC => as_(payload, Self::Toggled),
             ValueChanged::TOPIC => as_(payload, Self::ValueChanged),
+            Dropped::TOPIC => as_(payload, Self::Dropped),
+            Submitted::TOPIC => as_(payload, Self::Submitted),
+            KeyPressed::TOPIC => as_(payload, Self::KeyPressed),
             PanelOpened::TOPIC => as_(payload, Self::PanelOpened),
             PanelClosed::TOPIC => as_(payload, Self::PanelClosed),
             PanelFailed::TOPIC => as_(payload, Self::PanelFailed),

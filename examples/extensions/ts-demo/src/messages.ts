@@ -295,6 +295,22 @@ export interface UiImageFree {
   handle: number;
 }
 
+/** `ui/dropped` */
+export interface UiDropped {
+  id: number;
+  payload: number;
+}
+
+/** `ui/submitted` */
+export interface UiSubmitted {
+  id: number;
+}
+
+/** `ui/key` */
+export interface UiKey {
+  key: string;
+}
+
 /** `audio/load-sound` */
 export interface AudioLoadSound {
   id: number;
@@ -443,6 +459,9 @@ export interface Messages {
   "ui/value": UiValue;
   "ui/image": UiImage;
   "ui/image-free": UiImageFree;
+  "ui/dropped": UiDropped;
+  "ui/submitted": UiSubmitted;
+  "ui/key": UiKey;
   "audio/load-sound": AudioLoadSound;
   "audio/play-sound": AudioPlaySound;
   "audio/play-music": AudioPlayMusic;
@@ -503,6 +522,9 @@ export const FIELDS: { [T in keyof Messages]: ReadonlyArray<readonly [string, Fi
   "ui/value": [["id", "u32"], ["value", "f32"]],
   "ui/image": [["handle", "u32"], ["width", "u32"], ["height", "u32"], ["rgba", "rest"]],
   "ui/image-free": [["handle", "u32"]],
+  "ui/dropped": [["id", "u32"], ["payload", "u32"]],
+  "ui/submitted": [["id", "u32"]],
+  "ui/key": [["key", "str-rest"]],
   "audio/load-sound": [["id", "u32"], ["bytes", "rest"]],
   "audio/play-sound": [["id", "u32"], ["volume", "f32"]],
   "audio/play-music": [["id", "u32"], ["volume", "f32"]],

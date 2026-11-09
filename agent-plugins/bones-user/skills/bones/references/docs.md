@@ -900,6 +900,13 @@ How a container arranges its children.
 | 4 | frame: a card, the look's faint fill with rounded corners; give it a `strong` first child as its title | none |
 | 5 | grid | `columns`: `u16` — children per row |
 | 6 | panel | `side`: `u8` — `0` top, `1` bottom, `2` left, `3` right, `4` central: what the other panels leave |
+| 7 | draggable: its children drag as one, carrying this container's id | none |
+| 8 | drop-target: highlights while a draggable hovers; a drop publishes `ui/dropped` | none |
+| 9 | context-menu: the first child is drawn, the rest is the menu a right click opens | none |
+| 10 | tooltip: the first child is drawn, the rest appears while the pointer rests on it | none |
+| 11 | fade: top to bottom; when anything inside changes, the new content fades in and rises into place (not on first appearance) | none |
+| 12 | tile: an uploaded image cover-cropped into the box, pulsing until it arrives; the children appear in a bar along the bottom on hover; a click elsewhere publishes `ui/clicked` with this id | `image`: `u32` — the owner's image handle; `width`, `height`: `u16` — in points; `badge`: `u32` — a Unicode code point shown top-right while not hovered, such as a Lucide glyph; `0` for none |
+| 13 | stage: a full-window preview, the image fitted on a dark backdrop with the children in a bottom bar; close publishes `ui/clicked`, previous and next `ui/selected` with index 0 and 1, all with this id | `image`: `u32` — the owner's image handle; `previous`, `next`: `bool` |
 
 #### label
 
@@ -1141,6 +1148,31 @@ Forgets an image the sender uploaded; widgets still naming it draw an empty box.
 | Field | Type |
 | --- | --- |
 | `handle` | `u32` |
+
+### `ui/dropped`
+
+A `draggable` container was dropped on a `drop-target` container.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `id` | `u32` | the drop target's id |
+| `payload` | `u32` | the dropped container's id |
+
+### `ui/submitted`
+
+Enter was pressed in a `text-edit` widget.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `id` | `u32` | the widget id from the spec |
+
+### `ui/key`
+
+A key no widget took, published to the owner of the `screen`: Escape or an arrow key while nothing has focus.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `key` | `str-rest` | egui's name for the key: `Escape`, `ArrowLeft`, `Enter`, `A` |
 
 ## `audio/*`
 
