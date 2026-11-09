@@ -329,6 +329,7 @@ Where the tree is drawn.
 | ---: | --- | --- |
 | 0 | window | `title`: `str` — a floating panel's title; each owner may show one |
 | 1 | screen | none |
+| 2 | modal | `title`: `str` — a dialog above everything, dimming the window, until the owner stops showing it |
 
 A `screen` is the whole window, held by one owner at a time; its direct children are usually `panel` containers. A second owner's `screen` is refused, and windows float above it.
 
@@ -363,6 +364,10 @@ How a container arranges its children.
 | 11 | fade: top to bottom; when anything inside changes, the new content fades in and rises into place (not on first appearance) | none |
 | 12 | tile: an uploaded image cover-cropped into the box, pulsing until it arrives; the children appear in a bar along the bottom on hover; a click elsewhere publishes `ui/clicked` with this id | `image`: `u32` — the owner's image handle; `width`, `height`: `u16` — in points; `badge`: `u32` — a Unicode code point shown top-right while not hovered, such as a Lucide glyph; `0` for none |
 | 13 | stage: a full-window preview, the image fitted on a dark backdrop with the children in a bottom bar; close publishes `ui/clicked`, previous and next `ui/selected` with index 0 and 1, all with this id | `image`: `u32` — the owner's image handle; `previous`, `next`: `bool` |
+| 14 | wrap: left to right, continuing on the next line when the width runs out | none |
+| 15 | right-to-left: aligned to the right edge, the first child rightmost | none |
+| 16 | submenu: inside a context-menu, named by its first child, a `label`; the others are its items | none |
+| 17 | gallery: justified rows; children keep their shape (a tile's width and height give it), full rows fill the width, and only rows on screen are drawn | `row_height`: `u16` — the height rows aim for, in points; `gap`: `u16` — between items and rows, in points |
 
 #### label
 
@@ -374,11 +379,14 @@ How a container arranges its children.
 
 #### text-edit
 
-`props` of kind `text-edit`: a one-line field; an edit publishes `ui/changed`.
+`props` of kind `text-edit`: a one-line field; an edit publishes `ui/changed`, Enter `ui/submitted`.
 
-| Field | Type |
-| --- | --- |
-| `text` | `str` |
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `text` | `str` | |
+| `hint` | `str` | shown while empty; empty for none |
+| `disabled` | `bool` | |
+| `focused` | `bool` | takes the keyboard focus |
 
 #### button
 
@@ -387,6 +395,7 @@ How a container arranges its children.
 | Field | Type |
 | --- | --- |
 | `label` | `str` |
+| `disabled` | `bool` |
 
 #### heading
 
@@ -529,6 +538,7 @@ Empty payload, zero bytes.
 | `icon` | `str` | a lucide.dev name; empty for none |
 | `label` | `str` | |
 | `primary` | `bool` | filled with the accent colour, for the main action |
+| `disabled` | `bool` | |
 
 #### toast
 
@@ -629,6 +639,22 @@ A key no widget took, published to the owner of the `screen`: Escape or an arrow
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `key` | `str-rest` | egui's name for the key: `Escape`, `ArrowLeft`, `Enter`, `A` |
+
+### `ui/appeared`
+
+A `tile` container is on screen for the first time: the moment to start loading its image.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `id` | `u32` | the tile's id |
+
+### `ui/reached-end`
+
+A `scroll` container with a non-zero id was scrolled near its end; once each time its content grows.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `id` | `u32` | the scroll container's id |
 
 ## `audio/*`
 

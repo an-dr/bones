@@ -10,7 +10,8 @@ use bones_messages::os::{Reply as OsReply, Result as OsResult};
 use bones_messages::renderer::{Captured, DisplayChanged, LogicalCanvas};
 use bones_messages::tick::Tick;
 use bones_messages::ui::{
-    Changed, Clicked, Dropped, KeyPressed, Selected, Submitted, Toggled, ValueChanged,
+    Appeared, Changed, Clicked, Dropped, KeyPressed, ReachedEnd, Selected, Submitted, Toggled,
+    ValueChanged,
 };
 use bones_messages::upgrader::Result as UpgraderResult;
 use bones_messages::web::{PageMessage, PanelClosed, PanelFailed, PanelOpened};
@@ -69,6 +70,10 @@ pub enum Inbound<'a> {
     Submitted(Submitted),
     /// `ui/key`: a key no widget took, for the `Screen` owner.
     KeyPressed(KeyPressed<'a>),
+    /// `ui/appeared`: a `tile` is on screen for the first time.
+    Appeared(Appeared),
+    /// `ui/reached-end`: a `scroll` container neared its end.
+    ReachedEnd(ReachedEnd),
     /// `web/panel-opened`.
     PanelOpened(PanelOpened<'a>),
     /// `web/panel-closed`.
@@ -139,6 +144,8 @@ impl<'a> Inbound<'a> {
             Dropped::TOPIC => as_(payload, Self::Dropped),
             Submitted::TOPIC => as_(payload, Self::Submitted),
             KeyPressed::TOPIC => as_(payload, Self::KeyPressed),
+            Appeared::TOPIC => as_(payload, Self::Appeared),
+            ReachedEnd::TOPIC => as_(payload, Self::ReachedEnd),
             PanelOpened::TOPIC => as_(payload, Self::PanelOpened),
             PanelClosed::TOPIC => as_(payload, Self::PanelClosed),
             PanelFailed::TOPIC => as_(payload, Self::PanelFailed),

@@ -15,6 +15,25 @@ impl Kind for SelectKind {
             .and_then(|index| props.options.get(index as usize))
             .cloned()
             .unwrap_or(props.placeholder);
+        // egui's combo box does not wrap in a wrapping row by itself, so
+        // start the next row when this one will not fit.
+        if ui.layout().main_wrap {
+            let spacing = ui.spacing();
+            let text = egui::WidgetText::from(shown.as_str()).into_galley(
+                ui,
+                Some(egui::TextWrapMode::Extend),
+                f32::INFINITY,
+                egui::TextStyle::Button,
+            );
+            let needed = (text.size().x
+                + spacing.icon_width
+                + spacing.icon_spacing
+                + 2.0 * spacing.button_padding.x)
+                .max(spacing.combo_width);
+            if needed > ui.available_size_before_wrap().x {
+                ui.end_row();
+            }
+        }
         egui::ComboBox::from_id_salt(("select", id))
             .selected_text(shown)
             .show_ui(ui, |ui| {

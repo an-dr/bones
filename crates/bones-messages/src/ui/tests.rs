@@ -10,17 +10,8 @@ fn notes() -> Spec {
         body: Node::container(
             Layout::Vertical,
             vec![
-                TextEdit {
-                    text: "buy milk".into(),
-                }
-                .node(1),
-                Node::container(
-                    Layout::Horizontal,
-                    vec![Button {
-                        label: "Add".into(),
-                    }
-                    .node(2)],
-                ),
+                TextEdit::new("buy milk").node(1),
+                Node::container(Layout::Horizontal, vec![Button::new("Add").node(2)]),
                 Label {
                     text: "existing note".into(),
                 }
@@ -76,6 +67,13 @@ fn screen_with_every_layout_round_trips() {
             previous: false,
             next: true,
         },
+        Layout::Wrap,
+        Layout::RightToLeft,
+        Layout::Submenu,
+        Layout::Gallery {
+            row_height: 210,
+            gap: 8,
+        },
     ];
     let spec = Spec {
         root: Root::Screen,
@@ -91,6 +89,17 @@ fn screen_with_every_layout_round_trips() {
                 })
                 .collect(),
         ),
+    };
+    assert_eq!(Spec::decode(&spec.encode()), Ok(spec));
+}
+
+#[test]
+fn a_modal_round_trips() {
+    let spec = Spec {
+        root: Root::Modal {
+            title: "Rename".into(),
+        },
+        body: Node::container(Layout::Vertical, vec![]),
     };
     assert_eq!(Spec::decode(&spec.encode()), Ok(spec));
 }
@@ -145,15 +154,7 @@ fn a_tree_deeper_than_the_limit_is_rejected() {
 fn widgets_of_finds_one_kind_depth_first() {
     let spec = notes();
     let buttons = spec.body.widgets_of::<Button>();
-    assert_eq!(
-        buttons,
-        vec![(
-            2,
-            Button {
-                label: "Add".into()
-            }
-        )]
-    );
+    assert_eq!(buttons, vec![(2, Button::new("Add"))]);
     let labels: Vec<String> = spec
         .body
         .widgets_of::<Label>()
@@ -224,6 +225,8 @@ fn every_event_publishes_as_its_own_topic() {
         Event::ValueChanged { id: 1, value: 0.0 },
         Event::Dropped { id: 1, payload: 2 },
         Event::Submitted { id: 1 },
+        Event::Appeared { id: 1 },
+        Event::ReachedEnd { id: 1 },
         Event::KeyPressed {
             key: "Escape".into(),
         },
@@ -241,6 +244,8 @@ fn every_event_publishes_as_its_own_topic() {
             "ui/value",
             "ui/dropped",
             "ui/submitted",
+            "ui/appeared",
+            "ui/reached-end",
             "ui/key"
         ]
     );

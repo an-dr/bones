@@ -18,6 +18,7 @@ mod chrome;
 mod display_scale;
 mod draw_context;
 mod fonts;
+mod gallery;
 mod input_translation;
 mod kind;
 mod look;

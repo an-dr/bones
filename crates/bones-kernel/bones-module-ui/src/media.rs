@@ -6,6 +6,14 @@ use bones_messages::ui::icons;
 /// Seconds a newly arrived image or an opened stage takes to fade in.
 const APPEAR_SECONDS: f32 = 0.25;
 
+/// What a tile's drawing reported.
+pub(crate) struct TileShown {
+    /// Clicked outside its actions.
+    pub(crate) clicked: bool,
+    /// On screen for the first time.
+    pub(crate) appeared: bool,
+}
+
 /// What the user asked of a stage.
 pub(crate) enum StageAction {
     Close,
@@ -33,7 +41,7 @@ fn cover_uv(natural: egui::Vec2, size: egui::Vec2) -> egui::Rect {
     egui::Rect::from_center_size(egui::pos2(0.5, 0.5), egui::vec2(w, h))
 }
 
-/// Draws a tile; says whether it was clicked outside its actions.
+/// Draws a tile filling `size`.
 pub(crate) fn tile(
     ui: &mut egui::Ui,
     id: egui::Id,
@@ -41,8 +49,16 @@ pub(crate) fn tile(
     texture: Option<egui::TextureHandle>,
     badge: u32,
     actions: impl FnOnce(&mut egui::Ui),
-) -> bool {
+) -> TileShown {
     let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
+    let seen = id.with("seen");
+    let appeared = ui.is_rect_visible(rect)
+        && !ui
+            .ctx()
+            .data(|data| data.get_temp::<bool>(seen).unwrap_or(false));
+    if appeared {
+        ui.ctx().data_mut(|data| data.insert_temp(seen, true));
+    }
     let response = response.on_hover_cursor(egui::CursorIcon::PointingHand);
     let radius = ui.visuals().widgets.inactive.corner_radius;
     let base = ui.visuals().faint_bg_color;
@@ -114,7 +130,10 @@ pub(crate) fn tile(
             },
         );
     }
-    response.clicked()
+    TileShown {
+        clicked: response.clicked(),
+        appeared,
+    }
 }
 
 /// White text and translucent buttons, for controls over a photo.

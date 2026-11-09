@@ -38,14 +38,8 @@ impl Guest for Component {
         STATE.with(|state| {
             let state = state.borrow();
             let mut widgets = vec![
-                TextEdit {
-                    text: state.input.clone(),
-                }
-                .node(INPUT_ID),
-                Button {
-                    label: "Add".into(),
-                }
-                .node(ADD_ID),
+                TextEdit::new(state.input.clone()).node(INPUT_ID),
+                Button::new("Add").node(ADD_ID),
             ];
             for note in &state.notes {
                 widgets.push(Label { text: note.clone() }.node(0));

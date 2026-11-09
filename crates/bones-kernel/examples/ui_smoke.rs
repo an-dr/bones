@@ -40,14 +40,8 @@ fn main() -> Result<(), String> {
         body: Node::container(
             Layout::Vertical,
             vec![
-                TextEdit {
-                    text: "buy milk".into(),
-                }
-                .node(1),
-                Button {
-                    label: "Add".into(),
-                }
-                .node(2),
+                TextEdit::new("buy milk").node(1),
+                Button::new("Add").node(2),
                 Label {
                     text: "existing note".into(),
                 }

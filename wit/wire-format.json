@@ -394,10 +394,11 @@
               "description": "Where the tree is drawn.",
               "payload": {
                 "union": {
-                  "tag": "kind",
+                  "tag": "root",
                   "variants": [
                     { "tag": 0, "name": "window", "fields": [{ "name": "title", "type": "str", "meaning": "a floating panel's title; each owner may show one" }] },
-                    { "tag": 1, "name": "screen", "fields": [] }
+                    { "tag": 1, "name": "screen", "fields": [] },
+                    { "tag": 2, "name": "modal", "fields": [{ "name": "title", "type": "str", "meaning": "a dialog above everything, dimming the window, until the owner stops showing it" }] }
                   ]
                 }
               },
@@ -461,6 +462,13 @@
                       { "name": "image", "type": "u32", "meaning": "the owner's image handle" },
                       { "name": "previous", "type": "bool" },
                       { "name": "next", "type": "bool" }
+                    ] },
+                    { "tag": 14, "name": "wrap: left to right, continuing on the next line when the width runs out", "fields": [] },
+                    { "tag": 15, "name": "right-to-left: aligned to the right edge, the first child rightmost", "fields": [] },
+                    { "tag": 16, "name": "submenu: inside a context-menu, named by its first child, a `label`; the others are its items", "fields": [] },
+                    { "tag": 17, "name": "gallery: justified rows; children keep their shape (a tile's width and height give it), full rows fill the width, and only rows on screen are drawn", "fields": [
+                      { "name": "row_height", "type": "u16", "meaning": "the height rows aim for, in points" },
+                      { "name": "gap", "type": "u16", "meaning": "between items and rows, in points" }
                     ] }
                   ]
                 }
@@ -473,13 +481,13 @@
             },
             {
               "name": "text-edit",
-              "description": "`props` of kind `text-edit`: a one-line field; an edit publishes `ui/changed`.",
-              "payload": { "fields": [{ "name": "text", "type": "str" }] }
+              "description": "`props` of kind `text-edit`: a one-line field; an edit publishes `ui/changed`, Enter `ui/submitted`.",
+              "payload": { "fields": [{ "name": "text", "type": "str" }, { "name": "hint", "type": "str", "meaning": "shown while empty; empty for none" }, { "name": "disabled", "type": "bool" }, { "name": "focused", "type": "bool", "meaning": "takes the keyboard focus" }] }
             },
             {
               "name": "button",
               "description": "`props` of kind `button`: a push button; a click publishes `ui/clicked`.",
-              "payload": { "fields": [{ "name": "label", "type": "str" }] }
+              "payload": { "fields": [{ "name": "label", "type": "str" }, { "name": "disabled", "type": "bool" }] }
             },
             {
               "name": "heading",
@@ -572,7 +580,7 @@
             {
               "name": "icon-button",
               "description": "`props` of kind `icon-button`: a button with a leading icon; a click publishes `ui/clicked`.",
-              "payload": { "fields": [{ "name": "icon", "type": "str", "meaning": "a lucide.dev name; empty for none" }, { "name": "label", "type": "str" }, { "name": "primary", "type": "bool", "meaning": "filled with the accent colour, for the main action" }] }
+              "payload": { "fields": [{ "name": "icon", "type": "str", "meaning": "a lucide.dev name; empty for none" }, { "name": "label", "type": "str" }, { "name": "primary", "type": "bool", "meaning": "filled with the accent colour, for the main action" }, { "name": "disabled", "type": "bool" }] }
             },
             {
               "name": "toast",
@@ -667,6 +675,16 @@
           "topics": ["ui/key"],
           "description": "A key no widget took, published to the owner of the `screen`: Escape or an arrow key while nothing has focus.",
           "payload": { "fields": [{ "name": "key", "type": "str-rest", "meaning": "egui's name for the key: `Escape`, `ArrowLeft`, `Enter`, `A`" }] }
+        },
+        {
+          "topics": ["ui/appeared"],
+          "description": "A `tile` container is on screen for the first time: the moment to start loading its image.",
+          "payload": { "fields": [{ "name": "id", "type": "u32", "meaning": "the tile's id" }] }
+        },
+        {
+          "topics": ["ui/reached-end"],
+          "description": "A `scroll` container with a non-zero id was scrolled near its end; once each time its content grows.",
+          "payload": { "fields": [{ "name": "id", "type": "u32", "meaning": "the scroll container's id" }] }
         }
       ]
     },

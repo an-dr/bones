@@ -11,7 +11,7 @@ use bones_messages::{EncodeMessage, Message};
 use super::Ui;
 use crate::draw_context::DrawContext;
 use crate::kind::Kind;
-use bones_messages::ui::kinds::{Fit, Image};
+use bones_messages::ui::kinds::{Fit, Image, Select, TextEdit};
 use bones_messages::ui::{Event, SetImage};
 
 /// Everything the ui module asks of a surface, recorded instead of drawn.
@@ -92,10 +92,7 @@ fn spec_envelope() -> Envelope {
                     text: "existing note".into(),
                 }
                 .node(0),
-                Button {
-                    label: "Add".into(),
-                }
-                .node(2),
+                Button::new("Add").node(2),
             ],
         ),
     };
@@ -454,4 +451,78 @@ fn a_key_no_widget_takes_goes_to_the_screen_owner_only() {
         }]
     );
     assert!(port.take_events("panel").is_empty());
+}
+
+fn widest_drawn(body: Node) -> f32 {
+    let target = SharedTarget::default();
+    let mut ui = Ui::new(Bus::new(), Logger::default());
+    let mut services = ServiceRegistry::new();
+    services
+        .provide::<DrawTargetService>(Box::new(target.clone()))
+        .unwrap();
+    ui.init(&mut ModuleContext::new(&mut services)).unwrap();
+    let port: UiService = services.get::<UiService>().unwrap().clone();
+    for _ in 0..3 {
+        port.lock().unwrap().show(
+            "app",
+            Spec {
+                root: Root::Screen,
+                body: body.clone(),
+            },
+        );
+        ui.update();
+    }
+    let recorded = target.0.lock().unwrap();
+    recorded
+        .meshes
+        .iter()
+        .flat_map(|mesh| mesh.vertices.iter())
+        .map(|vertex| vertex.x)
+        .fold(0.0_f32, f32::max)
+}
+
+#[test]
+fn a_wrapping_toolbar_and_a_gallery_stay_inside_the_window() {
+    let select = |text: &str| Select {
+        selected: Some(0),
+        placeholder: String::new(),
+        options: vec![text.into()],
+    };
+    let toolbar = Node::container(
+        Layout::Wrap,
+        vec![
+            TextEdit::new("").hint("Search wallpapers").node(1),
+            select("Wallhaven").node(2),
+            select("Any shape").node(3),
+            select("Main display (2560 x 1440)").node(4),
+        ],
+    );
+    let tiles = (1..=6)
+        .map(|id| Node::Container {
+            id,
+            layout: Layout::Tile {
+                image: 0,
+                width: 300,
+                height: 200,
+                badge: 0,
+            },
+            children: vec![],
+        })
+        .collect();
+    let gallery = Node::Container {
+        id: 9,
+        layout: Layout::Scroll,
+        children: vec![Node::container(
+            Layout::Gallery {
+                row_height: 120,
+                gap: 8,
+            },
+            tiles,
+        )],
+    };
+
+    let widest = widest_drawn(Node::container(Layout::Vertical, vec![toolbar, gallery]));
+
+    // The test surface is 480 wide.
+    assert!(widest <= 480.5, "drawn out to {widest}");
 }

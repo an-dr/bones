@@ -9,6 +9,7 @@
 //! - `kinds` holds the standard kinds' typed properties.
 //! - `icons` names every bundled Lucide icon (ADR-049).
 
+mod appeared;
 mod changed;
 mod clicked;
 mod dropped;
@@ -20,6 +21,7 @@ pub mod kinds;
 mod layout;
 mod node;
 mod panel_side;
+mod reached_end;
 mod root;
 mod selected;
 mod set_image;
@@ -29,6 +31,7 @@ mod toggled;
 mod value_changed;
 mod widget_props;
 
+pub use appeared::Appeared;
 pub use changed::Changed;
 pub use clicked::Clicked;
 pub use dropped::Dropped;
@@ -38,6 +41,7 @@ pub use key_pressed::KeyPressed;
 pub use layout::Layout;
 pub use node::{Node, MAX_DEPTH};
 pub use panel_side::PanelSide;
+pub use reached_end::ReachedEnd;
 pub use root::Root;
 pub use selected::Selected;
 pub use set_image::SetImage;
