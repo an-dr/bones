@@ -11,16 +11,25 @@ pub enum Root {
     /// The whole window; its direct children are usually
     /// `Layout::Panel` containers. One owner holds it at a time.
     Screen,
+    /// A dialog above everything, dimming the rest of the window until the
+    /// owner stops showing it. It closes only through the owner's own
+    /// buttons.
+    Modal {
+        /// The dialog's heading.
+        title: String,
+    },
 }
 
 const TAG_WINDOW: u8 = 0;
 const TAG_SCREEN: u8 = 1;
+const TAG_MODAL: u8 = 2;
 
 impl Root {
     pub(super) fn encode_into(&self, writer: Writer) -> Writer {
         match self {
             Root::Window { title } => writer.u8(TAG_WINDOW).str(title),
             Root::Screen => writer.u8(TAG_SCREEN),
+            Root::Modal { title } => writer.u8(TAG_MODAL).str(title),
         }
     }
 
@@ -31,6 +40,9 @@ impl Root {
                 title: reader.read_str()?.to_owned(),
             }),
             TAG_SCREEN => Ok(Root::Screen),
+            TAG_MODAL => Ok(Root::Modal {
+                title: reader.read_str()?.to_owned(),
+            }),
             _ => Err(DecodeError::InvalidTag {
                 message: "ui root",
                 tag,

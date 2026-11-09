@@ -1,9 +1,11 @@
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
-use bones_messages::ui::{Event, Layout, Node, PanelSide, Root, Spec};
+use bones_messages::ui::kinds::Label;
+use bones_messages::ui::{Event, Layout, Node, PanelSide, Root, Spec, WidgetProps};
 
 use crate::draw_context::DrawContext;
+use crate::gallery;
 use crate::media;
 use crate::registry::{DrawProblem, Registry};
 
@@ -22,6 +24,9 @@ pub(crate) type Images = HashMap<u32, egui::TextureHandle>;
 struct Walk<'a> {
     registry: &'a Registry,
     images: Option<&'a Images>,
+    /// The size a gallery gave the item being drawn; the first tile inside
+    /// it takes this instead of its own.
+    tile_size: Option<egui::Vec2>,
     outcome: &'a mut Outcome,
 }
 
@@ -37,6 +42,7 @@ pub(crate) fn draw_spec(
     let mut walk = Walk {
         registry,
         images,
+        tile_size: None,
         outcome: &mut outcome,
     };
     match &spec.root {
@@ -46,6 +52,14 @@ pub(crate) fn draw_spec(
                 .show(ctx, |ui| walk.node(ui, &spec.body));
         }
         Root::Screen => walk.screen(ctx, owner, &spec.body),
+        Root::Modal { title } => {
+            egui::Modal::new(egui::Id::new((owner, "modal"))).show(ctx, |ui| {
+                ui.set_width(360.0);
+                ui.heading(title.as_str());
+                ui.add_space(6.0);
+                walk.node(ui, &spec.body);
+            });
+        }
     }
     outcome
 }
@@ -129,6 +143,68 @@ impl Walk<'_> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
+    fn tile(
+        &mut self,
+        ui: &mut egui::Ui,
+        id: u32,
+        state_id: egui::Id,
+        image: u32,
+        size: egui::Vec2,
+        badge: u32,
+        children: &[Node],
+    ) {
+        let texture = self.images.and_then(|images| images.get(&image)).cloned();
+        let shown = media::tile(ui, state_id, size, texture, badge, |ui| {
+            self.children(ui, children)
+        });
+        if shown.appeared {
+            self.outcome.events.push(Event::Appeared { id });
+        }
+        if shown.clicked {
+            self.outcome.events.push(Event::Clicked { id });
+        }
+    }
+
+    /// Lays `children` out in justified rows and draws the rows on screen;
+    /// the rest only take their room.
+    fn gallery(&mut self, ui: &mut egui::Ui, row_height: f32, gap: f32, children: &[Node]) {
+        let aspects: Vec<f32> = children
+            .iter()
+            .map(|child| match inner_tile(child) {
+                Some((width, height)) => gallery::aspect(f32::from(width), f32::from(height)),
+                None => gallery::DEFAULT_ASPECT,
+            })
+            .collect();
+        let width = ui.available_width();
+        for row in gallery::rows(&aspects, width, row_height.max(1.0), gap) {
+            let (row_rect, _) =
+                ui.allocate_exact_size(egui::vec2(width, row.height), egui::Sense::hover());
+            if ui.is_rect_visible(row_rect) {
+                let mut x = row_rect.left();
+                for (index, item_width) in row.items {
+                    let rect = egui::Rect::from_min_size(
+                        egui::pos2(x, row_rect.top()),
+                        egui::vec2(item_width, row.height),
+                    );
+                    self.gallery_item(ui, &children[index], rect);
+                    x += item_width + gap;
+                }
+            }
+            ui.add_space(gap - ui.spacing().item_spacing.y);
+        }
+    }
+
+    /// One gallery child in `rect`; the tile in it takes the rect's size.
+    fn gallery_item(&mut self, ui: &mut egui::Ui, child: &Node, rect: egui::Rect) {
+        let builder = egui::UiBuilder::new().max_rect(rect);
+        ui.scope_builder(builder, |ui| {
+            self.tile_size = Some(rect.size());
+            self.node(ui, child);
+            self.tile_size = None;
+        });
+    }
+
     fn children(&mut self, ui: &mut egui::Ui, children: &[Node]) {
         for child in children {
             self.node(ui, child);
@@ -153,9 +229,15 @@ impl Walk<'_> {
                 ui.vertical_centered(|ui| self.children(ui, children));
             }
             Layout::Scroll => {
-                egui::ScrollArea::vertical()
+                let scroll = egui::ScrollArea::vertical()
                     .id_salt(state_id)
+                    .auto_shrink(false)
                     .show(ui, |ui| self.children(ui, children));
+                let bottom = scroll.state.offset.y + scroll.inner_rect.height();
+                let content = scroll.content_size.y;
+                if id != 0 && reached_end(ui, state_id, bottom, content) {
+                    self.outcome.events.push(Event::ReachedEnd { id });
+                }
             }
             Layout::Frame => {
                 // A card: a titled group is a frame whose first child is a
@@ -193,7 +275,14 @@ impl Walk<'_> {
                     .scope(|ui| self.node(ui, area))
                     .response
                     .interact(egui::Sense::click());
-                response.context_menu(|ui| self.children(ui, menu));
+                response.context_menu(|ui| {
+                    let before = self.outcome.events.len();
+                    self.children(ui, menu);
+                    // An item acted on closes the menu, as menus do.
+                    if self.outcome.events.len() > before {
+                        ui.close();
+                    }
+                });
             }
             Layout::Tooltip => {
                 let Some((area, tip)) = children.split_first() else {
@@ -216,14 +305,12 @@ impl Walk<'_> {
                 height,
                 badge,
             } => {
-                let size = egui::vec2(f32::from(width), f32::from(height));
-                let texture = self.images.and_then(|images| images.get(&image)).cloned();
-                let clicked = media::tile(ui, state_id, size, texture, badge, |ui| {
-                    self.children(ui, children)
-                });
-                if clicked {
-                    self.outcome.events.push(Event::Clicked { id });
-                }
+                let own = egui::vec2(f32::from(width), f32::from(height));
+                let size = self.tile_size.take().unwrap_or(own);
+                self.tile(ui, id, state_id, image, size, badge, children);
+            }
+            Layout::Gallery { row_height, gap } => {
+                self.gallery(ui, f32::from(row_height), f32::from(gap), children);
             }
             Layout::Stage {
                 image,
@@ -244,6 +331,25 @@ impl Walk<'_> {
                     None => {}
                 }
             }
+            Layout::Wrap => {
+                ui.horizontal_wrapped(|ui| self.children(ui, children));
+            }
+            Layout::RightToLeft => {
+                let layout = egui::Layout::right_to_left(egui::Align::Center);
+                ui.with_layout(layout, |ui| self.children(ui, children));
+            }
+            Layout::Submenu => {
+                let Some((name, items)) = children.split_first() else {
+                    return;
+                };
+                let title = match name {
+                    Node::Widget { kind, props, .. } if kind == Label::KIND => Label::decode(props)
+                        .map(|label| label.text)
+                        .unwrap_or_default(),
+                    _ => String::new(),
+                };
+                ui.menu_button(title, |ui| self.children(ui, items));
+            }
             Layout::Grid { columns } => {
                 let columns = columns.max(1) as usize;
                 egui::Grid::new(state_id).show(ui, |ui| {
@@ -257,6 +363,43 @@ impl Walk<'_> {
             }
         }
     }
+}
+
+/// The width and height of the tile `node` is or wraps: a gallery child may
+/// be a tile inside a `draggable`, `context-menu`, or `tooltip`, whose first
+/// child is what is drawn.
+fn inner_tile(node: &Node) -> Option<(u16, u16)> {
+    match node {
+        Node::Container {
+            layout: Layout::Tile { width, height, .. },
+            ..
+        } => Some((*width, *height)),
+        Node::Container {
+            layout: Layout::Draggable | Layout::ContextMenu | Layout::Tooltip | Layout::DropTarget,
+            children,
+            ..
+        } => children.first().and_then(inner_tile),
+        _ => None,
+    }
+}
+
+/// How close to the end, in points, a scroll area reports reaching it, so
+/// more can load before the user sees a gap.
+const END_MARGIN: f32 = 500.0;
+
+/// Whether a scroll area has come near its end since its content last
+/// grew: true once per growth.
+fn reached_end(ui: &egui::Ui, id: egui::Id, bottom: f32, content: f32) -> bool {
+    if bottom + END_MARGIN < content {
+        return false;
+    }
+    let key = id.with("reported-end");
+    let reported = ui.ctx().data(|data| data.get_temp::<f32>(key));
+    if reported == Some(content) {
+        return false;
+    }
+    ui.ctx().data_mut(|data| data.insert_temp(key, content));
+    true
 }
 
 /// How long a `fade` container's change takes, in seconds: short enough that

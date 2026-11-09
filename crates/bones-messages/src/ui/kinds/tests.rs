@@ -6,13 +6,9 @@ use crate::DecodeError;
 fn standard_kinds_round_trip() {
     let label = Label { text: "hi".into() };
     assert_eq!(Label::decode(&label.encode()), Ok(label));
-    let button = Button {
-        label: "Add".into(),
-    };
+    let button = Button::new("Add");
     assert_eq!(Button::decode(&button.encode()), Ok(button));
-    let edit = TextEdit {
-        text: "milk".into(),
-    };
+    let edit = TextEdit::new("milk");
     assert_eq!(TextEdit::decode(&edit.encode()), Ok(edit));
 }
 
@@ -93,11 +89,7 @@ fn set_a_kinds_round_trip() {
         fraction: -1.0,
         text: "".into(),
     });
-    round_trips(IconButton {
-        icon: "download".into(),
-        label: "Save".into(),
-        primary: true,
-    });
+    round_trips(IconButton::new("download", "Save").primary(true));
     round_trips(TitleBar {
         title: "crossWall".into(),
         icon: 1,

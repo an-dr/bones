@@ -11,7 +11,17 @@ impl Kind for TextEditKind {
 
     fn draw(&self, ui: &mut egui::Ui, id: u32, props: TextEdit, cx: &mut DrawContext<'_>) {
         let mut text = props.text;
-        let response = ui.text_edit_singleline(&mut text);
+        // egui's usual field width, or less where the row is narrower, so a
+        // field in a wrapping row leaves its neighbours room to wrap.
+        let width = ui.spacing().text_edit_width.min(ui.available_width());
+        let field = egui::TextEdit::singleline(&mut text)
+            .desired_width(width)
+            .hint_text(props.hint)
+            .margin(egui::Margin::symmetric(10, 5));
+        let response = ui.add_enabled(!props.disabled, field);
+        if props.focused && !response.has_focus() && !response.lost_focus() {
+            response.request_focus();
+        }
         if response.changed() {
             cx.emit(Event::Changed { id, text });
         }

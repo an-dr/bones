@@ -71,6 +71,23 @@ pub enum Layout {
         /// Whether to offer a next button.
         next: bool,
     },
+    /// Left to right, continuing on the next line when the width runs out.
+    Wrap,
+    /// Right to left, aligned to the right edge: the first child is
+    /// rightmost, as in a toolbar's trailing buttons.
+    RightToLeft,
+    /// A nested menu inside a `ContextMenu`: the first child, a `label`,
+    /// names it; the others are its items.
+    Submenu,
+    /// Justified rows: children keep their shape (a `Tile`'s width and
+    /// height give it), each full row fills the width, and only rows on
+    /// screen are drawn. Put it inside a `Scroll`.
+    Gallery {
+        /// The height rows aim for, in points.
+        row_height: u16,
+        /// The gap between items and rows, in points.
+        gap: u16,
+    },
 }
 
 const TAG_VERTICAL: u8 = 0;
@@ -87,6 +104,10 @@ const TAG_TOOLTIP: u8 = 10;
 const TAG_FADE: u8 = 11;
 const TAG_TILE: u8 = 12;
 const TAG_STAGE: u8 = 13;
+const TAG_WRAP: u8 = 14;
+const TAG_RIGHT_TO_LEFT: u8 = 15;
+const TAG_SUBMENU: u8 = 16;
+const TAG_GALLERY: u8 = 17;
 
 impl Layout {
     pub(super) fn encode_into(self, writer: Writer) -> Writer {
@@ -123,6 +144,10 @@ impl Layout {
                 .u32(image)
                 .u8(u8::from(previous))
                 .u8(u8::from(next)),
+            Layout::Wrap => writer.u8(TAG_WRAP),
+            Layout::RightToLeft => writer.u8(TAG_RIGHT_TO_LEFT),
+            Layout::Submenu => writer.u8(TAG_SUBMENU),
+            Layout::Gallery { row_height, gap } => writer.u8(TAG_GALLERY).u16(row_height).u16(gap),
         }
     }
 
@@ -155,6 +180,13 @@ impl Layout {
                 image: reader.read_u32()?,
                 previous: reader.read_u8()? != 0,
                 next: reader.read_u8()? != 0,
+            },
+            TAG_WRAP => Layout::Wrap,
+            TAG_RIGHT_TO_LEFT => Layout::RightToLeft,
+            TAG_SUBMENU => Layout::Submenu,
+            TAG_GALLERY => Layout::Gallery {
+                row_height: reader.read_u16()?,
+                gap: reader.read_u16()?,
             },
             _ => {
                 return Err(DecodeError::InvalidTag {

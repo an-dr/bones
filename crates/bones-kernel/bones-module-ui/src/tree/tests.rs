@@ -147,8 +147,8 @@ fn every_standard_kind_is_registered_and_draws() {
         Heading { text: "h".into() }.node(0),
         Weak { text: "w".into() }.node(0),
         Strong { text: "s".into() }.node(0),
-        Button { label: "b".into() }.node(1),
-        TextEdit { text: "t".into() }.node(2),
+        Button::new("b").node(1),
+        TextEdit::new("t").node(2),
         Selectable {
             label: "sel".into(),
             selected: true,
@@ -190,12 +190,7 @@ fn every_standard_kind_is_registered_and_draws() {
             text: "c".into(),
         }
         .node(0),
-        IconButton {
-            icon: "download".into(),
-            label: "Save".into(),
-            primary: true,
-        }
-        .node(7),
+        IconButton::new("download", "Save").primary(true).node(7),
         Toast { text: "hi".into() }.node(8),
         Icon {
             name: "trash-2".into(),
@@ -298,7 +293,123 @@ fn a_tile_and_a_stage_draw_with_or_without_their_image() {
     let outcome = run(&spec, &registry);
 
     assert!(outcome.problems.is_empty(), "{:?}", outcome.problems);
-    // The stage's bar always shows; a tile's actions only under the pointer.
-    let ids: Vec<u32> = outcome.events.iter().map(Event::id).collect();
+    // The tile reports appearing; the stage's bar always shows; a tile's
+    // actions only under the pointer.
+    assert_eq!(outcome.events[0], Event::Appeared { id: 1 });
+    let ids: Vec<u32> = outcome.events[1..].iter().map(Event::id).collect();
     assert_eq!(ids, [2]);
+}
+
+#[test]
+fn wrap_right_to_left_and_a_modal_draw_their_children() {
+    let mut registry = Registry::standard();
+    registry.register(GaugeKind);
+    let row = |layout, id| Node::container(layout, vec![Gauge { level: id }.node(id)]);
+    let screen_spec = screen(vec![row(Layout::Wrap, 1), row(Layout::RightToLeft, 2)]);
+    let modal = Spec {
+        root: Root::Modal {
+            title: "Rename".into(),
+        },
+        body: row(Layout::Vertical, 3),
+    };
+
+    let mut ids: Vec<u32> = run(&screen_spec, &registry)
+        .events
+        .iter()
+        .chain(run(&modal, &registry).events.iter())
+        .map(Event::id)
+        .collect();
+    ids.sort();
+
+    assert_eq!(ids, [1, 2, 3]);
+}
+
+#[test]
+fn a_gallery_draws_and_announces_only_the_tiles_on_screen() {
+    let tiles: Vec<Node> = (1..=60)
+        .map(|id| Node::Container {
+            id,
+            layout: Layout::Tile {
+                image: id,
+                width: 160,
+                height: 100,
+                badge: 0,
+            },
+            children: vec![],
+        })
+        .collect();
+    let spec = screen(vec![Node::Container {
+        id: 9,
+        layout: Layout::Scroll,
+        children: vec![Node::container(
+            Layout::Gallery {
+                row_height: 100,
+                gap: 8,
+            },
+            tiles,
+        )],
+    }]);
+    let ctx = egui::Context::default();
+    let input = egui::RawInput {
+        screen_rect: Some(egui::Rect::from_min_size(
+            egui::Pos2::ZERO,
+            egui::vec2(400.0, 300.0),
+        )),
+        ..Default::default()
+    };
+    let mut outcome = None;
+    let _ = ctx.run(input, |ctx| {
+        outcome = Some(draw_spec(ctx, "owner", &spec, &Registry::standard(), None));
+    });
+
+    let appeared: Vec<u32> = outcome
+        .unwrap()
+        .events
+        .iter()
+        .filter(|event| matches!(event, Event::Appeared { .. }))
+        .map(Event::id)
+        .collect();
+    assert!(!appeared.is_empty() && appeared.len() < 20, "{appeared:?}");
+    assert_eq!(appeared[0], 1);
+}
+
+#[test]
+fn a_gallery_sees_through_wrappers_to_its_tiles() {
+    let wrapped = |id| Node::Container {
+        id: 100 + id,
+        layout: Layout::ContextMenu,
+        children: vec![
+            Node::Container {
+                id: 200 + id,
+                layout: Layout::Draggable,
+                children: vec![Node::Container {
+                    id,
+                    layout: Layout::Tile {
+                        image: 0,
+                        width: 300,
+                        height: 100,
+                        badge: 0,
+                    },
+                    children: vec![],
+                }],
+            },
+            Label {
+                text: "menu".into(),
+            }
+            .node(0),
+        ],
+    };
+    let spec = screen(vec![Node::container(
+        Layout::Gallery {
+            row_height: 100,
+            gap: 8,
+        },
+        vec![wrapped(1), wrapped(2)],
+    )]);
+
+    let outcome = run(&spec, &Registry::standard());
+
+    assert!(outcome.problems.is_empty(), "{:?}", outcome.problems);
+    let appeared: Vec<u32> = outcome.events.iter().map(Event::id).collect();
+    assert_eq!(appeared, [1, 2]);
 }

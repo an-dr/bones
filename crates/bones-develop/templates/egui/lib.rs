@@ -36,10 +36,7 @@ impl Guest for Component {
                 Layout::Vertical,
                 vec![
                     Label { text: label }.node(0),
-                    Button {
-                        label: "Click".into(),
-                    }
-                    .node(BUTTON),
+                    Button::new("Click").node(BUTTON),
                 ],
             ),
         });

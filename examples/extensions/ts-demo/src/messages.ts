@@ -311,6 +311,16 @@ export interface UiKey {
   key: string;
 }
 
+/** `ui/appeared` */
+export interface UiAppeared {
+  id: number;
+}
+
+/** `ui/reached-end` */
+export interface UiReachedEnd {
+  id: number;
+}
+
 /** `audio/load-sound` */
 export interface AudioLoadSound {
   id: number;
@@ -462,6 +472,8 @@ export interface Messages {
   "ui/dropped": UiDropped;
   "ui/submitted": UiSubmitted;
   "ui/key": UiKey;
+  "ui/appeared": UiAppeared;
+  "ui/reached-end": UiReachedEnd;
   "audio/load-sound": AudioLoadSound;
   "audio/play-sound": AudioPlaySound;
   "audio/play-music": AudioPlayMusic;
@@ -525,6 +537,8 @@ export const FIELDS: { [T in keyof Messages]: ReadonlyArray<readonly [string, Fi
   "ui/dropped": [["id", "u32"], ["payload", "u32"]],
   "ui/submitted": [["id", "u32"]],
   "ui/key": [["key", "str-rest"]],
+  "ui/appeared": [["id", "u32"]],
+  "ui/reached-end": [["id", "u32"]],
   "audio/load-sound": [["id", "u32"], ["bytes", "rest"]],
   "audio/play-sound": [["id", "u32"], ["volume", "f32"]],
   "audio/play-music": [["id", "u32"], ["volume", "f32"]],

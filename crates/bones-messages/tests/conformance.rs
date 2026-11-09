@@ -48,8 +48,8 @@ use bones_messages::renderer::{Capture, Captured, DisplayChanged, LogicalCanvas,
 use bones_messages::tick::Tick;
 use bones_messages::ui::kinds::{Button, Label, TextEdit};
 use bones_messages::ui::{
-    Changed, Clicked, Dropped, FreeImage, KeyPressed, Layout, Node, PanelSide, Root, Selected,
-    SetImage, Spec, Submitted, Toggled, ValueChanged, WidgetProps,
+    Appeared, Changed, Clicked, Dropped, FreeImage, KeyPressed, Layout, Node, PanelSide,
+    ReachedEnd, Root, Selected, SetImage, Spec, Submitted, Toggled, ValueChanged, WidgetProps,
 };
 use bones_messages::upgrader::{
     Action as UpgraderAction, Outcome as UpgraderOutcome, Request as UpgraderRequest,
@@ -338,10 +338,8 @@ fn vectors() -> Vec<Vector> {
                     Layout::Vertical,
                     vec![
                         Label { text: "name".into() }.node(0),
-                        TextEdit { text: "ada".into() }.node(1),
-                        Button {
-                            label: "save".into(),
-                        }
+                        TextEdit::new("ada").node(1),
+                        Button::new("save")
                         .node(2),
                     ],
                 ),
@@ -384,6 +382,8 @@ fn vectors() -> Vec<Vector> {
         vector(&FreeImage { handle: 2 }, "handle=2"),
         vector(&Dropped { id: 6, payload: 9 }, "id=6;payload=9"),
         vector(&Submitted { id: 1 }, "id=1"),
+        vector(&Appeared { id: 4 }, "id=4"),
+        vector(&ReachedEnd { id: 5 }, "id=5"),
         vector(&KeyPressed { key: "Escape" }, "key=Escape"),
         // -- audio ------------------------------------------------------
         vector(

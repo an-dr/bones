@@ -10,7 +10,8 @@ impl Kind for ButtonKind {
     type Props = Button;
 
     fn draw(&self, ui: &mut egui::Ui, id: u32, props: Button, cx: &mut DrawContext<'_>) {
-        if ui.button(props.label).clicked() {
+        let button = egui::Button::new(props.label);
+        if ui.add_enabled(!props.disabled, button).clicked() {
             cx.emit(Event::Clicked { id });
         }
     }

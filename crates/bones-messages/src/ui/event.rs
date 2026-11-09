@@ -1,6 +1,9 @@
 use crate::{EncodeMessage, Message};
 
-use super::{Changed, Clicked, Dropped, KeyPressed, Selected, Submitted, Toggled, ValueChanged};
+use super::{
+    Appeared, Changed, Clicked, Dropped, KeyPressed, ReachedEnd, Selected, Submitted, Toggled,
+    ValueChanged,
+};
 
 /// Something a user did to one widget, as the ui module reports it to the
 /// widget's owner (ADR-048): returned to a native owner, published as the
@@ -52,6 +55,16 @@ pub enum Event {
         /// The field's id.
         id: u32,
     },
+    /// A `tile` container is on screen for the first time.
+    Appeared {
+        /// The tile's id.
+        id: u32,
+    },
+    /// A `scroll` container was scrolled near its end.
+    ReachedEnd {
+        /// The scroll container's id.
+        id: u32,
+    },
     /// A key no widget took, for the `Screen` owner; its id is always 0.
     KeyPressed {
         /// The key's name, as egui names it: `Escape`, `ArrowLeft`.
@@ -69,7 +82,9 @@ impl Event {
             | Event::Toggled { id, .. }
             | Event::ValueChanged { id, .. }
             | Event::Dropped { id, .. }
-            | Event::Submitted { id } => *id,
+            | Event::Submitted { id }
+            | Event::Appeared { id }
+            | Event::ReachedEnd { id } => *id,
             Event::KeyPressed { .. } => 0,
         }
     }
@@ -112,6 +127,8 @@ impl Event {
                 .encode(),
             ),
             Event::Submitted { id } => (Submitted::TOPIC, Submitted { id: *id }.encode()),
+            Event::Appeared { id } => (Appeared::TOPIC, Appeared { id: *id }.encode()),
+            Event::ReachedEnd { id } => (ReachedEnd::TOPIC, ReachedEnd { id: *id }.encode()),
             Event::KeyPressed { key } => (KeyPressed::TOPIC, KeyPressed { key }.encode()),
         }
     }

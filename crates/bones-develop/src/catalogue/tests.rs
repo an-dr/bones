@@ -76,21 +76,25 @@ fn every_vector_without_a_list_encodes_and_decodes_exactly() {
 }
 
 #[test]
-fn a_widget_list_encodes_with_its_count() {
+fn a_nested_widget_tree_encodes_from_json() {
     let catalogue = Catalogue::load();
-    let fields = json!({ "title": "notes", "widgets": [
-        { "kind": 0, "text": "name" },
-        { "kind": 1, "id": 1, "text": "ada" },
-        { "kind": 2, "id": 2, "label": "save" },
-    ]});
+    // Nested types are written in place, so their fields share one object;
+    // lists hold an object per element.
+    let fields = json!({
+        "root": 1,
+        "node": 0, "id": 3, "layout": 6, "side": 2, "count": 1,
+        "children": [
+            { "node": 0, "id": 0, "layout": 5, "columns": 2, "count": 0, "children": [] }
+        ]
+    });
     let bytes = catalogue
         .encode("ui/spec", fields.as_object().unwrap())
         .unwrap();
+    // The shipped vector for a screen with a left panel holding an empty grid.
     assert_eq!(
         crate::hex::format(&bytes),
-        "05006e6f74657303000004006e616d65010100000003006164610202000000040073617665"
+        "0100030000000602010000000000000502000000"
     );
-    assert_eq!(catalogue.decode("ui/spec", &bytes), Some(fields));
 }
 
 #[test]

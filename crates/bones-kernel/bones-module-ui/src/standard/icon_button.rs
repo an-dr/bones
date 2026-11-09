@@ -23,7 +23,7 @@ impl Kind for IconButtonKind {
             text = text.color(ink_on(accent));
             button = egui::Button::new(text).fill(accent);
         }
-        if ui.add(button).clicked() {
+        if ui.add_enabled(!props.disabled, button).clicked() {
             cx.emit(Event::Clicked { id });
         }
     }
