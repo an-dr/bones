@@ -14,10 +14,17 @@
 //! at a time; revisit (direct send, or a per-extension topic) once that
 //! stops holding.
 
+mod display_scale;
 mod input_translation;
+mod kind;
+mod native_door;
 mod output_translation;
-mod owned_widget;
-mod pending_spec;
+mod registry;
+mod standard;
+mod tree;
 mod ui;
 
+pub use bones_messages::ui::Event;
+pub use egui;
+pub use kind::Kind;
 pub use ui::Ui;

@@ -19,6 +19,7 @@ pub mod frame_control;
 pub mod logging;
 pub mod persistence;
 pub mod runner;
+pub mod ui_port;
 pub mod window_control;
 
 #[cfg(feature = "platform")]

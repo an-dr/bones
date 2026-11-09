@@ -33,7 +33,8 @@ One extension may use several backends at once (e.g. a game on `gfx/*` with a se
 - Images are uploaded once and referred to by handle, so a tree never carries pixels.
 - The standard set is versioned like the draw-command set; adding a widget is a minor ABI change, changing an encoding a major one.
 - The look follows the desktop by default: system font, light or dark mode, accent colour, and the desktop's spacing and corners, refreshed when the system changes them (ADR-049). Icons are Lucide, picked by name.
-- egui output is drawn by the renderer above all gfx layers, at the display's scale.
+- Trees are drawn in the order their owners first showed them; that order also decides the first Screen claim.
+- egui output is drawn by the renderer above all gfx layers, at the display's scale times an interface zoom a native owner may set through the `ui` service.
 
 ## web — panels
 

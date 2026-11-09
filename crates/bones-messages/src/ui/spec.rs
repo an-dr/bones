@@ -1,47 +1,37 @@
 use crate::{DecodeError, DecodeMessage, EncodeMessage, Message, Reader, Writer};
 
-use super::Widget;
+use super::{Node, Root};
 
-/// A full per-frame panel (ADR-005): published every tick the owning
-/// extension wants its UI visible. Not publishing this frame means nothing
-/// is drawn this frame — there is no retained state to fall back on.
+/// One owner's whole interface for one frame (ADR-048): published on
+/// `ui/spec` by an extension, or handed to the `ui` service by a native
+/// module. Not sending one this frame means nothing of that owner's is
+/// drawn this frame.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Spec<'a> {
-    /// The panel's window title.
-    pub title: &'a str,
-    /// The widgets, top to bottom.
-    pub widgets: Vec<Widget<'a>>,
+pub struct Spec {
+    /// Where the tree is drawn.
+    pub root: Root,
+    /// The tree; usually a container.
+    pub body: Node,
 }
 
-impl Message for Spec<'_> {
+impl Message for Spec {
     const TOPIC: &'static str = "ui/spec";
 }
 
-impl EncodeMessage for Spec<'_> {
+impl EncodeMessage for Spec {
     fn encode(&self) -> Vec<u8> {
-        let widget_count: u16 = self
-            .widgets
-            .len()
-            .try_into()
-            .expect("more than u16::MAX widgets in one spec");
-        let mut writer = Writer::new().str(self.title).u16(widget_count);
-        for widget in &self.widgets {
-            writer = widget.encode_into(writer);
-        }
-        writer.finish()
+        self.body
+            .encode_into(self.root.encode_into(Writer::new()))
+            .finish()
     }
 }
 
-impl<'a> DecodeMessage<'a> for Spec<'a> {
+impl<'a> DecodeMessage<'a> for Spec {
     fn decode(payload: &'a [u8]) -> Result<Self, DecodeError> {
         let mut reader = Reader::new(payload);
-        let title = reader.read_str()?;
-        let count = reader.read_u16()?;
-        let mut widgets = Vec::with_capacity(count as usize);
-        for _ in 0..count {
-            widgets.push(Widget::decode(&mut reader)?);
-        }
+        let root = Root::decode(&mut reader)?;
+        let body = Node::decode(&mut reader, 1)?;
         reader.finish()?;
-        Ok(Self { title, widgets })
+        Ok(Self { root, body })
     }
 }

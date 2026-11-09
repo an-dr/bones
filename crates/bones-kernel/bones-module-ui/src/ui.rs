@@ -1,18 +1,21 @@
-use std::collections::HashMap;
-use std::time::Instant;
+use std::collections::HashSet;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use bones_kernel_infra::bus::{Bus, Envelope, Handler, Module, ModuleContext};
 use bones_kernel_infra::draw_target::{DrawTargetService, UiMesh, UiVertex};
 use bones_kernel_infra::logging::Logger;
-use bones_messages::ui::{Changed, Clicked, Spec};
+use bones_kernel_infra::ui_port::UiService;
+use bones_messages::ui::{Root, Spec};
 use bones_messages::{DecodeMessage, Message};
 
+use crate::display_scale::display_scale;
 use crate::input_translation::{compute_modifiers, translate_key, translate_mouse_button};
-use crate::output_translation::{
-    compute_texture_key, convert_color_image_to_straight_rgba, publish,
-};
-use crate::owned_widget::OwnedWidget;
-use crate::pending_spec::PendingSpec;
+use crate::kind::Kind;
+use crate::native_door::{upsert, NativeDoor};
+use crate::output_translation::{compute_texture_key, convert_color_image_to_straight_rgba};
+use crate::registry::{DrawProblem, Registry};
+use crate::tree::{draw_spec, Outcome};
 
 /// Owns the embedded egui context: decodes widget specs published on
 /// `ui/spec`, runs one egui frame per tick, and submits the resulting
@@ -23,7 +26,22 @@ pub struct Ui {
     // Keyed by the publishing extension's bus sender name; ADR-005 is
     // immediate-mode, so a spec not republished this frame draws nothing —
     // `update` drains this on every call.
-    pending: HashMap<String, PendingSpec>,
+    pending: Vec<(String, Spec)>,
+    registry: Registry,
+    // Trees native modules showed through the `ui` service, and the events
+    // waiting for them; shared with every module that resolved the service.
+    door: Arc<Mutex<NativeDoor>>,
+    // (owner, kind) pairs already reported, so a broken widget republished
+    // every frame logs one line.
+    reported: HashSet<(String, String)>,
+    // The one owner whose `Screen` tree is drawn; kept until it stops
+    // showing one, so a second claimant cannot take the window mid-use.
+    screen_owner: Option<String>,
+    // Physical pixels per point: the display's scale times the zoom a
+    // native owner set. Pointer positions and output are converted with it.
+    scale: f32,
+    display: f32,
+    scale_checked: Option<Instant>,
     events: Vec<egui::Event>,
     modifiers: egui::Modifiers,
     pointer_pos: egui::Pos2,
@@ -44,7 +62,14 @@ impl Ui {
         Self {
             ctx: egui::Context::default(),
             bus,
-            pending: HashMap::new(),
+            pending: Vec::new(),
+            registry: Registry::standard(),
+            door: Arc::default(),
+            reported: HashSet::new(),
+            screen_owner: None,
+            scale: 1.0,
+            display: 1.0,
+            scale_checked: None,
             events: Vec::new(),
             modifiers: egui::Modifiers::default(),
             pointer_pos: egui::Pos2::ZERO,
@@ -52,6 +77,12 @@ impl Ui {
             logger,
             target: None,
         }
+    }
+
+    /// Adds a widget kind every owner's tree can place (ADR-048); a kind
+    /// with the name of an existing one replaces it.
+    pub fn register<K: Kind>(&mut self, kind: K) {
+        self.registry.register(kind);
     }
 
     /// Whether egui currently wants pointer events — reflects hover/focus
@@ -76,7 +107,7 @@ impl Ui {
         use sdl3::event::Event as E;
         match event {
             E::MouseMotion { x, y, .. } => {
-                self.pointer_pos = egui::pos2(*x, *y);
+                self.pointer_pos = egui::pos2(*x, *y) / self.scale;
                 self.events
                     .push(egui::Event::PointerMoved(self.pointer_pos));
                 self.wants_pointer_input()
@@ -90,11 +121,19 @@ impl Ui {
                 let Some(button) = translate_mouse_button(*mouse_btn) else {
                     return false;
                 };
-                self.pointer_pos = egui::pos2(*x, *y);
+                self.pointer_pos = egui::pos2(*x, *y) / self.scale;
                 self.events.push(egui::Event::PointerButton {
                     pos: self.pointer_pos,
                     button,
                     pressed: matches!(event, E::MouseButtonDown { .. }),
+                    modifiers: self.modifiers,
+                });
+                self.wants_pointer_input()
+            }
+            E::MouseWheel { x, y, .. } => {
+                self.events.push(egui::Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Line,
+                    delta: egui::vec2(*x, *y),
                     modifiers: self.modifiers,
                 });
                 self.wants_pointer_input()
@@ -146,59 +185,49 @@ impl Ui {
         else {
             return;
         };
+        self.refresh_scale();
         let screen_rect = egui::Rect::from_min_size(
             egui::Pos2::ZERO,
-            egui::vec2(screen_width as f32, screen_height as f32),
+            egui::vec2(screen_width as f32, screen_height as f32) / self.scale,
         );
-        // TODO: no `native_pixels_per_point`/`pixels_per_point` set — egui
-        // defaults to 1.0, so a scaled (high-DPI) display renders undersized
-        // relative to the physical window.
-        let raw_input = egui::RawInput {
+        let mut raw_input = egui::RawInput {
             screen_rect: Some(screen_rect),
             time: Some(self.start.elapsed().as_secs_f64()),
             modifiers: self.modifiers,
             events: std::mem::take(&mut self.events),
             ..Default::default()
         };
+        raw_input
+            .viewports
+            .entry(egui::ViewportId::ROOT)
+            .or_default()
+            .native_pixels_per_point = Some(self.scale);
 
-        let pending = std::mem::take(&mut self.pending);
-        let bus = &self.bus;
+        // Extension trees and native trees draw alike; only where their
+        // events go differs.
+        let native = std::mem::take(&mut self.door.lock().unwrap().shown);
+        let pending: Vec<(String, Spec, bool)> = std::mem::take(&mut self.pending)
+            .into_iter()
+            .map(|(owner, spec)| (owner, spec, false))
+            .chain(native.into_iter().map(|(owner, spec)| (owner, spec, true)))
+            .collect();
+        let pending = self.one_screen(pending);
+        let registry = &self.registry;
+        let mut outcomes: Vec<Outcome> = Vec::new();
         let full_output = self.ctx.run(raw_input, |ctx| {
-            for (sender, spec) in &pending {
-                egui::Window::new(spec.title.as_str())
-                    .id(egui::Id::new(sender.as_str()))
-                    .show(ctx, |ui| {
-                        for widget in &spec.widgets {
-                            match widget {
-                                OwnedWidget::Label(text) => {
-                                    ui.label(text);
-                                }
-                                OwnedWidget::TextEdit { id, text } => {
-                                    let mut buf = text.clone();
-                                    if ui.text_edit_singleline(&mut buf).changed() {
-                                        publish(
-                                            bus,
-                                            Changed {
-                                                id: *id,
-                                                text: &buf,
-                                            },
-                                        );
-                                    }
-                                }
-                                OwnedWidget::Button { id, label } => {
-                                    if ui.button(label).clicked() {
-                                        publish(bus, Clicked { id: *id });
-                                    }
-                                }
-                            }
-                        }
-                    });
-            }
+            // egui may run the closure more than once per frame; only the
+            // last pass's outcome is the one the user saw.
+            outcomes = pending
+                .iter()
+                .map(|(owner, spec, _)| draw_spec(ctx, owner, spec, registry))
+                .collect();
         });
+        for ((owner, _, native), outcome) in pending.iter().zip(outcomes) {
+            self.report(owner, *native, outcome);
+        }
 
-        let clipped = self
-            .ctx
-            .tessellate(full_output.shapes, full_output.pixels_per_point);
+        let ppp = full_output.pixels_per_point;
+        let clipped = self.ctx.tessellate(full_output.shapes, ppp);
 
         let logger = self.logger.clone();
         // Not a second chance to bail: the early return above already
@@ -241,8 +270,8 @@ impl Ui {
                     .map(|vertex| {
                         let [r, g, b, a] = vertex.color.to_srgba_unmultiplied();
                         UiVertex {
-                            x: vertex.pos.x,
-                            y: vertex.pos.y,
+                            x: vertex.pos.x * ppp,
+                            y: vertex.pos.y * ppp,
                             u: vertex.uv.x,
                             v: vertex.uv.y,
                             r,
@@ -255,10 +284,10 @@ impl Ui {
                 indices: mesh.indices.clone(),
                 texture: compute_texture_key(mesh.texture_id),
                 clip: (
-                    clip.min.x.round() as i32,
-                    clip.min.y.round() as i32,
-                    clip.width().round().max(0.0) as u32,
-                    clip.height().round().max(0.0) as u32,
+                    (clip.min.x * ppp).round() as i32,
+                    (clip.min.y * ppp).round() as i32,
+                    (clip.width() * ppp).round().max(0.0) as u32,
+                    (clip.height() * ppp).round().max(0.0) as u32,
                 ),
             };
             if let Err(err) = target.draw_ui_mesh(&ui_mesh) {
@@ -272,6 +301,104 @@ impl Ui {
     }
 }
 
+impl Ui {
+    /// How often the display's scale is asked again: it changes only when
+    /// the window moves to another display or the user changes the setting.
+    const SCALE_POLL: Duration = Duration::from_secs(1);
+
+    fn refresh_scale(&mut self) {
+        let due = self
+            .scale_checked
+            .is_none_or(|checked| checked.elapsed() >= Self::SCALE_POLL);
+        let display = if due {
+            self.scale_checked = Some(Instant::now());
+            Some(display_scale())
+        } else {
+            None
+        };
+        let zoom = self.door.lock().unwrap().zoom;
+        if let Some(display) = display {
+            self.display = display;
+        }
+        self.scale = (self.display * zoom).clamp(0.5, 6.0);
+    }
+
+    /// Keeps at most one `Screen` tree: the current holder's while it still
+    /// shows one, else the first claimant's. Each refused claimant is told
+    /// once who holds the window; its `Window` trees are unaffected.
+    fn one_screen(&mut self, pending: Vec<(String, Spec, bool)>) -> Vec<(String, Spec, bool)> {
+        let claimants: Vec<&String> = pending
+            .iter()
+            .filter(|(_, spec, _)| spec.root == Root::Screen)
+            .map(|(owner, _, _)| owner)
+            .collect();
+        let holder = match &self.screen_owner {
+            Some(holder) if claimants.contains(&holder) => Some(holder.clone()),
+            _ => claimants.first().map(|owner| (*owner).clone()),
+        };
+        self.screen_owner = holder.clone();
+        let mut kept = Vec::with_capacity(pending.len());
+        for (owner, spec, native) in pending {
+            if spec.root == Root::Screen && Some(&owner) != holder.as_ref() {
+                let holder = holder.as_deref().unwrap_or_default();
+                if self.reported.insert((owner.clone(), "screen".into())) {
+                    self.logger.warn(
+                        "ui",
+                        &format!(
+                            "'{owner}' showed a Screen, but '{holder}' holds the window; not drawn"
+                        ),
+                    );
+                }
+                continue;
+            }
+            kept.push((owner, spec, native));
+        }
+        kept
+    }
+
+    /// Hands a native owner its events, publishes an extension owner's, and
+    /// logs each broken widget once per owner and kind.
+    fn report(&mut self, owner: &str, native: bool, outcome: Outcome) {
+        if native {
+            self.door
+                .lock()
+                .unwrap()
+                .events
+                .entry(owner.to_string())
+                .or_default()
+                .extend(outcome.events);
+            self.report_problems(owner, outcome.problems);
+            return;
+        }
+        for event in outcome.events {
+            let (topic, payload) = event.to_message();
+            self.bus.publish(Envelope {
+                topic: topic.to_string(),
+                sender: "ui".to_string(),
+                correlation: None,
+                payload,
+            });
+        }
+        self.report_problems(owner, outcome.problems);
+    }
+
+    fn report_problems(&mut self, owner: &str, problems: Vec<(String, DrawProblem)>) {
+        for (kind, problem) in problems {
+            if !self.reported.insert((owner.to_string(), kind.clone())) {
+                continue;
+            }
+            let why = match problem {
+                DrawProblem::UnknownKind => "is not a registered widget kind".to_string(),
+                DrawProblem::BadProps(error) => format!("has malformed properties: {error}"),
+            };
+            self.logger.warn(
+                "ui",
+                &format!("'{owner}' placed a '{kind}' widget, which {why}; drawn as nothing"),
+            );
+        }
+    }
+}
+
 impl Module for Ui {
     fn name(&self) -> &str {
         "ui"
@@ -280,12 +407,14 @@ impl Module for Ui {
     /// Consumes the `draw-target` service — whatever module provides a
     /// surface, which is `renderer` in the default composition but need
     /// not be. Errors if none was provided, since this module has nothing
-    /// to draw on without one.
+    /// to draw on without one. Provides the `ui` service, the native door.
     fn init(&mut self, ctx: &mut ModuleContext) -> Result<(), String> {
         self.target = Some(ctx.consume_service::<DrawTargetService>().ok_or_else(|| {
             "ui needs a draw-target service (configure .renderer() too)".to_string()
         })?);
         ctx.subscribe(Spec::TOPIC);
+        let service: UiService = self.door.clone();
+        ctx.provide_service(service)?;
         Ok(())
     }
 
@@ -308,8 +437,7 @@ impl Handler for Ui {
     fn handle(&mut self, envelope: &Envelope) {
         match Spec::decode(&envelope.payload) {
             Ok(spec) => {
-                self.pending
-                    .insert(envelope.sender.clone(), PendingSpec::from_message(&spec));
+                upsert(&mut self.pending, &envelope.sender, spec);
             }
             Err(err) => {
                 self.logger.error(

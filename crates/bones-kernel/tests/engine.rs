@@ -1553,3 +1553,68 @@ fn is_no_audio_device(error: &str) -> bool {
     .iter()
     .any(|phrase| error.contains(phrase))
 }
+
+/// Reports a click whenever it is drawn, so a test needs no pointer.
+struct AlwaysClicked;
+
+impl bones_kernel::ui::Kind for AlwaysClicked {
+    type Props = bones_kernel::messages::ui::kinds::Label;
+
+    fn draw(
+        &self,
+        ui: &mut bones_kernel::ui::egui::Ui,
+        id: u32,
+        props: Self::Props,
+        events: &mut Vec<bones_kernel::ui::Event>,
+    ) {
+        ui.label(props.text);
+        events.push(bones_kernel::ui::Event::Clicked { id });
+    }
+}
+
+/// A native screen holding one widget, recording what it is told.
+struct OneButton {
+    seen: Arc<Mutex<Vec<bones_kernel::ui::Event>>>,
+}
+
+impl bones_kernel::ui::UiView for OneButton {
+    fn on_event(&mut self, event: bones_kernel::ui::Event) {
+        self.seen.lock().unwrap().push(event);
+    }
+
+    fn view(&mut self) -> bones_kernel::messages::ui::Spec {
+        use bones_kernel::messages::ui::{kinds::Label, Root, Spec, WidgetProps};
+        Spec {
+            root: Root::Screen,
+            body: Label { text: "go".into() }.node(3),
+        }
+    }
+}
+
+sdl_test! { fn a_native_view_with_a_custom_kind_runs_through_the_builder() {
+    // The whole native door as an embedder composes it: a custom kind
+    // registered on the builder, a view module after the ui module, and
+    // the view's events arriving through the `ui` service frame by frame.
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let mut built = kernel()
+        .window("test", 64, 64)
+        .renderer()
+        .ui_kind(AlwaysClicked)
+        .module(bones_kernel::ui::ViewModule::new(
+            "app",
+            OneButton { seen: seen.clone() },
+        ))
+        .build()
+        .unwrap();
+
+    for _ in 0..3 {
+        built.step(1.0 / 60.0);
+        built.present_frame();
+    }
+
+    let seen = seen.lock().unwrap();
+    assert!(
+        seen.iter().all(|e| *e == bones_kernel::ui::Event::Clicked { id: 3 }) && seen.len() >= 2,
+        "{seen:?}"
+    );
+}}

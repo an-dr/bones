@@ -12,7 +12,7 @@ You are done when `cargo test` passes in the project and the tool below works. D
 
 ## The contract
 
-Every frame publishes a `ui/spec` titled `notes` whose widgets are, in order:
+Every frame publishes a `ui/spec` whose root is a window titled `notes` and whose tree holds, in order:
 
 1. a text edit with id 1, holding the text being typed;
 2. a button with id 2 labelled `Add`;

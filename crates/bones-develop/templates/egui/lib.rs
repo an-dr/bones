@@ -4,7 +4,8 @@ use std::cell::Cell;
 
 use bones_wasm_sdk::bindings::bones::extension::host_api::{log, Level};
 use bones_wasm_sdk::messages::tick::Tick;
-use bones_wasm_sdk::messages::ui::{Clicked, Spec, Widget};
+use bones_wasm_sdk::messages::ui::kinds::{Button, Label};
+use bones_wasm_sdk::messages::ui::{Clicked, Layout, Node, Root, Spec, WidgetProps};
 use bones_wasm_sdk::{bus, Guest, Inbound};
 
 const BUTTON: u32 = 1;
@@ -28,14 +29,19 @@ impl Guest for Component {
     fn on_tick(_dt: f32) {
         let label = format!("Clicked {} times", COUNT.get());
         bus::publish(&Spec {
-            title: "counter",
-            widgets: vec![
-                Widget::Label { text: &label },
-                Widget::Button {
-                    id: BUTTON,
-                    label: "Click",
-                },
-            ],
+            root: Root::Window {
+                title: "counter".into(),
+            },
+            body: Node::container(
+                Layout::Vertical,
+                vec![
+                    Label { text: label }.node(0),
+                    Button {
+                        label: "Click".into(),
+                    }
+                    .node(BUTTON),
+                ],
+            ),
         });
     }
 

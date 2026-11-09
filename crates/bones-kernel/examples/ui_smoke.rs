@@ -11,7 +11,8 @@
 use bones_kernel_infra::bus::{Bus, Envelope, Handler, Module, ModuleContext, ServiceRegistry};
 use bones_kernel_infra::logging::Logger;
 use bones_kernel_infra::platform::Platform;
-use bones_messages::ui::{Spec, Widget};
+use bones_messages::ui::kinds::{Button, Label, TextEdit};
+use bones_messages::ui::{Layout, Node, Root, Spec, WidgetProps};
 use bones_messages::{EncodeMessage, Message};
 use bones_module_renderer::Renderer;
 use bones_module_ui::Ui;
@@ -33,20 +34,26 @@ fn main() -> Result<(), String> {
     ui.init(&mut ctx)?;
 
     let spec = Spec {
-        title: "notes",
-        widgets: vec![
-            Widget::TextEdit {
-                id: 1,
-                text: "buy milk",
-            },
-            Widget::Button {
-                id: 2,
-                label: "Add",
-            },
-            Widget::Label {
-                text: "existing note",
-            },
-        ],
+        root: Root::Window {
+            title: "notes".into(),
+        },
+        body: Node::container(
+            Layout::Vertical,
+            vec![
+                TextEdit {
+                    text: "buy milk".into(),
+                }
+                .node(1),
+                Button {
+                    label: "Add".into(),
+                }
+                .node(2),
+                Label {
+                    text: "existing note".into(),
+                }
+                .node(0),
+            ],
+        ),
     };
 
     for frame in 0..240 {

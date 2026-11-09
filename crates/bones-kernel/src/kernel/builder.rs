@@ -35,6 +35,10 @@ use bones_kernel_infra::runner::Runner;
 use super::built_kernel::{run_frame_phases, run_shutdown, step_frame, BuiltKernel, ENGINE_SENDER};
 use super::register_module::register_module;
 
+/// One deferred `Ui::register` call, kept until `build` constructs the ui module.
+#[cfg(feature = "presentation")]
+type RegisterKind = Box<dyn FnOnce(&mut Ui) + Send>;
+
 const DEFAULT_TICK_HZ: f64 = 60.0;
 
 /// A relative `extensions_dir`/`saves_dir` resolves against the running
@@ -117,6 +121,9 @@ pub struct Kernel {
     renderer_enabled: bool,
     #[cfg(feature = "presentation")]
     ui_enabled: bool,
+    // Applied to the ui module when `build` constructs it.
+    #[cfg(feature = "presentation")]
+    ui_kinds: Vec<RegisterKind>,
     #[cfg(feature = "web")]
     web_enabled: bool,
     #[cfg(feature = "instance")]
@@ -170,6 +177,8 @@ impl Kernel {
             renderer_enabled: false,
             #[cfg(feature = "presentation")]
             ui_enabled: false,
+            #[cfg(feature = "presentation")]
+            ui_kinds: Vec::new(),
             #[cfg(feature = "web")]
             web_enabled: false,
             #[cfg(feature = "instance")]
@@ -326,6 +335,17 @@ impl Kernel {
     #[cfg(feature = "presentation")]
     pub fn ui(mut self) -> Self {
         self.ui_enabled = true;
+        self
+    }
+
+    /// Adds a widget kind the ui module draws (ADR-048), so every tree,
+    /// native or extension, can place it. Implies `.ui()`. A kind named
+    /// like a standard one replaces it.
+    #[cfg(feature = "presentation")]
+    pub fn ui_kind<K: bones_module_ui::Kind>(mut self, kind: K) -> Self {
+        self.ui_enabled = true;
+        self.ui_kinds
+            .push(Box::new(move |ui: &mut Ui| ui.register(kind)));
         self
     }
 
@@ -543,6 +563,8 @@ impl Kernel {
         let renderer_enabled = self.renderer_enabled;
         #[cfg(feature = "presentation")]
         let ui_enabled = self.ui_enabled;
+        #[cfg(feature = "presentation")]
+        let ui_kinds = std::mem::take(&mut self.ui_kinds);
         let bus = bones_kernel_infra::bus::Bus::new();
         let registry = Registry::new();
         let exit_requested = bones_kernel_infra::exit::ExitRequest::new();
@@ -702,7 +724,10 @@ impl Kernel {
         }
         #[cfg(feature = "presentation")]
         if ui_enabled {
-            let ui = Ui::new(bus.clone(), self.logger.clone());
+            let mut ui = Ui::new(bus.clone(), self.logger.clone());
+            for register in ui_kinds {
+                register(&mut ui);
+            }
             register_module(&bus, &registry, &mut services, &mut modules, Box::new(ui))
                 .map_err(crate::Error::msg)?;
         }

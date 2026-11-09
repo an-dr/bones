@@ -59,7 +59,7 @@ Counted sequences are a `u16` count followed by that many elements back to back,
 
 ## Decoding failures
 
-Four failures are distinguishable, and an implementation should report them separately because they mean different things:
+Five failures are distinguishable, and an implementation should report them separately because they mean different things:
 
 | Failure | Meaning |
 | --- | --- |
@@ -67,6 +67,7 @@ Four failures are distinguishable, and an implementation should report them sepa
 | `trailing-bytes` | a fixed-shape payload had bytes left after its final field |
 | `invalid-tag` | a tagged union carried a tag the contract does not define |
 | `invalid-utf8` | a `str`, `str-rest`, or string field was not valid UTF-8 |
+| `too-deep` | a nested structure exceeded its depth limit (a `ui/spec` tree deeper than 64) |
 
 A malformed payload is dropped by the receiver, not reported back to the sender. The bus is at-most-once and has no negative acknowledgement (ADR-009).
 
@@ -313,25 +314,72 @@ The reply to `renderer/capture`: for the canvas, published once that frame is dr
 
 ### `ui/spec`
 
-A whole widget panel, republished whenever it changes (ADR-005).
+One owner's whole interface for one frame: a root and a widget tree, republished every frame it should be visible (ADR-048). Not publishing it this frame draws nothing of the owner's.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `title` | `str` | |
-| `count` | `u16` | number of widgets that follow |
-| `widgets` | `count` × widget | back to back, no separator |
+| `root` | root | |
+| `body` | node | the tree; usually a container |
 
-#### widget
+#### root
 
-Each widget is a tagged union.
+Where the tree is drawn.
 
 | Tag | Variant | Fields after the tag |
 | ---: | --- | --- |
-| 0 | label | `text`: `str` |
-| 1 | text-edit | `id`: `u32`; `text`: `str` |
-| 2 | button | `id`: `u32`; `label`: `str` |
+| 0 | window | `title`: `str` — a floating panel's title; each owner may show one |
+| 1 | screen | none |
 
-Every widget string is `str`, not `str-rest`, because another widget may follow it.
+A `screen` is the whole window, held by one owner at a time; its direct children are usually `panel` containers. A second owner's `screen` is refused, and windows float above it.
+
+#### node
+
+A layout container or a widget; containers nest, at most 64 deep.
+
+| Tag | Variant | Fields after the tag |
+| ---: | --- | --- |
+| 0 | container | `id`: `u32` — owner-assigned; the ui module keeps scroll position and similar state under it. `0` when unused; layout (below); `count`: `u16` — number of children that follow; `children`: `count` × node |
+| 1 | widget | `kind`: `str` — the registered widget kind, e.g. `button`; `id`: `u32` — owner-assigned; events name it; `props`: `blob` — the kind's properties, encoded as that kind specifies below |
+
+A widget names its kind rather than taking a tag, so adding a kind never changes this encoding. A kind the ui module has not registered is reported once by name and drawn as nothing. A tree nested deeper than 64 is malformed.
+
+#### layout
+
+How a container arranges its children.
+
+| Tag | Variant | Fields after the tag |
+| ---: | --- | --- |
+| 0 | vertical | none |
+| 1 | horizontal | none |
+| 2 | centred | none |
+| 3 | scroll | none |
+| 4 | frame | none |
+| 5 | grid | `columns`: `u16` — children per row |
+| 6 | panel | `side`: `u8` — `0` top, `1` bottom, `2` left, `3` right, `4` central: what the other panels leave |
+
+#### label
+
+`props` of kind `label`: static text, no events.
+
+| Field | Type |
+| --- | --- |
+| `text` | `str` |
+
+#### text-edit
+
+`props` of kind `text-edit`: a one-line field; an edit publishes `ui/changed`.
+
+| Field | Type |
+| --- | --- |
+| `text` | `str` |
+
+#### button
+
+`props` of kind `button`: a push button; a click publishes `ui/clicked`.
+
+| Field | Type |
+| --- | --- |
+| `label` | `str` |
 
 ### `ui/clicked`
 

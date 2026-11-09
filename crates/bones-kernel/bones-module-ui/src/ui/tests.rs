@@ -2,11 +2,15 @@ use std::sync::{Arc, Mutex};
 
 use bones_kernel_infra::bus::{Bus, Envelope, Handler, Module, ModuleContext, ServiceRegistry};
 use bones_kernel_infra::draw_target::{DrawTarget, DrawTargetService, UiMesh};
-use bones_kernel_infra::logging::Logger;
-use bones_messages::ui::{Spec, Widget};
+use bones_kernel_infra::logging::{Level, Logger, RecordingSink};
+use bones_kernel_infra::ui_port::UiService;
+use bones_messages::ui::kinds::{Button, Label};
+use bones_messages::ui::{Layout, Node, Root, Spec, WidgetProps};
 use bones_messages::{EncodeMessage, Message};
 
 use super::Ui;
+use crate::kind::Kind;
+use bones_messages::ui::Event;
 
 /// Everything the ui module asks of a surface, recorded instead of drawn.
 ///
@@ -76,16 +80,22 @@ fn ui_with_target(target: SharedTarget) -> Ui {
 
 fn spec_envelope() -> Envelope {
     let spec = Spec {
-        title: "notes",
-        widgets: vec![
-            Widget::Label {
-                text: "existing note",
-            },
-            Widget::Button {
-                id: 2,
-                label: "Add",
-            },
-        ],
+        root: Root::Window {
+            title: "notes".into(),
+        },
+        body: Node::container(
+            Layout::Vertical,
+            vec![
+                Label {
+                    text: "existing note".into(),
+                }
+                .node(0),
+                Button {
+                    label: "Add".into(),
+                }
+                .node(2),
+            ],
+        ),
     };
     Envelope {
         topic: Spec::TOPIC.to_string(),
@@ -152,4 +162,161 @@ fn the_module_name_is_the_bus_endpoint_ui_specs_are_addressed_to() {
     let ui = ui_with_target(SharedTarget::default());
 
     assert_eq!(ui.name(), "ui");
+}
+
+#[test]
+fn a_broken_widget_republished_every_frame_is_reported_once() {
+    let sink = RecordingSink::new();
+    let mut ui = Ui::new(Bus::new(), Logger::new(Arc::new(sink.clone())));
+    let mut services = ServiceRegistry::new();
+    services
+        .provide::<DrawTargetService>(Box::new(SharedTarget::default()))
+        .unwrap();
+    ui.init(&mut ModuleContext::new(&mut services)).unwrap();
+    let spec = Spec {
+        root: Root::Screen,
+        body: Node::Widget {
+            kind: "nobody/registered-this".into(),
+            id: 1,
+            props: vec![],
+        },
+    };
+
+    for _ in 0..3 {
+        ui.handle(&Envelope {
+            topic: Spec::TOPIC.to_string(),
+            sender: "game".to_string(),
+            correlation: None,
+            payload: spec.encode(),
+        });
+        ui.update();
+    }
+
+    let warnings: Vec<String> = sink
+        .records()
+        .into_iter()
+        .filter(|(level, _, _)| *level == Level::Warn)
+        .map(|(_, _, message)| message)
+        .collect();
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
+    assert!(warnings[0].contains("'game'") && warnings[0].contains("nobody/registered-this"));
+}
+
+/// Reports a click every frame it is drawn, so a test needs no pointer.
+struct AlwaysClicked;
+
+impl Kind for AlwaysClicked {
+    type Props = Label;
+
+    fn draw(&self, ui: &mut egui::Ui, id: u32, props: Label, events: &mut Vec<Event>) {
+        ui.label(props.text);
+        events.push(Event::Clicked { id });
+    }
+}
+
+#[test]
+fn a_native_tree_draws_through_the_ui_service_and_gets_its_events_back() {
+    let target = SharedTarget::default();
+    let mut ui = Ui::new(Bus::new(), Logger::default());
+    ui.register(AlwaysClicked);
+    let mut services = ServiceRegistry::new();
+    services
+        .provide::<DrawTargetService>(Box::new(target.clone()))
+        .unwrap();
+    ui.init(&mut ModuleContext::new(&mut services)).unwrap();
+    let port: UiService = services.get::<UiService>().unwrap().clone();
+    let spec = Spec {
+        root: Root::Screen,
+        body: Label { text: "go".into() }.node(7),
+    };
+
+    for _ in 0..2 {
+        port.lock().unwrap().show("app", spec.clone());
+        ui.update();
+    }
+
+    let events = port.lock().unwrap().take_events("app");
+    assert_eq!(events, [Event::Clicked { id: 7 }, Event::Clicked { id: 7 }]);
+    assert!(port.lock().unwrap().take_events("app").is_empty());
+    assert!(!target.0.lock().unwrap().meshes.is_empty());
+}
+
+fn screen_of(text: &str, id: u32) -> Spec {
+    Spec {
+        root: Root::Screen,
+        body: Label { text: text.into() }.node(id),
+    }
+}
+
+#[test]
+fn one_owner_holds_the_screen_and_a_second_claim_is_refused_once() {
+    let sink = RecordingSink::new();
+    let mut ui = Ui::new(Bus::new(), Logger::new(Arc::new(sink.clone())));
+    ui.register(AlwaysClicked);
+    let mut services = ServiceRegistry::new();
+    services
+        .provide::<DrawTargetService>(Box::new(SharedTarget::default()))
+        .unwrap();
+    ui.init(&mut ModuleContext::new(&mut services)).unwrap();
+    let port: UiService = services.get::<UiService>().unwrap().clone();
+
+    for _ in 0..3 {
+        port.lock().unwrap().show("first", screen_of("a", 1));
+        port.lock().unwrap().show("second", screen_of("b", 2));
+        ui.update();
+    }
+
+    let mut port = port.lock().unwrap();
+    assert_eq!(port.take_events("first").len(), 3);
+    assert!(port.take_events("second").is_empty());
+    let warnings: Vec<String> = sink
+        .records()
+        .into_iter()
+        .filter(|(level, _, _)| *level == Level::Warn)
+        .map(|(_, _, message)| message)
+        .collect();
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
+    assert!(warnings[0].contains("'second'") && warnings[0].contains("'first'"));
+}
+
+#[test]
+fn zoom_scales_what_is_drawn() {
+    let tallest = |zoom: f32| {
+        let target = SharedTarget::default();
+        let mut ui = Ui::new(Bus::new(), Logger::default());
+        let mut services = ServiceRegistry::new();
+        services
+            .provide::<DrawTargetService>(Box::new(target.clone()))
+            .unwrap();
+        ui.init(&mut ModuleContext::new(&mut services)).unwrap();
+        let port: UiService = services.get::<UiService>().unwrap().clone();
+        port.lock().unwrap().set_zoom(zoom);
+        // A floating window sizes itself to its content, unlike a Screen,
+        // whose central panel always fills the surface.
+        let window = Spec {
+            root: Root::Window { title: "w".into() },
+            body: Label {
+                text: "Hello".into(),
+            }
+            .node(0),
+        };
+        for _ in 0..2 {
+            port.lock().unwrap().show("app", window.clone());
+            ui.update();
+        }
+        let recorded = target.0.lock().unwrap();
+        recorded
+            .meshes
+            .iter()
+            .flat_map(|mesh| mesh.vertices.iter())
+            .map(|vertex| vertex.y)
+            .fold(0.0_f32, f32::max)
+    };
+
+    let (normal, doubled) = (tallest(1.0), tallest(2.0));
+
+    assert!(
+        doubled > normal * 1.5,
+        "zoom 2 should draw about twice as large: {normal} vs {doubled}"
+    );
 }

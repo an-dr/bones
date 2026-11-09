@@ -46,7 +46,8 @@ use bones_messages::os::{
 use bones_messages::persistence::Save;
 use bones_messages::renderer::{Capture, Captured, DisplayChanged, LogicalCanvas, Scope};
 use bones_messages::tick::Tick;
-use bones_messages::ui::{Changed, Clicked, Spec, Widget};
+use bones_messages::ui::kinds::{Button, Label, TextEdit};
+use bones_messages::ui::{Changed, Clicked, Layout, Node, PanelSide, Root, Spec, WidgetProps};
 use bones_messages::upgrader::{
     Action as UpgraderAction, Outcome as UpgraderOutcome, Request as UpgraderRequest,
     Result as UpgraderResult,
@@ -327,22 +328,36 @@ fn vectors() -> Vec<Vector> {
         // -- ui ---------------------------------------------------------
         vector(
             &Spec {
-                title: "notes",
-                widgets: vec![
-                    Widget::Label { text: "name" },
-                    Widget::TextEdit {
-                        id: 1,
-                        text: "ada",
-                    },
-                    Widget::Button {
-                        id: 2,
-                        label: "save",
-                    },
-                ],
+                root: Root::Window {
+                    title: "notes".into(),
+                },
+                body: Node::container(
+                    Layout::Vertical,
+                    vec![
+                        Label { text: "name".into() }.node(0),
+                        TextEdit { text: "ada".into() }.node(1),
+                        Button {
+                            label: "save".into(),
+                        }
+                        .node(2),
+                    ],
+                ),
             },
-            "title=notes;widgets=label(name),text-edit(1,ada),button(2,save)",
+            "root=window(notes);body=vertical#0[label#0(name),text-edit#1(ada),button#2(save)]",
         ),
-        vector(&Spec { title: "", widgets: vec![] }, "title=;widgets="),
+        vector(
+            &Spec {
+                root: Root::Screen,
+                body: Node::Container {
+                    id: 3,
+                    layout: Layout::Panel {
+                        side: PanelSide::Left,
+                    },
+                    children: vec![Node::container(Layout::Grid { columns: 2 }, vec![])],
+                },
+            },
+            "root=screen;body=panel(left)#3[grid(2)#0[]]",
+        ),
         vector(&Clicked { id: 2 }, "id=2"),
         vector(
             &Changed {

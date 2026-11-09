@@ -305,6 +305,20 @@ pub mod draw_target {
     pub use bones_kernel_infra::draw_target::{DrawTarget, DrawTargetService, UiMesh, UiVertex};
 }
 
+/// Widget interfaces (ADR-048): the native door into the ui module, and
+/// what a custom widget kind is written against.
+///
+/// - `UiView` + `ViewModule` describe a native screen from state; compose
+///   the module with `.module(ViewModule::new(name, view))` after `.ui()`.
+/// - `Kind` adds a widget kind, registered with `Kernel::ui_kind`; draw it
+///   with the re-exported `egui`, the version the ui module embeds.
+/// - The tree itself is `messages::ui`.
+#[cfg(feature = "presentation")]
+pub mod ui {
+    pub use bones_kernel_infra::ui_port::{UiPort, UiService, UiView, ViewModule};
+    pub use bones_module_ui::{egui, Event, Kind};
+}
+
 /// Structured logging, including the sink trait the kernel infrastructure resolves against
 /// (ADR-012).
 pub mod logging {
