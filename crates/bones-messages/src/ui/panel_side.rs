@@ -1,7 +1,7 @@
 use crate::DecodeError;
 
 /// Where a `Layout::Panel` sits on a `Screen`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PanelSide {
     /// Full width, along the top edge.
     Top,

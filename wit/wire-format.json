@@ -445,7 +445,23 @@
                       { "value": 2, "name": "left" },
                       { "value": 3, "name": "right" },
                       { "value": 4, "name": "central: what the other panels leave" }
-                    ] }] }
+                    ] }] },
+                    { "tag": 7, "name": "draggable: its children drag as one, carrying this container's id", "fields": [] },
+                    { "tag": 8, "name": "drop-target: highlights while a draggable hovers; a drop publishes `ui/dropped`", "fields": [] },
+                    { "tag": 9, "name": "context-menu: the first child is drawn, the rest is the menu a right click opens", "fields": [] },
+                    { "tag": 10, "name": "tooltip: the first child is drawn, the rest appears while the pointer rests on it", "fields": [] },
+                    { "tag": 11, "name": "fade: top to bottom; when anything inside changes, the new content fades in and rises into place (not on first appearance)", "fields": [] },
+                    { "tag": 12, "name": "tile: an uploaded image cover-cropped into the box, pulsing until it arrives; the children appear in a bar along the bottom on hover; a click elsewhere publishes `ui/clicked` with this id", "fields": [
+                      { "name": "image", "type": "u32", "meaning": "the owner's image handle" },
+                      { "name": "width", "type": "u16", "meaning": "in points" },
+                      { "name": "height", "type": "u16", "meaning": "in points" },
+                      { "name": "badge", "type": "u32", "meaning": "a Unicode code point shown top-right while not hovered, such as a Lucide glyph; `0` for none" }
+                    ] },
+                    { "tag": 13, "name": "stage: a full-window preview, the image fitted on a dark backdrop with the children in a bottom bar; close publishes `ui/clicked`, previous and next `ui/selected` with index 0 and 1, all with this id", "fields": [
+                      { "name": "image", "type": "u32", "meaning": "the owner's image handle" },
+                      { "name": "previous", "type": "bool" },
+                      { "name": "next", "type": "bool" }
+                    ] }
                   ]
                 }
               }
@@ -633,6 +649,24 @@
           "topics": ["ui/image-free"],
           "description": "Forgets an image the sender uploaded; widgets still naming it draw an empty box.",
           "payload": { "fields": [{ "name": "handle", "type": "u32" }] }
+        },
+        {
+          "topics": ["ui/dropped"],
+          "description": "A `draggable` container was dropped on a `drop-target` container.",
+          "payload": { "fields": [
+            { "name": "id", "type": "u32", "meaning": "the drop target's id" },
+            { "name": "payload", "type": "u32", "meaning": "the dropped container's id" }
+          ] }
+        },
+        {
+          "topics": ["ui/submitted"],
+          "description": "Enter was pressed in a `text-edit` widget.",
+          "payload": { "fields": [{ "name": "id", "type": "u32", "meaning": "the widget id from the spec" }] }
+        },
+        {
+          "topics": ["ui/key"],
+          "description": "A key no widget took, published to the owner of the `screen`: Escape or an arrow key while nothing has focus.",
+          "payload": { "fields": [{ "name": "key", "type": "str-rest", "meaning": "egui's name for the key: `Escape`, `ArrowLeft`, `Enter`, `A`" }] }
         }
       ]
     },

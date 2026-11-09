@@ -98,6 +98,12 @@ ui/image 020000000100000001000000ff0000ff handle=2;width=1;height=1;rgba=ff0000f
 
 ui/image-free 02000000 handle=2
 
+ui/dropped 0600000009000000 id=6;payload=9
+
+ui/submitted 01000000 id=1
+
+ui/key 457363617065 key=Escape
+
 audio/load-sound 0400000052494646 id=4;bytes=52494646
 
 audio/play-sound 040000000000403f id=4;volume=0.75

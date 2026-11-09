@@ -7,7 +7,7 @@ use super::{Layout, WidgetProps};
 pub const MAX_DEPTH: usize = 64;
 
 /// One node of a widget tree.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Node {
     /// A layout container.
     Container {

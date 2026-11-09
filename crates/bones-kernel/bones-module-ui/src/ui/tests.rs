@@ -420,3 +420,38 @@ fn the_owners_theme_choice_overrides_the_desktop_mode() {
         assert_eq!(ui.ctx.style().visuals.dark_mode, dark, "{theme:?}");
     }
 }
+
+#[test]
+fn a_key_no_widget_takes_goes_to_the_screen_owner_only() {
+    let mut ui = Ui::new(Bus::new(), Logger::default());
+    let mut services = ServiceRegistry::new();
+    services
+        .provide::<DrawTargetService>(Box::new(SharedTarget::default()))
+        .unwrap();
+    ui.init(&mut ModuleContext::new(&mut services)).unwrap();
+    let port: UiService = services.get::<UiService>().unwrap().clone();
+    let window = Spec {
+        root: Root::Window { title: "w".into() },
+        body: Label { text: "w".into() }.node(0),
+    };
+
+    port.lock().unwrap().show("app", screen_of("s", 0));
+    port.lock().unwrap().show("panel", window);
+    ui.events.push(egui::Event::Key {
+        key: egui::Key::Escape,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    ui.update();
+
+    let mut port = port.lock().unwrap();
+    assert_eq!(
+        port.take_events("app"),
+        [Event::KeyPressed {
+            key: "Escape".into()
+        }]
+    );
+    assert!(port.take_events("panel").is_empty());
+}

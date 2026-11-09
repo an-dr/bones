@@ -1,6 +1,6 @@
 use crate::{EncodeMessage, Message};
 
-use super::{Changed, Clicked, Selected, Toggled, ValueChanged};
+use super::{Changed, Clicked, Dropped, KeyPressed, Selected, Submitted, Toggled, ValueChanged};
 
 /// Something a user did to one widget, as the ui module reports it to the
 /// widget's owner (ADR-048): returned to a native owner, published as the
@@ -40,6 +40,23 @@ pub enum Event {
         /// The new value.
         value: f32,
     },
+    /// A `draggable` container was dropped on a `drop-target` one.
+    Dropped {
+        /// The drop target's id.
+        id: u32,
+        /// The dropped container's id.
+        payload: u32,
+    },
+    /// Enter was pressed in a text field.
+    Submitted {
+        /// The field's id.
+        id: u32,
+    },
+    /// A key no widget took, for the `Screen` owner; its id is always 0.
+    KeyPressed {
+        /// The key's name, as egui names it: `Escape`, `ArrowLeft`.
+        key: String,
+    },
 }
 
 impl Event {
@@ -50,7 +67,10 @@ impl Event {
             | Event::Changed { id, .. }
             | Event::Selected { id, .. }
             | Event::Toggled { id, .. }
-            | Event::ValueChanged { id, .. } => *id,
+            | Event::ValueChanged { id, .. }
+            | Event::Dropped { id, .. }
+            | Event::Submitted { id } => *id,
+            Event::KeyPressed { .. } => 0,
         }
     }
 
@@ -83,6 +103,16 @@ impl Event {
                 }
                 .encode(),
             ),
+            Event::Dropped { id, payload } => (
+                Dropped::TOPIC,
+                Dropped {
+                    id: *id,
+                    payload: *payload,
+                }
+                .encode(),
+            ),
+            Event::Submitted { id } => (Submitted::TOPIC, Submitted { id: *id }.encode()),
+            Event::KeyPressed { key } => (KeyPressed::TOPIC, KeyPressed { key }.encode()),
         }
     }
 }

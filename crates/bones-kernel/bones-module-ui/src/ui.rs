@@ -6,7 +6,7 @@ use bones_kernel_infra::bus::{Bus, Envelope, Handler, Module, ModuleContext};
 use bones_kernel_infra::draw_target::{DrawTargetService, UiMesh, UiVertex};
 use bones_kernel_infra::logging::Logger;
 use bones_kernel_infra::ui_port::UiService;
-use bones_messages::ui::{FreeImage, Root, SetImage, Spec};
+use bones_messages::ui::{Event, FreeImage, Root, SetImage, Spec};
 use bones_messages::{DecodeMessage, Message};
 
 use crate::display_scale::display_scale;
@@ -228,6 +228,18 @@ impl Ui {
             egui::Pos2::ZERO,
             egui::vec2(screen_width as f32, screen_height as f32) / self.scale,
         );
+        // Keys pressed this frame; those no widget takes go to the Screen
+        // owner as `KeyPressed`.
+        let pressed: Vec<egui::Key> = self
+            .events
+            .iter()
+            .filter_map(|event| match event {
+                egui::Event::Key {
+                    key, pressed: true, ..
+                } => Some(*key),
+                _ => None,
+            })
+            .collect();
         let mut raw_input = egui::RawInput {
             screen_rect: Some(screen_rect),
             time: Some(self.start.elapsed().as_secs_f64()),
@@ -270,7 +282,15 @@ impl Ui {
                 look.paint_fade(ctx, time);
             }
         });
-        for ((owner, _, native), outcome) in pending.iter().zip(outcomes) {
+        let keys_free = !self.ctx.wants_keyboard_input();
+        for ((owner, spec, native), mut outcome) in pending.iter().zip(outcomes) {
+            if keys_free && spec.root == Root::Screen {
+                outcome
+                    .events
+                    .extend(pressed.iter().map(|key| Event::KeyPressed {
+                        key: key.name().to_string(),
+                    }));
+            }
             self.report(owner, *native, outcome);
         }
 

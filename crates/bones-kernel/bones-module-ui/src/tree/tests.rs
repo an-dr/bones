@@ -5,7 +5,7 @@ use bones_messages::ui::kinds::{
 use bones_messages::ui::{Event, Layout, Node, PanelSide, Root, Spec, WidgetProps};
 use bones_messages::{DecodeError, Reader, Writer};
 
-use super::draw_spec;
+use super::{draw_spec, transition};
 use crate::draw_context::DrawContext;
 use crate::kind::Kind;
 use crate::registry::{DrawProblem, Registry};
@@ -208,4 +208,97 @@ fn every_standard_kind_is_registered_and_draws() {
 
     assert!(outcome.problems.is_empty(), "{:?}", outcome.problems);
     assert!(outcome.events.is_empty(), "nothing was clicked");
+}
+
+#[test]
+fn interaction_layouts_draw_their_area() {
+    let mut registry = Registry::standard();
+    registry.register(GaugeKind);
+    let wrap = |layout, id| Node::Container {
+        id,
+        layout,
+        children: vec![
+            Gauge { level: id }.node(id),
+            Label {
+                text: "menu or tip".into(),
+            }
+            .node(0),
+        ],
+    };
+    let spec = screen(vec![
+        wrap(Layout::Draggable, 1),
+        wrap(Layout::DropTarget, 2),
+        wrap(Layout::ContextMenu, 3),
+        wrap(Layout::Tooltip, 4),
+    ]);
+
+    let outcome = run(&spec, &registry);
+
+    assert!(outcome.problems.is_empty(), "{:?}", outcome.problems);
+    let mut ids: Vec<u32> = outcome.events.iter().map(Event::id).collect();
+    ids.sort();
+    // Each area is drawn; the menu and tip stay closed without a pointer.
+    assert_eq!(ids, [1, 2, 3, 4]);
+}
+
+#[test]
+fn a_fade_runs_when_its_content_changes_but_not_on_first_sight() {
+    let ctx = egui::Context::default();
+    let id = egui::Id::new("fade");
+    let progress_at = |time: f64, text: &str| {
+        let children = vec![Label { text: text.into() }.node(0)];
+        let mut progress = 0.0;
+        let input = egui::RawInput {
+            time: Some(time),
+            ..Default::default()
+        };
+        let _ = ctx.run(input, |ctx| {
+            egui::CentralPanel::default().show(ctx, |ui| {
+                progress = transition(ui, id, &children);
+            });
+        });
+        progress
+    };
+
+    assert_eq!(progress_at(0.0, "a"), 1.0, "first sight shows at once");
+    assert_eq!(progress_at(1.0, "a"), 1.0, "unchanged content stays");
+    let started = progress_at(2.0, "b");
+    let halfway = progress_at(2.09, "b");
+    assert!(started < 0.01, "{started}");
+    assert!(halfway > 0.0 && halfway < 1.0, "{halfway}");
+    assert_eq!(progress_at(2.5, "b"), 1.0);
+}
+
+#[test]
+fn a_tile_and_a_stage_draw_with_or_without_their_image() {
+    let mut registry = Registry::standard();
+    registry.register(GaugeKind);
+    let spec = screen(vec![
+        Node::Container {
+            id: 1,
+            layout: Layout::Tile {
+                image: 9,
+                width: 120,
+                height: 80,
+                badge: 0x2665,
+            },
+            children: vec![Gauge { level: 1 }.node(1)],
+        },
+        Node::Container {
+            id: 2,
+            layout: Layout::Stage {
+                image: 9,
+                previous: true,
+                next: true,
+            },
+            children: vec![Gauge { level: 2 }.node(2)],
+        },
+    ]);
+
+    let outcome = run(&spec, &registry);
+
+    assert!(outcome.problems.is_empty(), "{:?}", outcome.problems);
+    // The stage's bar always shows; a tile's actions only under the pointer.
+    let ids: Vec<u32> = outcome.events.iter().map(Event::id).collect();
+    assert_eq!(ids, [2]);
 }

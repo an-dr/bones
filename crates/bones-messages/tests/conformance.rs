@@ -48,8 +48,8 @@ use bones_messages::renderer::{Capture, Captured, DisplayChanged, LogicalCanvas,
 use bones_messages::tick::Tick;
 use bones_messages::ui::kinds::{Button, Label, TextEdit};
 use bones_messages::ui::{
-    Changed, Clicked, FreeImage, Layout, Node, PanelSide, Root, Selected, SetImage, Spec, Toggled,
-    ValueChanged, WidgetProps,
+    Changed, Clicked, Dropped, FreeImage, KeyPressed, Layout, Node, PanelSide, Root, Selected,
+    SetImage, Spec, Submitted, Toggled, ValueChanged, WidgetProps,
 };
 use bones_messages::upgrader::{
     Action as UpgraderAction, Outcome as UpgraderOutcome, Request as UpgraderRequest,
@@ -382,6 +382,9 @@ fn vectors() -> Vec<Vector> {
             "handle=2;width=1;height=1;rgba=ff0000ff",
         ),
         vector(&FreeImage { handle: 2 }, "handle=2"),
+        vector(&Dropped { id: 6, payload: 9 }, "id=6;payload=9"),
+        vector(&Submitted { id: 1 }, "id=1"),
+        vector(&KeyPressed { key: "Escape" }, "key=Escape"),
         // -- audio ------------------------------------------------------
         vector(
             &LoadSound {
