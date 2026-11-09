@@ -28,7 +28,8 @@ A bones product is a WebAssembly extension the engine loads. The extension never
 Every frame the interface should show, publish one `ui/spec`: a `Root` (`Window` for a floating panel, `Screen` for the whole window with `Panel` containers) over a tree of `Node`s. Never draw widgets yourself.
 
 - Widgets are `bones_wasm_sdk::messages::ui::kinds::*` (`Label`, `Button`, `TextEdit`, `Select`, `Checkbox`, `Image`, `IconButton`, `Progress`, `Toast`, `TitleBar`, …), placed with `.node(id)`; containers are `Node::container(Layout::…, children)`.
-- Events come back as `ui/clicked`, `ui/changed`, `ui/selected`, `ui/toggled`, `ui/value`, `ui/submitted`, `ui/dropped`, and `ui/key`, each naming the widget id you gave.
+- Events come back as `ui/clicked`, `ui/changed`, `ui/selected`, `ui/toggled`, `ui/value`, `ui/submitted`, `ui/dropped`, `ui/appeared`, `ui/reached-end`, and `ui/key`, each naming the widget id you gave.
+- Long lists: a `Scroll` with an id reports `ui/reached-end` to load more; a `Gallery` of `Tile`s draws only what is on screen, and each tile reports `ui/appeared` once, the moment to load its image.
 - Icons are Lucide, by lucide.dev name: the `Icon` and `IconButton` kinds take the name, and `ui::icons::TRASH_2` and its siblings go straight into any text.
 - Images are uploaded once with `ui/image` and shown by handle.
 - In a check, `spec.body.widgets_of::<Label>()` lists what a frame showed.
