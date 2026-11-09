@@ -60,6 +60,7 @@ The bus carries *behavior*; **services** carry in-process plumbing that must not
 | window-surface | platform (kernel infrastructure), via `Kernel::build` | renderer, web | `sdl3::video::Window` |
 | bus | kernel infrastructure, via `Kernel::build` | game-core | `bus::Bus` |
 | draw-target | renderer, via its own `init` | ui | `Box<dyn DrawTarget>`: textures plus `UiMesh` submission |
+| ui | ui, via its own `init` | any native module showing widgets | `Arc<Mutex<dyn UiPort>>`: show a widget tree, take its events (ADR-048); read with `get`, never consumed |
 | window-control | platform (kernel infrastructure), via `Kernel::build` | instance | `WindowControl`: `raise()` — un-minimise, raise, and focus the window, where the platform allows (ADR-035) |
 | frame-control | kernel infrastructure, via `Kernel::build` | devtools | `FrameControl`: pause the simulation, resume it, or step it a number of frames at the fixed tick period |
 

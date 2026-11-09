@@ -3,7 +3,8 @@
 use std::path::PathBuf;
 
 use bones_test::kernel::Kernel;
-use bones_test::messages::ui::{Changed, Clicked, Spec, Widget};
+use bones_test::messages::ui::kinds::{Button, Label, TextEdit};
+use bones_test::messages::ui::{Changed, Clicked, Root, Spec};
 use bones_test::App;
 
 /// An app saving into its own folder, so runs do not see each other.
@@ -23,18 +24,29 @@ fn panel(app: &mut App) -> (String, Vec<String>) {
     app.clear();
     app.step(1);
     let spec = app.published::<Spec>().pop().expect("no ui/spec published");
-    assert_eq!(spec.title, "notes");
-    let mut typed = None;
-    let mut labels = Vec::new();
-    for widget in &spec.widgets {
-        match widget {
-            Widget::TextEdit { id: 1, text } => typed = Some(text.to_string()),
-            Widget::Label { text } => labels.push(text.to_string()),
-            _ => {}
+    assert_eq!(
+        spec.root,
+        Root::Window {
+            title: "notes".into()
         }
-    }
+    );
+    let typed = spec
+        .body
+        .widgets_of::<TextEdit>()
+        .into_iter()
+        .find(|(id, _)| *id == 1)
+        .map(|(_, edit)| edit.text);
+    let labels = spec
+        .body
+        .widgets_of::<Label>()
+        .into_iter()
+        .map(|(_, label)| label.text)
+        .collect();
     assert!(
-        spec.widgets.iter().any(|w| matches!(w, Widget::Button { id: 2, label } if *label == "Add")),
+        spec.body
+            .widgets_of::<Button>()
+            .iter()
+            .any(|(id, button)| *id == 2 && button.label == "Add"),
         "no Add button with id 2"
     );
     (typed.expect("no text edit with id 1"), labels)

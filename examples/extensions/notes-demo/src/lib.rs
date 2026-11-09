@@ -2,7 +2,8 @@ use std::cell::RefCell;
 
 use bones_wasm_sdk::bindings::bones::extension::host_api::{log, Level};
 use bones_wasm_sdk::messages::tick::Tick;
-use bones_wasm_sdk::messages::ui::{Changed, Clicked, Spec, Widget};
+use bones_wasm_sdk::messages::ui::kinds::{Button, Label, TextEdit};
+use bones_wasm_sdk::messages::ui::{Changed, Clicked, Layout, Node, Root, Spec, WidgetProps};
 use bones_wasm_sdk::{bus, Guest, Inbound};
 
 const INPUT_ID: u32 = 1;
@@ -37,21 +38,23 @@ impl Guest for Component {
         STATE.with(|state| {
             let state = state.borrow();
             let mut widgets = vec![
-                Widget::TextEdit {
-                    id: INPUT_ID,
-                    text: &state.input,
-                },
-                Widget::Button {
-                    id: ADD_ID,
-                    label: "Add",
-                },
+                TextEdit {
+                    text: state.input.clone(),
+                }
+                .node(INPUT_ID),
+                Button {
+                    label: "Add".into(),
+                }
+                .node(ADD_ID),
             ];
             for note in &state.notes {
-                widgets.push(Widget::Label { text: note });
+                widgets.push(Label { text: note.clone() }.node(0));
             }
             let spec = Spec {
-                title: "notes",
-                widgets,
+                root: Root::Window {
+                    title: "notes".into(),
+                },
+                body: Node::container(Layout::Vertical, widgets),
             };
             bus::publish(&spec);
         });

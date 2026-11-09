@@ -1,15 +1,3 @@
-use bones_kernel_infra::bus::{Bus, Envelope};
-use bones_messages::EncodeMessage;
-
-pub(crate) fn publish<M: EncodeMessage>(bus: &Bus, message: M) {
-    bus.publish(Envelope {
-        topic: M::TOPIC.to_string(),
-        sender: "ui".to_string(),
-        correlation: None,
-        payload: message.encode(),
-    });
-}
-
 /// Splits egui's own texture-id namespace into one `u64` key: `Managed` and
 /// `User` ids each start at 0, so they'd otherwise collide.
 pub(crate) fn compute_texture_key(id: egui::TextureId) -> u64 {

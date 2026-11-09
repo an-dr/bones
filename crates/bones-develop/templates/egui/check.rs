@@ -1,6 +1,7 @@
 //! Runs the built extension headless and checks its widget panel.
 
-use bones_test::messages::ui::{Clicked, Spec, Widget};
+use bones_test::messages::ui::kinds::Label;
+use bones_test::messages::ui::{Clicked, Spec};
 use bones_test::App;
 
 fn app() -> App {
@@ -10,10 +11,13 @@ fn app() -> App {
 
 fn label(app: &App) -> String {
     let spec = app.published::<Spec>().pop().expect("no ui/spec published");
-    match spec.widgets.first() {
-        Some(Widget::Label { text }) => text.to_string(),
-        other => panic!("expected a label first, got {other:?}"),
-    }
+    let (_, label) = spec
+        .body
+        .widgets_of::<Label>()
+        .into_iter()
+        .next()
+        .expect("no label in the panel");
+    label.text
 }
 
 #[test]

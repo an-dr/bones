@@ -14,6 +14,8 @@ pub enum DecodeError {
     },
     /// A string field was not valid UTF-8.
     InvalidUtf8,
+    /// A nested structure exceeded its message's depth limit.
+    TooDeep,
 }
 
 impl std::fmt::Display for DecodeError {
@@ -23,6 +25,7 @@ impl std::fmt::Display for DecodeError {
             DecodeError::TrailingBytes => write!(f, "payload has bytes left after decoding"),
             DecodeError::InvalidTag { message, tag } => write!(f, "unknown {message} tag {tag}"),
             DecodeError::InvalidUtf8 => write!(f, "payload contains invalid UTF-8"),
+            DecodeError::TooDeep => write!(f, "payload nests deeper than its limit"),
         }
     }
 }

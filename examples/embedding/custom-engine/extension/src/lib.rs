@@ -9,7 +9,8 @@
 //! shows a custom request/reply and a bones-owned message side by side.
 
 use bones_wasm_sdk::bindings::bones::extension::host_api::{log, send, Level};
-use bones_wasm_sdk::messages::ui::{Spec, Widget};
+use bones_wasm_sdk::messages::ui::kinds::Label;
+use bones_wasm_sdk::messages::ui::{Layout, Node, Root, Spec, WidgetProps};
 use bones_wasm_sdk::messages::{DecodeMessage, EncodeMessage};
 use bones_wasm_sdk::{bus, Guest};
 use host_facts_messages::{Fact, FactsReply, FactsRequest, ENDPOINT};
@@ -55,17 +56,19 @@ impl Guest for Component {
         // Published, not sent: a widget spec is a broadcast to whichever ui
         // module is composed, which may be none. Core vocabulary this time,
         // to show both kinds of message in one extension.
+        let label = |text: &str| Label { text: text.into() }.node(0);
         let spec = Spec {
-            title: "host facts",
-            widgets: vec![
-                Widget::Label {
-                    text: "Answered by a native module this engine was built with:",
-                },
-                Widget::Label { text: &hostname },
-                Widget::Label {
-                    text: &working_directory,
-                },
-            ],
+            root: Root::Window {
+                title: "host facts".into(),
+            },
+            body: Node::container(
+                Layout::Vertical,
+                vec![
+                    label("Answered by a native module this engine was built with:"),
+                    label(&hostname),
+                    label(&working_directory),
+                ],
+            ),
         };
         bus::publish(&spec);
     }

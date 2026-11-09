@@ -34,7 +34,7 @@
     },
     {
       "heading": "Decoding failures",
-      "markdown": "Four failures are distinguishable, and an implementation should report them separately because they mean different things:\n\n| Failure | Meaning |\n| --- | --- |\n| `truncated` | the payload ended before a field could be read in full |\n| `trailing-bytes` | a fixed-shape payload had bytes left after its final field |\n| `invalid-tag` | a tagged union carried a tag the contract does not define |\n| `invalid-utf8` | a `str`, `str-rest`, or string field was not valid UTF-8 |\n\nA malformed payload is dropped by the receiver, not reported back to the sender. The bus is at-most-once and has no negative acknowledgement (ADR-009).\n\nThe extension host checks every core-topic payload an extension publishes against this specification before delivering it. When one fails, it logs a warning naming the extension, the topic, the failure, the payload's length and leading bytes, and this specification's section for the topic. It warns once per extension and topic, so a malformed message published every frame produces one line. The payload is still delivered, and its receiver drops it as above."
+      "markdown": "Five failures are distinguishable, and an implementation should report them separately because they mean different things:\n\n| Failure | Meaning |\n| --- | --- |\n| `truncated` | the payload ended before a field could be read in full |\n| `trailing-bytes` | a fixed-shape payload had bytes left after its final field |\n| `invalid-tag` | a tagged union carried a tag the contract does not define |\n| `invalid-utf8` | a `str`, `str-rest`, or string field was not valid UTF-8 |\n| `too-deep` | a nested structure exceeded its depth limit (a `ui/spec` tree deeper than 64) |\n\nA malformed payload is dropped by the receiver, not reported back to the sender. The bus is at-most-once and has no negative acknowledgement (ADR-009).\n\nThe extension host checks every core-topic payload an extension publishes against this specification before delivering it. When one fails, it logs a warning naming the extension, the topic, the failure, the payload's length and leading bytes, and this specification's section for the topic. It warns once per extension and topic, so a malformed message published every frame produces one line. The payload is still delivered, and its receiver drops it as above."
     }
   ],
   "groups": [
@@ -381,29 +381,89 @@
       "entries": [
         {
           "topics": ["ui/spec"],
-          "description": "A whole widget panel, republished whenever it changes (ADR-005).",
+          "description": "One owner's whole interface for one frame: a root and a widget tree, republished every frame it should be visible (ADR-048). Not publishing it this frame draws nothing of the owner's.",
           "payload": {
             "fields": [
-              { "name": "title", "type": "str" },
-              { "name": "count", "type": "u16", "meaning": "number of widgets that follow" },
-              { "name": "widgets", "type": { "list": "widget", "count": "count" }, "meaning": "back to back, no separator" }
+              { "name": "root", "type": "root" },
+              { "name": "body", "type": "node", "meaning": "the tree; usually a container" }
             ]
           },
           "types": [
             {
-              "name": "widget",
-              "description": "Each widget is a tagged union.",
+              "name": "root",
+              "description": "Where the tree is drawn.",
               "payload": {
                 "union": {
                   "tag": "kind",
                   "variants": [
-                    { "tag": 0, "name": "label", "fields": [{ "name": "text", "type": "str" }] },
-                    { "tag": 1, "name": "text-edit", "fields": [{ "name": "id", "type": "u32" }, { "name": "text", "type": "str" }] },
-                    { "tag": 2, "name": "button", "fields": [{ "name": "id", "type": "u32" }, { "name": "label", "type": "str" }] }
+                    { "tag": 0, "name": "window", "fields": [{ "name": "title", "type": "str", "meaning": "a floating panel's title; each owner may show one" }] },
+                    { "tag": 1, "name": "screen", "fields": [] }
                   ]
                 }
               },
-              "notes": "Every widget string is `str`, not `str-rest`, because another widget may follow it."
+              "notes": "A `screen` is the whole window, held by one owner at a time; its direct children are usually `panel` containers. A second owner's `screen` is refused, and windows float above it."
+            },
+            {
+              "name": "node",
+              "description": "A layout container or a widget; containers nest, at most 64 deep.",
+              "payload": {
+                "union": {
+                  "tag": "node",
+                  "variants": [
+                    { "tag": 0, "name": "container", "fields": [
+                      { "name": "id", "type": "u32", "meaning": "owner-assigned; the ui module keeps scroll position and similar state under it. `0` when unused" },
+                      { "name": "layout", "type": "layout" },
+                      { "name": "count", "type": "u16", "meaning": "number of children that follow" },
+                      { "name": "children", "type": { "list": "node", "count": "count" } }
+                    ] },
+                    { "tag": 1, "name": "widget", "fields": [
+                      { "name": "kind", "type": "str", "meaning": "the registered widget kind, e.g. `button`" },
+                      { "name": "id", "type": "u32", "meaning": "owner-assigned; events name it" },
+                      { "name": "props", "type": "blob", "meaning": "the kind's properties, encoded as that kind specifies below" }
+                    ] }
+                  ]
+                }
+              },
+              "notes": "A widget names its kind rather than taking a tag, so adding a kind never changes this encoding. A kind the ui module has not registered is reported once by name and drawn as nothing. A tree nested deeper than 64 is malformed."
+            },
+            {
+              "name": "layout",
+              "description": "How a container arranges its children.",
+              "payload": {
+                "union": {
+                  "tag": "layout",
+                  "variants": [
+                    { "tag": 0, "name": "vertical", "fields": [] },
+                    { "tag": 1, "name": "horizontal", "fields": [] },
+                    { "tag": 2, "name": "centred", "fields": [] },
+                    { "tag": 3, "name": "scroll", "fields": [] },
+                    { "tag": 4, "name": "frame", "fields": [] },
+                    { "tag": 5, "name": "grid", "fields": [{ "name": "columns", "type": "u16", "meaning": "children per row" }] },
+                    { "tag": 6, "name": "panel", "fields": [{ "name": "side", "type": "u8", "values": [
+                      { "value": 0, "name": "top" },
+                      { "value": 1, "name": "bottom" },
+                      { "value": 2, "name": "left" },
+                      { "value": 3, "name": "right" },
+                      { "value": 4, "name": "central: what the other panels leave" }
+                    ] }] }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "label",
+              "description": "`props` of kind `label`: static text, no events.",
+              "payload": { "fields": [{ "name": "text", "type": "str" }] }
+            },
+            {
+              "name": "text-edit",
+              "description": "`props` of kind `text-edit`: a one-line field; an edit publishes `ui/changed`.",
+              "payload": { "fields": [{ "name": "text", "type": "str" }] }
+            },
+            {
+              "name": "button",
+              "description": "`props` of kind `button`: a push button; a click publishes `ui/clicked`.",
+              "payload": { "fields": [{ "name": "label", "type": "str" }] }
             }
           ]
         },
