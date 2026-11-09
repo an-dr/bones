@@ -316,7 +316,7 @@ pub mod draw_target {
 #[cfg(feature = "presentation")]
 pub mod ui {
     pub use bones_kernel_infra::ui_port::{UiPort, UiService, UiView, ViewModule};
-    pub use bones_module_ui::{egui, Event, Kind};
+    pub use bones_module_ui::{egui, DrawContext, Event, Kind};
 }
 
 /// Structured logging, including the sink trait the kernel infrastructure resolves against

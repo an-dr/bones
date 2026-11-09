@@ -9,8 +9,10 @@ use bones_messages::ui::{Layout, Node, Root, Spec, WidgetProps};
 use bones_messages::{EncodeMessage, Message};
 
 use super::Ui;
+use crate::draw_context::DrawContext;
 use crate::kind::Kind;
-use bones_messages::ui::Event;
+use bones_messages::ui::kinds::{Fit, Image};
+use bones_messages::ui::{Event, SetImage};
 
 /// Everything the ui module asks of a surface, recorded instead of drawn.
 ///
@@ -208,9 +210,9 @@ struct AlwaysClicked;
 impl Kind for AlwaysClicked {
     type Props = Label;
 
-    fn draw(&self, ui: &mut egui::Ui, id: u32, props: Label, events: &mut Vec<Event>) {
+    fn draw(&self, ui: &mut egui::Ui, id: u32, props: Label, cx: &mut DrawContext<'_>) {
         ui.label(props.text);
-        events.push(Event::Clicked { id });
+        cx.emit(Event::Clicked { id });
     }
 }
 
@@ -319,4 +321,80 @@ fn zoom_scales_what_is_drawn() {
         doubled > normal * 1.5,
         "zoom 2 should draw about twice as large: {normal} vs {doubled}"
     );
+}
+
+fn image_screen(handle: u32) -> Spec {
+    Spec {
+        root: Root::Screen,
+        body: Image {
+            handle,
+            width: 32.0,
+            height: 32.0,
+            fit: Fit::Cover,
+            corner: 0.0,
+        }
+        .node(0),
+    }
+}
+
+fn warnings(sink: &RecordingSink) -> Vec<String> {
+    sink.records()
+        .into_iter()
+        .filter(|(level, _, _)| *level == Level::Warn)
+        .map(|(_, _, message)| message)
+        .collect()
+}
+
+#[test]
+fn images_upload_once_through_either_door_and_draw_by_handle() {
+    let sink = RecordingSink::new();
+    let target = SharedTarget::default();
+    let mut ui = Ui::new(Bus::new(), Logger::new(Arc::new(sink.clone())));
+    let mut services = ServiceRegistry::new();
+    services
+        .provide::<DrawTargetService>(Box::new(target.clone()))
+        .unwrap();
+    ui.init(&mut ModuleContext::new(&mut services)).unwrap();
+    let port: UiService = services.get::<UiService>().unwrap().clone();
+
+    port.lock().unwrap().set_image("app", 1, 2, 1, vec![255; 8]);
+    ui.handle(&Envelope {
+        topic: SetImage::TOPIC.to_string(),
+        sender: "ext".to_string(),
+        correlation: None,
+        payload: SetImage {
+            handle: 1,
+            width: 1,
+            height: 1,
+            rgba: &[0, 0, 255, 255],
+        }
+        .encode(),
+    });
+    for _ in 0..2 {
+        port.lock().unwrap().show("app", image_screen(1));
+        ui.update();
+    }
+
+    // The font atlas plus one texture per owner's image, each uploaded once.
+    assert_eq!(target.0.lock().unwrap().textures_set.len(), 3);
+    assert!(warnings(&sink).is_empty(), "{:?}", warnings(&sink));
+}
+
+#[test]
+fn an_image_whose_size_and_pixels_disagree_is_refused_with_a_warning() {
+    let sink = RecordingSink::new();
+    let mut ui = Ui::new(Bus::new(), Logger::new(Arc::new(sink.clone())));
+    let mut services = ServiceRegistry::new();
+    services
+        .provide::<DrawTargetService>(Box::new(SharedTarget::default()))
+        .unwrap();
+    ui.init(&mut ModuleContext::new(&mut services)).unwrap();
+    let port: UiService = services.get::<UiService>().unwrap().clone();
+
+    port.lock().unwrap().set_image("app", 4, 10, 10, vec![0; 3]);
+    ui.update();
+
+    let warnings = warnings(&sink);
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
+    assert!(warnings[0].contains("image 4"));
 }

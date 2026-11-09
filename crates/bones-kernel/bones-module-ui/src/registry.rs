@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
-use bones_messages::ui::{Event, WidgetProps};
+use bones_messages::ui::WidgetProps;
 use bones_messages::DecodeError;
 
+use crate::draw_context::DrawContext;
 use crate::kind::Kind;
 use crate::standard;
 
@@ -23,7 +24,7 @@ trait AnyKind: Send {
         ui: &mut egui::Ui,
         id: u32,
         props: &[u8],
-        events: &mut Vec<Event>,
+        cx: &mut DrawContext<'_>,
     ) -> Result<(), DecodeError>;
 }
 
@@ -33,10 +34,10 @@ impl<K: Kind> AnyKind for K {
         ui: &mut egui::Ui,
         id: u32,
         props: &[u8],
-        events: &mut Vec<Event>,
+        cx: &mut DrawContext<'_>,
     ) -> Result<(), DecodeError> {
         let props = K::Props::decode(props)?;
-        Kind::draw(self, ui, id, props, events);
+        Kind::draw(self, ui, id, props, cx);
         Ok(())
     }
 }
@@ -67,11 +68,9 @@ impl Registry {
         kind: &str,
         id: u32,
         props: &[u8],
-        events: &mut Vec<Event>,
+        cx: &mut DrawContext<'_>,
     ) -> Result<(), DrawProblem> {
         let entry = self.kinds.get(kind).ok_or(DrawProblem::UnknownKind)?;
-        entry
-            .draw(ui, id, props, events)
-            .map_err(DrawProblem::BadProps)
+        entry.draw(ui, id, props, cx).map_err(DrawProblem::BadProps)
     }
 }

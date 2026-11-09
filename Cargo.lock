@@ -616,9 +616,11 @@ dependencies = [
 name = "bones-module-ui"
 version = "4.0.0"
 dependencies = [
+ "arboard",
  "bones-kernel-infra",
  "bones-messages",
  "egui",
+ "open",
  "sdl3",
 ]
 

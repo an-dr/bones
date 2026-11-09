@@ -15,16 +15,20 @@
 //! stops holding.
 
 mod display_scale;
+mod draw_context;
+mod fonts;
 mod input_translation;
 mod kind;
 mod native_door;
 mod output_translation;
+mod platform_output;
 mod registry;
 mod standard;
 mod tree;
 mod ui;
 
 pub use bones_messages::ui::Event;
+pub use draw_context::DrawContext;
 pub use egui;
 pub use kind::Kind;
 pub use ui::Ui;

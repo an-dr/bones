@@ -47,7 +47,10 @@ use bones_messages::persistence::Save;
 use bones_messages::renderer::{Capture, Captured, DisplayChanged, LogicalCanvas, Scope};
 use bones_messages::tick::Tick;
 use bones_messages::ui::kinds::{Button, Label, TextEdit};
-use bones_messages::ui::{Changed, Clicked, Layout, Node, PanelSide, Root, Spec, WidgetProps};
+use bones_messages::ui::{
+    Changed, Clicked, FreeImage, Layout, Node, PanelSide, Root, Selected, SetImage, Spec, Toggled,
+    ValueChanged, WidgetProps,
+};
 use bones_messages::upgrader::{
     Action as UpgraderAction, Outcome as UpgraderOutcome, Request as UpgraderRequest,
     Result as UpgraderResult,
@@ -366,6 +369,19 @@ fn vectors() -> Vec<Vector> {
             },
             "id=1;text=ada l",
         ),
+        vector(&Selected { id: 3, index: 1 }, "id=3;index=1"),
+        vector(&Toggled { id: 4, on: true }, "id=4;on=1"),
+        vector(&ValueChanged { id: 5, value: 1.5 }, "id=5;value=1.5"),
+        vector(
+            &SetImage {
+                handle: 2,
+                width: 1,
+                height: 1,
+                rgba: &[0xff, 0x00, 0x00, 0xff],
+            },
+            "handle=2;width=1;height=1;rgba=ff0000ff",
+        ),
+        vector(&FreeImage { handle: 2 }, "handle=2"),
         // -- audio ------------------------------------------------------
         vector(
             &LoadSound {

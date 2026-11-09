@@ -88,6 +88,16 @@ ui/clicked 02000000 id=2
 
 ui/changed 01000000616461206c id=1;text=ada l
 
+ui/selected 0300000001000000 id=3;index=1
+
+ui/toggled 0400000001 id=4;on=1
+
+ui/value 050000000000c03f id=5;value=1.5
+
+ui/image 020000000100000001000000ff0000ff handle=2;width=1;height=1;rgba=ff0000ff
+
+ui/image-free 02000000 handle=2
+
 audio/load-sound 0400000052494646 id=4;bytes=52494646
 
 audio/play-sound 040000000000403f id=4;volume=0.75

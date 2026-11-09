@@ -25,6 +25,11 @@ pub(crate) fn translate_key(keycode: sdl3::keyboard::Keycode) -> Option<egui::Ke
         K::Down => Some(egui::Key::ArrowDown),
         K::Home => Some(egui::Key::Home),
         K::End => Some(egui::Key::End),
+        K::A => Some(egui::Key::A),
+        K::C => Some(egui::Key::C),
+        K::V => Some(egui::Key::V),
+        K::X => Some(egui::Key::X),
+        K::Z => Some(egui::Key::Z),
         _ => None,
     }
 }

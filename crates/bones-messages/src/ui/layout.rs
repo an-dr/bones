@@ -14,7 +14,8 @@ pub enum Layout {
     /// Top to bottom inside a scrollable area; the ui module keeps the
     /// scroll position per node id.
     Scroll,
-    /// Top to bottom inside the look's group frame.
+    /// Top to bottom inside a card: the look's faint fill and rounded
+    /// corners, full width. A `strong` first child serves as its title.
     Frame,
     /// Row by row, `columns` children per row.
     Grid {

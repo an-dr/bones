@@ -12,6 +12,7 @@ mod commits;
 mod dist;
 mod example;
 mod files;
+mod lucide;
 mod metadata;
 mod native;
 mod plugin_docs;
@@ -39,6 +40,7 @@ commands:
   dist            build the engine into dist/ and a release archive
                   (--no-archive: dist/ only; --features web: with web panels)
   example         build one example into its own dist/ (no name: list them)
+  lucide          bring a Lucide release in from an unpacked lucide-static package
   linux-packages  print the Debian/Ubuntu packages a Linux build needs
   plugin-docs     regenerate the bones-user plugin's documentation reference
   plugins         check agent-plugins/ against Agent Plugins 1.0.0
@@ -59,6 +61,7 @@ fn main() -> ExitCode {
             println!("{}", prereq::LINUX_PACKAGES.join(" "));
             Ok(())
         }
+        Some("lucide") => lucide::run(&args[1..]),
         Some("plugin-docs") => plugin_docs::run(&args[1..]),
         Some("plugins") => plugins::run(&args[1..]),
         Some("test") => test::run(),

@@ -9,7 +9,7 @@ use bones_messages::lifecycle::LifecycleEvent;
 use bones_messages::os::{Reply as OsReply, Result as OsResult};
 use bones_messages::renderer::{Captured, DisplayChanged, LogicalCanvas};
 use bones_messages::tick::Tick;
-use bones_messages::ui::{Changed, Clicked};
+use bones_messages::ui::{Changed, Clicked, Selected, Toggled, ValueChanged};
 use bones_messages::upgrader::Result as UpgraderResult;
 use bones_messages::web::{PageMessage, PanelClosed, PanelFailed, PanelOpened};
 use bones_messages::window::CloseRequested;
@@ -55,6 +55,12 @@ pub enum Inbound<'a> {
     Clicked(Clicked),
     /// `ui/changed`.
     Changed(Changed<'a>),
+    /// `ui/selected`: an option of a `select` widget was chosen.
+    Selected(Selected),
+    /// `ui/toggled`: a `checkbox` widget was clicked.
+    Toggled(Toggled),
+    /// `ui/value`: a `slider` widget was dragged.
+    ValueChanged(ValueChanged),
     /// `web/panel-opened`.
     PanelOpened(PanelOpened<'a>),
     /// `web/panel-closed`.
@@ -119,6 +125,9 @@ impl<'a> Inbound<'a> {
             GamepadAxis::TOPIC => as_(payload, Self::GamepadAxis),
             Clicked::TOPIC => as_(payload, Self::Clicked),
             Changed::TOPIC => as_(payload, Self::Changed),
+            Selected::TOPIC => as_(payload, Self::Selected),
+            Toggled::TOPIC => as_(payload, Self::Toggled),
+            ValueChanged::TOPIC => as_(payload, Self::ValueChanged),
             PanelOpened::TOPIC => as_(payload, Self::PanelOpened),
             PanelClosed::TOPIC => as_(payload, Self::PanelClosed),
             PanelFailed::TOPIC => as_(payload, Self::PanelFailed),

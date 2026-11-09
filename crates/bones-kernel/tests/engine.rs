@@ -1565,10 +1565,10 @@ impl bones_kernel::ui::Kind for AlwaysClicked {
         ui: &mut bones_kernel::ui::egui::Ui,
         id: u32,
         props: Self::Props,
-        events: &mut Vec<bones_kernel::ui::Event>,
+        cx: &mut bones_kernel::ui::DrawContext<'_>,
     ) {
         ui.label(props.text);
-        events.push(bones_kernel::ui::Event::Clicked { id });
+        cx.emit(bones_kernel::ui::Event::Clicked { id });
     }
 }
 

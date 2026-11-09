@@ -6,8 +6,22 @@ use bones_messages::ui::{Event, Spec};
 /// The ui module's side of the `ui` service: trees native modules showed
 /// this frame, in the order their owners first showed them, and the events
 /// waiting for them.
+/// An image upload or release, applied at the start of the next frame.
+pub(crate) enum ImageOp {
+    Set {
+        handle: u32,
+        width: u32,
+        height: u32,
+        rgba: Vec<u8>,
+    },
+    Free {
+        handle: u32,
+    },
+}
+
 pub(crate) struct NativeDoor {
     pub(crate) shown: Vec<(String, Spec)>,
+    pub(crate) images: Vec<(String, ImageOp)>,
     pub(crate) events: HashMap<String, Vec<Event>>,
     pub(crate) zoom: f32,
 }
@@ -16,6 +30,7 @@ impl Default for NativeDoor {
     fn default() -> Self {
         Self {
             shown: Vec::new(),
+            images: Vec::new(),
             events: HashMap::new(),
             zoom: 1.0,
         }
@@ -33,6 +48,21 @@ impl UiPort for NativeDoor {
 
     fn set_zoom(&mut self, zoom: f32) {
         self.zoom = zoom.clamp(0.5, 2.0);
+    }
+
+    fn set_image(&mut self, owner: &str, handle: u32, width: u32, height: u32, rgba: Vec<u8>) {
+        let op = ImageOp::Set {
+            handle,
+            width,
+            height,
+            rgba,
+        };
+        self.images.push((owner.to_string(), op));
+    }
+
+    fn free_image(&mut self, owner: &str, handle: u32) {
+        self.images
+            .push((owner.to_string(), ImageOp::Free { handle }));
     }
 }
 
