@@ -24,7 +24,8 @@ An ABI entry concerns every extension in existence, in any language. An engine e
 
 ### Added
 
-- `ui/selected`, `ui/toggled`, `ui/value`, `ui/submitted`, `ui/dropped`, and `ui/key` events; `ui/image` and `ui/image-free` to upload images once; the standard widget kinds in `ui::kinds` and every Lucide icon in `ui::icons`.
+- Layouts for wrapping and right-aligned rows, submenus, justified galleries that draw only what is on screen, and a `Modal` root; hints, focus, and disabled states on inputs.
+- `ui/selected`, `ui/toggled`, `ui/value`, `ui/submitted`, `ui/dropped`, `ui/key`, `ui/appeared`, and `ui/reached-end` events; `ui/image` and `ui/image-free` to upload images once; the standard widget kinds in `ui::kinds` and every Lucide icon in `ui::icons`.
 
 ## engine 4.0.0 / ABI 1.4.0
 

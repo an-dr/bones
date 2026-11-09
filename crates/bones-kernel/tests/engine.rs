@@ -1582,7 +1582,10 @@ impl bones_kernel::ui::UiView for OneButton {
         self.seen.lock().unwrap().push(event);
     }
 
-    fn view(&mut self) -> bones_kernel::messages::ui::Spec {
+    fn view(
+        &mut self,
+        _frame: &mut bones_kernel::ui::Frame<'_>,
+    ) -> bones_kernel::messages::ui::Spec {
         use bones_kernel::messages::ui::{kinds::Label, Root, Spec, WidgetProps};
         Spec {
             root: Root::Screen,

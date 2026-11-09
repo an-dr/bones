@@ -75,8 +75,62 @@ pub trait UiView: Send + 'static {
     /// A bus message for this view's endpoint name.
     fn on_message(&mut self, _envelope: &Envelope) {}
 
-    /// The whole interface for this frame.
-    fn view(&mut self) -> Spec;
+    /// The whole interface for this frame. Through `frame` the view may
+    /// also show extra trees such as dialogs, upload images its widgets
+    /// show, and set the interface zoom and theme.
+    fn view(&mut self, frame: &mut Frame<'_>) -> Spec;
+}
+
+/// What a view may do besides returning its main tree, for one frame.
+pub struct Frame<'a> {
+    port: &'a mut dyn UiPort,
+    owner: &'a str,
+    extra: Vec<String>,
+}
+
+impl<'a> Frame<'a> {
+    /// A frame for `owner` over `port`; `ViewModule` makes one each frame,
+    /// and a test can make one over a recording port to check a view.
+    pub fn new(port: &'a mut dyn UiPort, owner: &'a str) -> Self {
+        Self {
+            port,
+            owner,
+            extra: Vec::new(),
+        }
+    }
+
+    /// Shows another tree this frame, such as a `Modal` dialog or a floating
+    /// `Window`, under `<module name>/<name>`. Its events come back through
+    /// `on_event` like the main tree's, so keep widget ids unique across
+    /// the trees.
+    pub fn window(&mut self, name: &str, spec: Spec) {
+        let owner = format!("{}/{name}", self.owner);
+        self.port.show(&owner, spec);
+        if !self.extra.contains(&owner) {
+            self.extra.push(owner);
+        }
+    }
+
+    /// Uploads an image this view's widgets show by `handle` (see
+    /// `UiPort::set_image`).
+    pub fn set_image(&mut self, handle: u32, width: u32, height: u32, rgba: Vec<u8>) {
+        self.port.set_image(self.owner, handle, width, height, rgba);
+    }
+
+    /// Forgets an image this view uploaded.
+    pub fn free_image(&mut self, handle: u32) {
+        self.port.free_image(self.owner, handle);
+    }
+
+    /// Scales the interface (see `UiPort::set_zoom`).
+    pub fn set_zoom(&mut self, zoom: f32) {
+        self.port.set_zoom(zoom);
+    }
+
+    /// Chooses light, dark, or the desktop's mode (see `UiPort::set_theme`).
+    pub fn set_theme(&mut self, theme: Theme) {
+        self.port.set_theme(theme);
+    }
 }
 
 /// Runs a `UiView` as a native module named `name`: each frame it hands
@@ -85,6 +139,8 @@ pub struct ViewModule<V: UiView> {
     name: String,
     view: V,
     port: Option<UiService>,
+    /// The extra trees shown last frame, whose events are due this frame.
+    extra: Vec<String>,
 }
 
 impl<V: UiView> ViewModule<V> {
@@ -94,6 +150,7 @@ impl<V: UiView> ViewModule<V> {
             name: name.into(),
             view,
             port: None,
+            extra: Vec::new(),
         }
     }
 }
@@ -123,13 +180,21 @@ impl<V: UiView> Module for ViewModule<V> {
     /// After the tick, so the tree reflects everything this frame's
     /// messages changed, and before `render`, where the ui module draws.
     fn after_tick(&mut self) {
-        let Some(port) = &self.port else { return };
-        let events = port.lock().unwrap().take_events(&self.name);
+        let Some(port) = self.port.clone() else {
+            return;
+        };
+        let mut port = port.lock().unwrap();
+        let mut events = port.take_events(&self.name);
+        for owner in &self.extra {
+            events.extend(port.take_events(owner));
+        }
         for event in events {
             self.view.on_event(event);
         }
-        let spec = self.view.view();
-        port.lock().unwrap().show(&self.name, spec);
+        let mut frame = Frame::new(&mut *port, &self.name);
+        let spec = self.view.view(&mut frame);
+        self.extra = frame.extra;
+        port.show(&self.name, spec);
     }
 }
 
