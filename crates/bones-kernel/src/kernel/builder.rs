@@ -124,6 +124,8 @@ pub struct Kernel {
     // Applied to the ui module when `build` constructs it.
     #[cfg(feature = "presentation")]
     ui_kinds: Vec<RegisterKind>,
+    #[cfg(feature = "presentation")]
+    ui_native_look: bool,
     #[cfg(feature = "web")]
     web_enabled: bool,
     #[cfg(feature = "instance")]
@@ -179,6 +181,8 @@ impl Kernel {
             ui_enabled: false,
             #[cfg(feature = "presentation")]
             ui_kinds: Vec::new(),
+            #[cfg(feature = "presentation")]
+            ui_native_look: true,
             #[cfg(feature = "web")]
             web_enabled: false,
             #[cfg(feature = "instance")]
@@ -346,6 +350,15 @@ impl Kernel {
         self.ui_enabled = true;
         self.ui_kinds
             .push(Box::new(move |ui: &mut Ui| ui.register(kind)));
+        self
+    }
+
+    /// Whether the ui module follows the desktop's look (ADR-049): its font,
+    /// light or dark mode, accent, and spacing. On by default; `false`
+    /// keeps egui's own look, for a game or a test that wants it fixed.
+    #[cfg(feature = "presentation")]
+    pub fn ui_native_look(mut self, native: bool) -> Self {
+        self.ui_native_look = native;
         self
     }
 
@@ -565,6 +578,8 @@ impl Kernel {
         let ui_enabled = self.ui_enabled;
         #[cfg(feature = "presentation")]
         let ui_kinds = std::mem::take(&mut self.ui_kinds);
+        #[cfg(feature = "presentation")]
+        let ui_native_look = self.ui_native_look;
         let bus = bones_kernel_infra::bus::Bus::new();
         let registry = Registry::new();
         let exit_requested = bones_kernel_infra::exit::ExitRequest::new();
@@ -727,6 +742,9 @@ impl Kernel {
             let mut ui = Ui::new(bus.clone(), self.logger.clone());
             for register in ui_kinds {
                 register(&mut ui);
+            }
+            if ui_native_look {
+                ui.use_native_look();
             }
             register_module(&bus, &registry, &mut services, &mut modules, Box::new(ui))
                 .map_err(crate::Error::msg)?;

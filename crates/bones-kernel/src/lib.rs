@@ -315,7 +315,7 @@ pub mod draw_target {
 /// - The tree itself is `messages::ui`.
 #[cfg(feature = "presentation")]
 pub mod ui {
-    pub use bones_kernel_infra::ui_port::{UiPort, UiService, UiView, ViewModule};
+    pub use bones_kernel_infra::ui_port::{Theme, UiPort, UiService, UiView, ViewModule};
     pub use bones_module_ui::{egui, DrawContext, Event, Kind};
 }
 

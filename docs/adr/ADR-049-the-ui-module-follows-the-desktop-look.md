@@ -9,7 +9,7 @@ egui's default look resembles no desktop. An application built on bones widgets 
 - **Native look by default.** The ui module reads the system font, light or dark mode, and accent colour, and applies the spacing and corners of the desktop it runs on (Windows, KDE, GNOME, COSMIC). It follows mode and accent changes while running. A composition setting turns it off for egui's own look.
 - **Resemble, not reproduce.** bones keeps drawing its own widgets; it does not wrap the platform's controls.
 - **Lucide icons.** The standard icon set is Lucide, bundled as a font and picked by name. The names are widely known to developers and agents, so an icon can be chosen without looking it up.
-- **Custom title bar as a window option.** The platform can open a window without the system frame and hand moving, resizing, and snapping back to the window manager; the title bar itself is a standard widget.
+- **Custom title bar as a standard widget.** Drawing a `title-bar` widget removes the window's system frame and hands moving, resizing, and snapping back to the window manager through a hit-test; where the platform refuses, the system frame stays and the widget draws nothing.
 
 ## Rationale
 
@@ -22,4 +22,5 @@ egui's default look resembles no desktop. An application built on bones widgets 
 - **Each application themes itself**: extensions cannot, and native applications would repeat the same detection code.
 - **Material Symbols**: the best-known names, but a font of several megabytes and one platform's look everywhere.
 - **Phosphor**: a ready egui crate, but less familiar names.
-- **Title bar in each application**: the hit-test needs the platform's window, which the platform layer owns.
+- **Title bar in each application**: every application would repeat the same unsafe window code.
+- **A separate window option**: a second switch that must agree with the tree; the widget's presence already says the application wants it.

@@ -12,6 +12,11 @@ publish.workspace = true
 arboard = "3.6"
 bones-kernel-infra = { path = "../bones-kernel-infra", default-features = false, features = ["platform"] }
 bones-messages = { path = "../../bones-messages" }
+# The native look reads the desktop's settings (ADR-049).
+dirs = "6"
 egui = "0.32"
 open = "5.3"
 sdl3 = { version = "0.18.4", features = ["build-from-source-static", "unsafe_textures"] }
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.55"

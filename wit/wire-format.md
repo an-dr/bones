@@ -531,6 +531,15 @@ Empty payload, zero bytes.
 | --- | --- |
 | `text` | `str` |
 
+#### title-bar
+
+`props` of kind `title-bar`: the window's own title bar with minimise, maximise, and close; place it first in a `screen`'s top panel. The first one drawn removes the system frame, which moving, resizing, and snapping then keep working without; where the platform refuses, the system frame stays and this draws nothing.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `title` | `str` | |
+| `icon` | `u32` | handle of an uploaded image before the title; one with no image shows none |
+
 ### `ui/clicked`
 
 | Field | Type | Meaning |

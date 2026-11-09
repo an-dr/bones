@@ -14,11 +14,13 @@
 //! at a time; revisit (direct send, or a per-extension topic) once that
 //! stops holding.
 
+mod chrome;
 mod display_scale;
 mod draw_context;
 mod fonts;
 mod input_translation;
 mod kind;
+mod look;
 mod native_door;
 mod output_translation;
 mod platform_output;

@@ -27,6 +27,8 @@ impl UiPort for FakePort {
     fn set_image(&mut self, _owner: &str, _handle: u32, _w: u32, _h: u32, _rgba: Vec<u8>) {}
 
     fn free_image(&mut self, _owner: &str, _handle: u32) {}
+
+    fn set_theme(&mut self, _theme: super::Theme) {}
 }
 
 /// Counts clicks and shows the count.

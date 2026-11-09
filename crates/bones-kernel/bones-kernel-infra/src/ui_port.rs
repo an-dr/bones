@@ -15,6 +15,18 @@ use bones_messages::ui::{Event, Spec};
 
 use crate::bus::{Envelope, Handler, Module, ModuleContext};
 
+/// Light or dark, as an application's theme setting chooses it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Theme {
+    /// Follow the desktop's light or dark mode (the default).
+    #[default]
+    System,
+    /// Always light.
+    Light,
+    /// Always dark.
+    Dark,
+}
+
 /// What the ui module offers a native module.
 pub trait UiPort: Send {
     /// Shows `owner`'s tree this frame, replacing anything it showed
@@ -38,6 +50,10 @@ pub trait UiPort: Send {
 
     /// Forgets an image `owner` uploaded.
     fn free_image(&mut self, owner: &str, handle: u32);
+
+    /// Chooses light, dark, or the desktop's mode for the native look; has
+    /// no effect when the look is turned off.
+    fn set_theme(&mut self, theme: Theme);
 }
 
 /// The service's registry key: shared, because several native modules may

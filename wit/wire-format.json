@@ -562,6 +562,11 @@
               "name": "toast",
               "description": "`props` of kind `toast`: a message floating at the bottom of the window; its close button publishes `ui/clicked`.",
               "payload": { "fields": [{ "name": "text", "type": "str" }] }
+            },
+            {
+              "name": "title-bar",
+              "description": "`props` of kind `title-bar`: the window's own title bar with minimise, maximise, and close; place it first in a `screen`'s top panel. The first one drawn removes the system frame, which moving, resizing, and snapping then keep working without; where the platform refuses, the system frame stays and this draws nothing.",
+              "payload": { "fields": [{ "name": "title", "type": "str" }, { "name": "icon", "type": "u32", "meaning": "handle of an uploaded image before the title; one with no image shows none" }] }
             }
           ]
         },

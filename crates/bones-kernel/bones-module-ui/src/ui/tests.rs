@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use bones_kernel_infra::bus::{Bus, Envelope, Handler, Module, ModuleContext, ServiceRegistry};
 use bones_kernel_infra::draw_target::{DrawTarget, DrawTargetService, UiMesh};
 use bones_kernel_infra::logging::{Level, Logger, RecordingSink};
-use bones_kernel_infra::ui_port::UiService;
+use bones_kernel_infra::ui_port::{Theme, UiService};
 use bones_messages::ui::kinds::{Button, Label};
 use bones_messages::ui::{Layout, Node, Root, Spec, WidgetProps};
 use bones_messages::{EncodeMessage, Message};
@@ -397,4 +397,26 @@ fn an_image_whose_size_and_pixels_disagree_is_refused_with_a_warning() {
     let warnings = warnings(&sink);
     assert_eq!(warnings.len(), 1, "{warnings:?}");
     assert!(warnings[0].contains("image 4"));
+}
+
+#[test]
+fn the_owners_theme_choice_overrides_the_desktop_mode() {
+    let mut ui = Ui::new(Bus::new(), Logger::default());
+    ui.use_native_look();
+    let mut services = ServiceRegistry::new();
+    services
+        .provide::<DrawTargetService>(Box::new(SharedTarget::default()))
+        .unwrap();
+    ui.init(&mut ModuleContext::new(&mut services)).unwrap();
+    let port: UiService = services.get::<UiService>().unwrap().clone();
+
+    for (theme, dark) in [
+        (Theme::Dark, true),
+        (Theme::Light, false),
+        (Theme::Dark, true),
+    ] {
+        port.lock().unwrap().set_theme(theme);
+        ui.update();
+        assert_eq!(ui.ctx.style().visuals.dark_mode, dark, "{theme:?}");
+    }
 }
