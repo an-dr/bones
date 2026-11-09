@@ -23,6 +23,10 @@ impl UiPort for FakePort {
     }
 
     fn set_zoom(&mut self, _zoom: f32) {}
+
+    fn set_image(&mut self, _owner: &str, _handle: u32, _w: u32, _h: u32, _rgba: Vec<u8>) {}
+
+    fn free_image(&mut self, _owner: &str, _handle: u32) {}
 }
 
 /// Counts clicks and shows the count.

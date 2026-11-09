@@ -30,6 +30,14 @@ pub trait UiPort: Send {
     /// scale, for an application's interface-size setting. Clamped to
     /// 0.5–2; 1 is the display's size.
     fn set_zoom(&mut self, zoom: f32);
+
+    /// Uploads an image `owner`'s `image` widgets show by `handle`:
+    /// `width * height` straight RGBA8 pixels, row by row. A second upload
+    /// under the same handle replaces the first.
+    fn set_image(&mut self, owner: &str, handle: u32, width: u32, height: u32, rgba: Vec<u8>);
+
+    /// Forgets an image `owner` uploaded.
+    fn free_image(&mut self, owner: &str, handle: u32);
 }
 
 /// The service's registry key: shared, because several native modules may

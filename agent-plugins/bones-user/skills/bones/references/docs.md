@@ -897,7 +897,7 @@ How a container arranges its children.
 | 1 | horizontal | none |
 | 2 | centred | none |
 | 3 | scroll | none |
-| 4 | frame | none |
+| 4 | frame: a card, the look's faint fill with rounded corners; give it a `strong` first child as its title | none |
 | 5 | grid | `columns`: `u16` — children per row |
 | 6 | panel | `side`: `u8` — `0` top, `1` bottom, `2` left, `3` right, `4` central: what the other panels leave |
 
@@ -925,6 +925,156 @@ How a container arranges its children.
 | --- | --- |
 | `label` | `str` |
 
+#### heading
+
+`props` of kind `heading`: a section title.
+
+| Field | Type |
+| --- | --- |
+| `text` | `str` |
+
+#### weak
+
+`props` of kind `weak`: de-emphasised text.
+
+| Field | Type |
+| --- | --- |
+| `text` | `str` |
+
+#### strong
+
+`props` of kind `strong`: emphasised text.
+
+| Field | Type |
+| --- | --- |
+| `text` | `str` |
+
+#### selectable
+
+`props` of kind `selectable`: a label drawn as chosen or not; a click publishes `ui/clicked`.
+
+| Field | Type |
+| --- | --- |
+| `label` | `str` |
+| `selected` | `bool` |
+
+#### select
+
+`props` of kind `select`: a drop-down of options; choosing one publishes `ui/selected`.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `selected` | `u32` | index of the chosen option; `4294967295` when none is |
+| `placeholder` | `str` | shown when none is chosen |
+| `count` | `u16` | number of options |
+| `options` | `count` × `str` | |
+
+#### checkbox
+
+`props` of kind `checkbox`: a labelled on/off box; a click publishes `ui/toggled`.
+
+| Field | Type |
+| --- | --- |
+| `label` | `str` |
+| `checked` | `bool` |
+
+#### slider
+
+`props` of kind `slider`: a value between bounds; a drag publishes `ui/value`.
+
+| Field | Type |
+| --- | --- |
+| `value` | `f32` |
+| `min` | `f32` |
+| `max` | `f32` |
+
+#### separator
+
+`props` of kind `separator`: a thin line; empty.
+
+Empty payload, zero bytes.
+
+#### hyperlink
+
+`props` of kind `hyperlink`: a link the ui module opens in the system browser.
+
+| Field | Type |
+| --- | --- |
+| `label` | `str` |
+| `url` | `str` |
+
+#### spinner
+
+`props` of kind `spinner`: a busy indicator; empty.
+
+Empty payload, zero bytes.
+
+#### space
+
+`props` of kind `space`: empty room between neighbours.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `amount` | `f32` | in points |
+
+#### image
+
+`props` of kind `image`: an image the owner uploaded with `ui/image`; a click publishes `ui/clicked` when the id is not `0`. A handle with no image draws an empty box of the same size.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `handle` | `u32` | |
+| `width` | `f32` | box width in points; `0` takes the image's own |
+| `height` | `f32` | box height in points; `0` takes the image's own |
+| `fit` | `u8` | `0` fill: stretched to the box, `1` cover: covers the box, the overflow cropped evenly, `2` contain: fits inside the box, centred |
+| `corner` | `f32` | corner radius in points |
+
+#### icon
+
+`props` of kind `icon`: one bundled Lucide icon by its lucide.dev name, e.g. `trash-2`; a click publishes `ui/clicked` when the id is not `0`. An unknown name draws nothing.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `name` | `str` | |
+| `size` | `f32` | height in points; `0` takes the body text size |
+
+#### empty-state
+
+`props` of kind `empty-state`: a centred icon, title, and detail where a screen has nothing to show.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `icon` | `str` | a lucide.dev name |
+| `title` | `str` | |
+| `detail` | `str` | |
+
+#### progress
+
+`props` of kind `progress`: a bar with an optional caption.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `fraction` | `f32` | done, 0 to 1; negative for work of unknown length, drawn as a sweep |
+| `text` | `str` | caption; empty for none |
+
+#### icon-button
+
+`props` of kind `icon-button`: a button with a leading icon; a click publishes `ui/clicked`.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `icon` | `str` | a lucide.dev name; empty for none |
+| `label` | `str` | |
+| `primary` | `bool` | filled with the accent colour, for the main action |
+
+#### toast
+
+`props` of kind `toast`: a message floating at the bottom of the window; its close button publishes `ui/clicked`.
+
+| Field | Type |
+| --- | --- |
+| `text` | `str` |
+
 ### `ui/clicked`
 
 | Field | Type | Meaning |
@@ -937,6 +1087,51 @@ How a container arranges its children.
 | --- | --- | --- |
 | `id` | `u32` | the widget id from the spec |
 | `text` | `str-rest` | the field's new contents |
+
+### `ui/selected`
+
+A `select` widget's option was chosen.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `id` | `u32` | the widget id from the spec |
+| `index` | `u32` | the chosen option |
+
+### `ui/toggled`
+
+A `checkbox` widget was clicked.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `id` | `u32` | the widget id from the spec |
+| `on` | `bool` | the new state |
+
+### `ui/value`
+
+A `slider` widget was dragged.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `id` | `u32` | the widget id from the spec |
+| `value` | `f32` | the new value |
+
+### `ui/image`
+
+Uploads an image the sender's `image` widgets show by handle, so a tree never carries pixels. Handles are per sender; a second upload under a handle replaces the first.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `handle` | `u32` | |
+| `width`, `height` | `u32` each | in pixels |
+| `rgba` | `rest` | `width * height` straight RGBA8 pixels, row by row |
+
+### `ui/image-free`
+
+Forgets an image the sender uploaded; widgets still naming it draw an empty box.
+
+| Field | Type |
+| --- | --- |
+| `handle` | `u32` |
 
 ## `audio/*`
 

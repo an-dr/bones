@@ -264,6 +264,37 @@ export interface UiChanged {
   text: string;
 }
 
+/** `ui/selected` */
+export interface UiSelected {
+  id: number;
+  index: number;
+}
+
+/** `ui/toggled` */
+export interface UiToggled {
+  id: number;
+  on: boolean;
+}
+
+/** `ui/value` */
+export interface UiValue {
+  id: number;
+  value: number;
+}
+
+/** `ui/image` */
+export interface UiImage {
+  handle: number;
+  width: number;
+  height: number;
+  rgba: Uint8Array;
+}
+
+/** `ui/image-free` */
+export interface UiImageFree {
+  handle: number;
+}
+
 /** `audio/load-sound` */
 export interface AudioLoadSound {
   id: number;
@@ -407,6 +438,11 @@ export interface Messages {
   "renderer/captured": RendererCaptured;
   "ui/clicked": UiClicked;
   "ui/changed": UiChanged;
+  "ui/selected": UiSelected;
+  "ui/toggled": UiToggled;
+  "ui/value": UiValue;
+  "ui/image": UiImage;
+  "ui/image-free": UiImageFree;
   "audio/load-sound": AudioLoadSound;
   "audio/play-sound": AudioPlaySound;
   "audio/play-music": AudioPlayMusic;
@@ -462,6 +498,11 @@ export const FIELDS: { [T in keyof Messages]: ReadonlyArray<readonly [string, Fi
   "renderer/captured": [["request_id", "u32"], ["scope", "u8"], ["width", "u32"], ["height", "u32"], ["png", "rest"]],
   "ui/clicked": [["id", "u32"]],
   "ui/changed": [["id", "u32"], ["text", "str-rest"]],
+  "ui/selected": [["id", "u32"], ["index", "u32"]],
+  "ui/toggled": [["id", "u32"], ["on", "bool"]],
+  "ui/value": [["id", "u32"], ["value", "f32"]],
+  "ui/image": [["handle", "u32"], ["width", "u32"], ["height", "u32"], ["rgba", "rest"]],
+  "ui/image-free": [["handle", "u32"]],
   "audio/load-sound": [["id", "u32"], ["bytes", "rest"]],
   "audio/play-sound": [["id", "u32"], ["volume", "f32"]],
   "audio/play-music": [["id", "u32"], ["volume", "f32"]],

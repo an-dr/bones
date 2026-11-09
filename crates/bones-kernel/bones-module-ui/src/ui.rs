@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -6,16 +6,18 @@ use bones_kernel_infra::bus::{Bus, Envelope, Handler, Module, ModuleContext};
 use bones_kernel_infra::draw_target::{DrawTargetService, UiMesh, UiVertex};
 use bones_kernel_infra::logging::Logger;
 use bones_kernel_infra::ui_port::UiService;
-use bones_messages::ui::{Root, Spec};
+use bones_messages::ui::{FreeImage, Root, SetImage, Spec};
 use bones_messages::{DecodeMessage, Message};
 
 use crate::display_scale::display_scale;
+use crate::fonts;
 use crate::input_translation::{compute_modifiers, translate_key, translate_mouse_button};
 use crate::kind::Kind;
-use crate::native_door::{upsert, NativeDoor};
+use crate::native_door::{upsert, ImageOp, NativeDoor};
 use crate::output_translation::{compute_texture_key, convert_color_image_to_straight_rgba};
+use crate::platform_output;
 use crate::registry::{DrawProblem, Registry};
-use crate::tree::{draw_spec, Outcome};
+use crate::tree::{draw_spec, Images, Outcome};
 
 /// Owns the embedded egui context: decodes widget specs published on
 /// `ui/spec`, runs one egui frame per tick, and submits the resulting
@@ -28,6 +30,10 @@ pub struct Ui {
     // `update` drains this on every call.
     pending: Vec<(String, Spec)>,
     registry: Registry,
+    // Uploaded images by owner, and uploads from extensions waiting for the
+    // next frame (native ones wait in the door).
+    images: HashMap<String, Images>,
+    image_ops: Vec<(String, ImageOp)>,
     // Trees native modules showed through the `ui` service, and the events
     // waiting for them; shared with every module that resolved the service.
     door: Arc<Mutex<NativeDoor>>,
@@ -59,11 +65,15 @@ impl Ui {
     /// used both to publish `ui/clicked`/`ui/changed` and to register `Self`
     /// as a bus endpoint via `Handler` (the caller's job, not `new`'s).
     pub fn new(bus: Bus, logger: Logger) -> Self {
+        let ctx = egui::Context::default();
+        ctx.set_fonts(fonts::definitions(None));
         Self {
-            ctx: egui::Context::default(),
+            ctx,
             bus,
             pending: Vec::new(),
             registry: Registry::standard(),
+            images: HashMap::new(),
+            image_ops: Vec::new(),
             door: Arc::default(),
             reported: HashSet::new(),
             screen_owner: None,
@@ -158,6 +168,20 @@ impl Ui {
                     return false;
                 };
                 self.modifiers = compute_modifiers(*keymod);
+                let pressed = matches!(event, E::KeyDown { .. });
+                // egui reads the clipboard only through these events.
+                if pressed && self.modifiers.command {
+                    match mapped {
+                        egui::Key::V => {
+                            if let Some(text) = platform_output::clipboard_text() {
+                                self.events.push(egui::Event::Paste(text));
+                            }
+                        }
+                        egui::Key::C => self.events.push(egui::Event::Copy),
+                        egui::Key::X => self.events.push(egui::Event::Cut),
+                        _ => {}
+                    }
+                }
                 self.events.push(egui::Event::Key {
                     key: mapped,
                     physical_key: None,
@@ -186,6 +210,7 @@ impl Ui {
             return;
         };
         self.refresh_scale();
+        self.apply_image_ops();
         let screen_rect = egui::Rect::from_min_size(
             egui::Pos2::ZERO,
             egui::vec2(screen_width as f32, screen_height as f32) / self.scale,
@@ -213,19 +238,21 @@ impl Ui {
             .collect();
         let pending = self.one_screen(pending);
         let registry = &self.registry;
+        let images = &self.images;
         let mut outcomes: Vec<Outcome> = Vec::new();
         let full_output = self.ctx.run(raw_input, |ctx| {
             // egui may run the closure more than once per frame; only the
             // last pass's outcome is the one the user saw.
             outcomes = pending
                 .iter()
-                .map(|(owner, spec, _)| draw_spec(ctx, owner, spec, registry))
+                .map(|(owner, spec, _)| draw_spec(ctx, owner, spec, registry, images.get(owner)))
                 .collect();
         });
         for ((owner, _, native), outcome) in pending.iter().zip(outcomes) {
             self.report(owner, *native, outcome);
         }
 
+        platform_output::apply(&full_output.platform_output, &self.logger);
         let ppp = full_output.pixels_per_point;
         let clipped = self.ctx.tessellate(full_output.shapes, ppp);
 
@@ -305,6 +332,49 @@ impl Ui {
     /// How often the display's scale is asked again: it changes only when
     /// the window moves to another display or the user changes the setting.
     const SCALE_POLL: Duration = Duration::from_secs(1);
+
+    /// Uploads and frees the images both doors queued since the last frame.
+    fn apply_image_ops(&mut self) {
+        let native = std::mem::take(&mut self.door.lock().unwrap().images);
+        let ops: Vec<(String, ImageOp)> = std::mem::take(&mut self.image_ops)
+            .into_iter()
+            .chain(native)
+            .collect();
+        for (owner, op) in ops {
+            match op {
+                ImageOp::Set {
+                    handle,
+                    width,
+                    height,
+                    rgba,
+                } => {
+                    let size = [width as usize, height as usize];
+                    if rgba.len() != size[0] * size[1] * 4 {
+                        let message = format!(
+                            "'{owner}' uploaded image {handle} as {width}x{height} with {} bytes; ignored",
+                            rgba.len()
+                        );
+                        self.logger.warn("ui", &message);
+                        continue;
+                    }
+                    let pixels = egui::ColorImage::from_rgba_unmultiplied(size, &rgba);
+                    let name = format!("{owner}/{handle}");
+                    let texture = self
+                        .ctx
+                        .load_texture(name, pixels, egui::TextureOptions::LINEAR);
+                    self.images
+                        .entry(owner)
+                        .or_default()
+                        .insert(handle, texture);
+                }
+                ImageOp::Free { handle } => {
+                    if let Some(images) = self.images.get_mut(&owner) {
+                        images.remove(&handle);
+                    }
+                }
+            }
+        }
+    }
 
     fn refresh_scale(&mut self) {
         let due = self
@@ -413,6 +483,8 @@ impl Module for Ui {
             "ui needs a draw-target service (configure .renderer() too)".to_string()
         })?);
         ctx.subscribe(Spec::TOPIC);
+        ctx.subscribe(SetImage::TOPIC);
+        ctx.subscribe(FreeImage::TOPIC);
         let service: UiService = self.door.clone();
         ctx.provide_service(service)?;
         Ok(())
@@ -435,10 +507,29 @@ impl Module for Ui {
 
 impl Handler for Ui {
     fn handle(&mut self, envelope: &Envelope) {
-        match Spec::decode(&envelope.payload) {
-            Ok(spec) => {
-                upsert(&mut self.pending, &envelope.sender, spec);
-            }
+        let owner = envelope.sender.clone();
+        let decoded = match envelope.topic.as_str() {
+            SetImage::TOPIC => SetImage::decode(&envelope.payload).map(|image| {
+                let op = ImageOp::Set {
+                    handle: image.handle,
+                    width: image.width,
+                    height: image.height,
+                    rgba: image.rgba.to_vec(),
+                };
+                self.image_ops.push((owner, op));
+            }),
+            FreeImage::TOPIC => FreeImage::decode(&envelope.payload).map(|free| {
+                let op = ImageOp::Free {
+                    handle: free.handle,
+                };
+                self.image_ops.push((owner, op));
+            }),
+            _ => Spec::decode(&envelope.payload).map(|spec| {
+                upsert(&mut self.pending, &owner, spec);
+            }),
+        };
+        match decoded {
+            Ok(()) => {}
             Err(err) => {
                 self.logger.error(
                     "ui",

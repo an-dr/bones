@@ -7,7 +7,11 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
+# Clipboard and opening links: egui asks, the ui module does it, as the os
+# module does for extensions (same versions, so one copy is built).
+arboard = "3.6"
 bones-kernel-infra = { path = "../bones-kernel-infra", default-features = false, features = ["platform"] }
 bones-messages = { path = "../../bones-messages" }
 egui = "0.32"
+open = "5.3"
 sdl3 = { version = "0.18.4", features = ["build-from-source-static", "unsafe_textures"] }

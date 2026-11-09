@@ -437,7 +437,7 @@
                     { "tag": 1, "name": "horizontal", "fields": [] },
                     { "tag": 2, "name": "centred", "fields": [] },
                     { "tag": 3, "name": "scroll", "fields": [] },
-                    { "tag": 4, "name": "frame", "fields": [] },
+                    { "tag": 4, "name": "frame: a card, the look's faint fill with rounded corners; give it a `strong` first child as its title", "fields": [] },
                     { "tag": 5, "name": "grid", "fields": [{ "name": "columns", "type": "u16", "meaning": "children per row" }] },
                     { "tag": 6, "name": "panel", "fields": [{ "name": "side", "type": "u8", "values": [
                       { "value": 0, "name": "top" },
@@ -464,6 +464,104 @@
               "name": "button",
               "description": "`props` of kind `button`: a push button; a click publishes `ui/clicked`.",
               "payload": { "fields": [{ "name": "label", "type": "str" }] }
+            },
+            {
+              "name": "heading",
+              "description": "`props` of kind `heading`: a section title.",
+              "payload": { "fields": [{ "name": "text", "type": "str" }] }
+            },
+            {
+              "name": "weak",
+              "description": "`props` of kind `weak`: de-emphasised text.",
+              "payload": { "fields": [{ "name": "text", "type": "str" }] }
+            },
+            {
+              "name": "strong",
+              "description": "`props` of kind `strong`: emphasised text.",
+              "payload": { "fields": [{ "name": "text", "type": "str" }] }
+            },
+            {
+              "name": "selectable",
+              "description": "`props` of kind `selectable`: a label drawn as chosen or not; a click publishes `ui/clicked`.",
+              "payload": { "fields": [{ "name": "label", "type": "str" }, { "name": "selected", "type": "bool" }] }
+            },
+            {
+              "name": "select",
+              "description": "`props` of kind `select`: a drop-down of options; choosing one publishes `ui/selected`.",
+              "payload": { "fields": [{ "name": "selected", "type": "u32", "meaning": "index of the chosen option; `4294967295` when none is" }, { "name": "placeholder", "type": "str", "meaning": "shown when none is chosen" }, { "name": "count", "type": "u16", "meaning": "number of options" }, { "name": "options", "type": { "list": "str", "count": "count" } }] }
+            },
+            {
+              "name": "checkbox",
+              "description": "`props` of kind `checkbox`: a labelled on/off box; a click publishes `ui/toggled`.",
+              "payload": { "fields": [{ "name": "label", "type": "str" }, { "name": "checked", "type": "bool" }] }
+            },
+            {
+              "name": "slider",
+              "description": "`props` of kind `slider`: a value between bounds; a drag publishes `ui/value`.",
+              "payload": { "fields": [{ "name": "value", "type": "f32" }, { "name": "min", "type": "f32" }, { "name": "max", "type": "f32" }] }
+            },
+            {
+              "name": "separator",
+              "description": "`props` of kind `separator`: a thin line; empty.",
+              "payload": { "fields": [] }
+            },
+            {
+              "name": "hyperlink",
+              "description": "`props` of kind `hyperlink`: a link the ui module opens in the system browser.",
+              "payload": { "fields": [{ "name": "label", "type": "str" }, { "name": "url", "type": "str" }] }
+            },
+            {
+              "name": "spinner",
+              "description": "`props` of kind `spinner`: a busy indicator; empty.",
+              "payload": { "fields": [] }
+            },
+            {
+              "name": "space",
+              "description": "`props` of kind `space`: empty room between neighbours.",
+              "payload": { "fields": [{ "name": "amount", "type": "f32", "meaning": "in points" }] }
+            },
+            {
+              "name": "image",
+              "description": "`props` of kind `image`: an image the owner uploaded with `ui/image`; a click publishes `ui/clicked` when the id is not `0`. A handle with no image draws an empty box of the same size.",
+              "payload": { "fields": [
+                { "name": "handle", "type": "u32" },
+                { "name": "width", "type": "f32", "meaning": "box width in points; `0` takes the image's own" },
+                { "name": "height", "type": "f32", "meaning": "box height in points; `0` takes the image's own" },
+                { "name": "fit", "type": "u8", "values": [
+                  { "value": 0, "name": "fill: stretched to the box" },
+                  { "value": 1, "name": "cover: covers the box, the overflow cropped evenly" },
+                  { "value": 2, "name": "contain: fits inside the box, centred" }
+                ] },
+                { "name": "corner", "type": "f32", "meaning": "corner radius in points" }
+              ] }
+            },
+            {
+              "name": "icon",
+              "description": "`props` of kind `icon`: one bundled Lucide icon by its lucide.dev name, e.g. `trash-2`; a click publishes `ui/clicked` when the id is not `0`. An unknown name draws nothing.",
+              "payload": { "fields": [
+                { "name": "name", "type": "str" },
+                { "name": "size", "type": "f32", "meaning": "height in points; `0` takes the body text size" }
+              ] }
+            },
+            {
+              "name": "empty-state",
+              "description": "`props` of kind `empty-state`: a centred icon, title, and detail where a screen has nothing to show.",
+              "payload": { "fields": [{ "name": "icon", "type": "str", "meaning": "a lucide.dev name" }, { "name": "title", "type": "str" }, { "name": "detail", "type": "str" }] }
+            },
+            {
+              "name": "progress",
+              "description": "`props` of kind `progress`: a bar with an optional caption.",
+              "payload": { "fields": [{ "name": "fraction", "type": "f32", "meaning": "done, 0 to 1; negative for work of unknown length, drawn as a sweep" }, { "name": "text", "type": "str", "meaning": "caption; empty for none" }] }
+            },
+            {
+              "name": "icon-button",
+              "description": "`props` of kind `icon-button`: a button with a leading icon; a click publishes `ui/clicked`.",
+              "payload": { "fields": [{ "name": "icon", "type": "str", "meaning": "a lucide.dev name; empty for none" }, { "name": "label", "type": "str" }, { "name": "primary", "type": "bool", "meaning": "filled with the accent colour, for the main action" }] }
+            },
+            {
+              "name": "toast",
+              "description": "`props` of kind `toast`: a message floating at the bottom of the window; its close button publishes `ui/clicked`.",
+              "payload": { "fields": [{ "name": "text", "type": "str" }] }
             }
           ]
         },
@@ -483,6 +581,53 @@
               { "name": "text", "type": "str-rest", "meaning": "the field's new contents" }
             ]
           }
+        },
+        {
+          "topics": ["ui/selected"],
+          "description": "A `select` widget's option was chosen.",
+          "payload": {
+            "fields": [
+              { "name": "id", "type": "u32", "meaning": "the widget id from the spec" },
+              { "name": "index", "type": "u32", "meaning": "the chosen option" }
+            ]
+          }
+        },
+        {
+          "topics": ["ui/toggled"],
+          "description": "A `checkbox` widget was clicked.",
+          "payload": {
+            "fields": [
+              { "name": "id", "type": "u32", "meaning": "the widget id from the spec" },
+              { "name": "on", "type": "bool", "meaning": "the new state" }
+            ]
+          }
+        },
+        {
+          "topics": ["ui/value"],
+          "description": "A `slider` widget was dragged.",
+          "payload": {
+            "fields": [
+              { "name": "id", "type": "u32", "meaning": "the widget id from the spec" },
+              { "name": "value", "type": "f32", "meaning": "the new value" }
+            ]
+          }
+        },
+        {
+          "topics": ["ui/image"],
+          "description": "Uploads an image the sender's `image` widgets show by handle, so a tree never carries pixels. Handles are per sender; a second upload under a handle replaces the first.",
+          "payload": {
+            "fields": [
+              { "name": "handle", "type": "u32" },
+              { "name": "width", "type": "u32", "meaning": "in pixels" },
+              { "name": "height", "type": "u32", "meaning": "in pixels" },
+              { "name": "rgba", "type": "rest", "meaning": "`width * height` straight RGBA8 pixels, row by row" }
+            ]
+          }
+        },
+        {
+          "topics": ["ui/image-free"],
+          "description": "Forgets an image the sender uploaded; widgets still naming it draw an empty box.",
+          "payload": { "fields": [{ "name": "handle", "type": "u32" }] }
         }
       ]
     },

@@ -1,5 +1,8 @@
+use std::collections::HashMap;
+
 use bones_messages::ui::{Event, Layout, Node, PanelSide, Root, Spec};
 
+use crate::draw_context::DrawContext;
 use crate::registry::{DrawProblem, Registry};
 
 /// What drawing one owner's spec produced, besides pixels.
@@ -11,8 +14,12 @@ pub(crate) struct Outcome {
     pub(crate) problems: Vec<(String, DrawProblem)>,
 }
 
+/// The images one owner uploaded, by handle.
+pub(crate) type Images = HashMap<u32, egui::TextureHandle>;
+
 struct Walk<'a> {
     registry: &'a Registry,
+    images: Option<&'a Images>,
     outcome: &'a mut Outcome,
 }
 
@@ -22,10 +29,12 @@ pub(crate) fn draw_spec(
     owner: &str,
     spec: &Spec,
     registry: &Registry,
+    images: Option<&Images>,
 ) -> Outcome {
     let mut outcome = Outcome::default();
     let mut walk = Walk {
         registry,
+        images,
         outcome: &mut outcome,
     };
     match &spec.root {
@@ -109,9 +118,8 @@ impl Walk<'_> {
                 children,
             } => self.container(ui, *id, *layout, children),
             Node::Widget { kind, id, props } => {
-                let result = self
-                    .registry
-                    .draw(ui, kind, *id, props, &mut self.outcome.events);
+                let mut cx = DrawContext::new(&mut self.outcome.events, self.images);
+                let result = self.registry.draw(ui, kind, *id, props, &mut cx);
                 if let Err(problem) = result {
                     self.outcome.problems.push((kind.clone(), problem));
                 }
@@ -148,7 +156,17 @@ impl Walk<'_> {
                     .show(ui, |ui| self.children(ui, children));
             }
             Layout::Frame => {
-                ui.group(|ui| self.children(ui, children));
+                // A card: a titled group is a frame whose first child is a
+                // `strong` title.
+                let visuals = ui.visuals();
+                egui::Frame::new()
+                    .fill(visuals.faint_bg_color)
+                    .corner_radius(visuals.widgets.inactive.corner_radius)
+                    .inner_margin(12)
+                    .show(ui, |ui| {
+                        ui.set_width(ui.available_width());
+                        self.children(ui, children);
+                    });
             }
             Layout::Grid { columns } => {
                 let columns = columns.max(1) as usize;

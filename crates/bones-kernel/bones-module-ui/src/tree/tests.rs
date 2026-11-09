@@ -1,8 +1,12 @@
-use bones_messages::ui::kinds::Label;
+use bones_messages::ui::kinds::{
+    Button, Checkbox, EmptyState, Heading, Hyperlink, Icon, IconButton, Label, Progress, Select,
+    Selectable, Separator, Slider, Space, Spinner, Strong, TextEdit, Toast, Weak,
+};
 use bones_messages::ui::{Event, Layout, Node, PanelSide, Root, Spec, WidgetProps};
 use bones_messages::{DecodeError, Reader, Writer};
 
 use super::draw_spec;
+use crate::draw_context::DrawContext;
 use crate::kind::Kind;
 use crate::registry::{DrawProblem, Registry};
 
@@ -32,9 +36,9 @@ struct GaugeKind;
 impl Kind for GaugeKind {
     type Props = Gauge;
 
-    fn draw(&self, ui: &mut egui::Ui, id: u32, props: Gauge, events: &mut Vec<Event>) {
+    fn draw(&self, ui: &mut egui::Ui, id: u32, props: Gauge, cx: &mut DrawContext<'_>) {
         ui.label(format!("{}%", props.level));
-        events.push(Event::Changed {
+        cx.emit(Event::Changed {
             id,
             text: props.level.to_string(),
         });
@@ -52,7 +56,7 @@ fn run(spec: &Spec, registry: &Registry) -> super::Outcome {
     let ctx = egui::Context::default();
     let mut outcome = None;
     let _ = ctx.run(egui::RawInput::default(), |ctx| {
-        outcome = Some(draw_spec(ctx, "owner", spec, registry));
+        outcome = Some(draw_spec(ctx, "owner", spec, registry, None));
     });
     outcome.unwrap()
 }
@@ -134,4 +138,74 @@ fn every_screen_panel_and_loose_child_is_drawn() {
     let mut ids: Vec<u32> = outcome.events.iter().map(Event::id).collect();
     ids.sort();
     assert_eq!(ids, [1, 2, 3, 4, 5, 6]);
+}
+
+#[test]
+fn every_standard_kind_is_registered_and_draws() {
+    let spec = screen(vec![
+        Label { text: "l".into() }.node(0),
+        Heading { text: "h".into() }.node(0),
+        Weak { text: "w".into() }.node(0),
+        Strong { text: "s".into() }.node(0),
+        Button { label: "b".into() }.node(1),
+        TextEdit { text: "t".into() }.node(2),
+        Selectable {
+            label: "sel".into(),
+            selected: true,
+        }
+        .node(3),
+        Select {
+            selected: Some(0),
+            placeholder: "p".into(),
+            options: vec!["a".into(), "b".into()],
+        }
+        .node(4),
+        Checkbox {
+            label: "c".into(),
+            checked: true,
+        }
+        .node(5),
+        Slider {
+            value: 1.0,
+            min: 0.0,
+            max: 2.0,
+        }
+        .node(6),
+        Separator.node(0),
+        Hyperlink {
+            label: "link".into(),
+            url: "https://example.com".into(),
+        }
+        .node(0),
+        Spinner.node(0),
+        Space { amount: 4.0 }.node(0),
+        EmptyState {
+            icon: "image".into(),
+            title: "t".into(),
+            detail: "d".into(),
+        }
+        .node(0),
+        Progress {
+            fraction: -1.0,
+            text: "c".into(),
+        }
+        .node(0),
+        IconButton {
+            icon: "download".into(),
+            label: "Save".into(),
+            primary: true,
+        }
+        .node(7),
+        Toast { text: "hi".into() }.node(8),
+        Icon {
+            name: "trash-2".into(),
+            size: 0.0,
+        }
+        .node(0),
+    ]);
+
+    let outcome = run(&spec, &Registry::standard());
+
+    assert!(outcome.problems.is_empty(), "{:?}", outcome.problems);
+    assert!(outcome.events.is_empty(), "nothing was clicked");
 }

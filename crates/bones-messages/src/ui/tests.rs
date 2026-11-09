@@ -161,3 +161,63 @@ fn changed_round_trips() {
     };
     assert_eq!(Changed::decode(&changed.encode()), Ok(changed));
 }
+
+#[test]
+fn set_a_events_round_trip() {
+    let selected = Selected { id: 3, index: 2 };
+    assert_eq!(Selected::decode(&selected.encode()), Ok(selected));
+    let toggled = Toggled { id: 4, on: true };
+    assert_eq!(Toggled::decode(&toggled.encode()), Ok(toggled));
+    let value = ValueChanged { id: 5, value: 1.5 };
+    assert_eq!(ValueChanged::decode(&value.encode()), Ok(value));
+}
+
+#[test]
+fn icons_are_found_by_their_lucide_name() {
+    assert_eq!(icons::by_name("trash-2"), Some(icons::TRASH_2));
+    assert_eq!(icons::by_name("folder-open"), Some(icons::FOLDER_OPEN));
+    assert_eq!(icons::by_name("no-such-icon"), None);
+    assert!(icons::TRASH_2
+        .chars()
+        .all(|c| ('\u{e000}'..='\u{f8ff}').contains(&c)));
+}
+
+#[test]
+fn image_messages_round_trip() {
+    let set = SetImage {
+        handle: 2,
+        width: 1,
+        height: 1,
+        rgba: &[1, 2, 3, 4],
+    };
+    assert_eq!(SetImage::decode(&set.encode()), Ok(set));
+    let free = FreeImage { handle: 2 };
+    assert_eq!(FreeImage::decode(&free.encode()), Ok(free));
+}
+
+#[test]
+fn every_event_publishes_as_its_own_topic() {
+    let topics: Vec<&str> = [
+        Event::Clicked { id: 1 },
+        Event::Changed {
+            id: 1,
+            text: "x".into(),
+        },
+        Event::Selected { id: 1, index: 0 },
+        Event::Toggled { id: 1, on: true },
+        Event::ValueChanged { id: 1, value: 0.0 },
+    ]
+    .iter()
+    .map(|event| event.to_message().0)
+    .collect();
+    assert_eq!(
+        topics,
+        [
+            "ui/clicked",
+            "ui/changed",
+            "ui/selected",
+            "ui/toggled",
+            "ui/value"
+        ]
+    );
+}
