@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use bones_kernel_infra::ui_port::UiPort;
+use bones_kernel_infra::ui_port::{Theme, UiPort};
 use bones_messages::ui::{Event, Spec};
 
 /// The ui module's side of the `ui` service: trees native modules showed
@@ -24,6 +24,7 @@ pub(crate) struct NativeDoor {
     pub(crate) images: Vec<(String, ImageOp)>,
     pub(crate) events: HashMap<String, Vec<Event>>,
     pub(crate) zoom: f32,
+    pub(crate) theme: Theme,
 }
 
 impl Default for NativeDoor {
@@ -33,6 +34,7 @@ impl Default for NativeDoor {
             images: Vec::new(),
             events: HashMap::new(),
             zoom: 1.0,
+            theme: Theme::System,
         }
     }
 }
@@ -58,6 +60,10 @@ impl UiPort for NativeDoor {
             rgba,
         };
         self.images.push((owner.to_string(), op));
+    }
+
+    fn set_theme(&mut self, theme: Theme) {
+        self.theme = theme;
     }
 
     fn free_image(&mut self, owner: &str, handle: u32) {

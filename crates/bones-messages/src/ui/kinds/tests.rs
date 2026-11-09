@@ -39,6 +39,7 @@ fn kind_names_are_distinct() {
         Progress::KIND,
         IconButton::KIND,
         Toast::KIND,
+        TitleBar::KIND,
     ];
     for (i, a) in names.iter().enumerate() {
         assert!(!names[i + 1..].contains(a), "{a} is used twice");
@@ -96,6 +97,10 @@ fn set_a_kinds_round_trip() {
         icon: "download".into(),
         label: "Save".into(),
         primary: true,
+    });
+    round_trips(TitleBar {
+        title: "crossWall".into(),
+        icon: 1,
     });
     round_trips(Toast {
         text: "Saved".into(),

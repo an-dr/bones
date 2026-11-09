@@ -20,6 +20,7 @@ mod space;
 mod spinner;
 mod strong;
 mod text_edit;
+mod title_bar;
 mod toast;
 mod weak;
 
@@ -41,6 +42,7 @@ pub use space::Space;
 pub use spinner::Spinner;
 pub use strong::Strong;
 pub use text_edit::TextEdit;
+pub use title_bar::TitleBar;
 pub use toast::Toast;
 pub use weak::Weak;
 

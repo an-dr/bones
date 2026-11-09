@@ -6,7 +6,7 @@ Detailed design of the platform layer — the only component that touches the OS
 
 | Area | Provides |
 | --- | --- |
-| Window | One SDL window; `window/*` events (resize, close request, DPI); optionally without the system frame, with moving, resizing, and snapping handed back to the window manager by a hit-test over the title bar and edges (ADR-049) |
+| Window | One SDL window; `window/*` events (resize, close request, DPI); optionally without the system frame, with moving, resizing, and snapping handed back to the window manager by a hit-test over the title bar and edges; the ui module does this the first time a `title-bar` widget is drawn (ADR-049) |
 | Tray icon | Icon + menu owned by core config; `tray/*` events (click, menu selection) |
 | Input | Keyboard, mouse, controller — fed into the focus layers (ADR-008) |
 | Timing | Frame pacing and `core/tick` generation with delta time |

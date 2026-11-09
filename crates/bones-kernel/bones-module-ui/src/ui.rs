@@ -13,6 +13,7 @@ use crate::display_scale::display_scale;
 use crate::fonts;
 use crate::input_translation::{compute_modifiers, translate_key, translate_mouse_button};
 use crate::kind::Kind;
+use crate::look::NativeLook;
 use crate::native_door::{upsert, ImageOp, NativeDoor};
 use crate::output_translation::{compute_texture_key, convert_color_image_to_straight_rgba};
 use crate::platform_output;
@@ -30,6 +31,8 @@ pub struct Ui {
     // `update` drains this on every call.
     pending: Vec<(String, Spec)>,
     registry: Registry,
+    // The desktop's look, when the composition asked for it (ADR-049).
+    look: Option<NativeLook>,
     // Uploaded images by owner, and uploads from extensions waiting for the
     // next frame (native ones wait in the door).
     images: HashMap<String, Images>,
@@ -72,6 +75,7 @@ impl Ui {
             bus,
             pending: Vec::new(),
             registry: Registry::standard(),
+            look: None,
             images: HashMap::new(),
             image_ops: Vec::new(),
             door: Arc::default(),
@@ -86,6 +90,15 @@ impl Ui {
             start: Instant::now(),
             logger,
             target: None,
+        }
+    }
+
+    /// Follows the desktop's font, mode, accent, and spacing from now on
+    /// (ADR-049). The kernel builder calls it unless the composition opts
+    /// out; without it egui's own look stays.
+    pub fn use_native_look(&mut self) {
+        if self.look.is_none() {
+            self.look = Some(NativeLook::start(&self.ctx));
         }
     }
 
@@ -237,8 +250,14 @@ impl Ui {
             .chain(native.into_iter().map(|(owner, spec)| (owner, spec, true)))
             .collect();
         let pending = self.one_screen(pending);
+        let time = self.start.elapsed().as_secs_f64();
+        let theme = self.door.lock().unwrap().theme;
+        if let Some(look) = &mut self.look {
+            look.follow(&self.ctx, theme, time);
+        }
         let registry = &self.registry;
         let images = &self.images;
+        let look = &mut self.look;
         let mut outcomes: Vec<Outcome> = Vec::new();
         let full_output = self.ctx.run(raw_input, |ctx| {
             // egui may run the closure more than once per frame; only the
@@ -247,6 +266,9 @@ impl Ui {
                 .iter()
                 .map(|(owner, spec, _)| draw_spec(ctx, owner, spec, registry, images.get(owner)))
                 .collect();
+            if let Some(look) = look.as_mut() {
+                look.paint_fade(ctx, time);
+            }
         });
         for ((owner, _, native), outcome) in pending.iter().zip(outcomes) {
             self.report(owner, *native, outcome);

@@ -19,6 +19,7 @@ mod space;
 mod spinner;
 mod strong;
 mod text_edit;
+mod title_bar;
 mod toast;
 mod weak;
 
@@ -43,6 +44,7 @@ pub(crate) fn register_all(registry: &mut Registry) {
     registry.register(spinner::SpinnerKind);
     registry.register(strong::StrongKind);
     registry.register(text_edit::TextEditKind);
+    registry.register(title_bar::TitleBarKind);
     registry.register(toast::ToastKind);
     registry.register(weak::WeakKind);
 }

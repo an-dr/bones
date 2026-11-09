@@ -45,7 +45,7 @@ bones draws application interfaces from widgets it ships, so a product never wri
 
 - **Actor**: application developer.
 - **Goal**: a title bar drawn by the application, as modern desktop applications have, without losing window management.
-- **Flow**: open the window with a custom title bar and put the title bar widget at the top of the screen.
+- **Flow**: put the title bar widget first in the screen's top panel.
 - **Success**: the system frame is gone; dragging the bar moves the window, edges resize it, the desktop's snapping works, and the caption buttons minimise, maximise, and close.
 
 ## Exclusions
