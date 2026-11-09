@@ -16,3 +16,4 @@ Each use case has a stable ID, `UC-<AREA>-<NN>`, kept when the use case is rewor
 ## Areas
 
 - [bones-develop.md](bones-develop.md) — `UC-DEV`: installing bones, creating products, embedding the engine in an existing program, the development loop, and keeping a project current.
+- [ui.md](ui.md) — `UC-UI`: building interfaces from bones widgets, icons, custom widgets, the native look, and the window's own title bar.

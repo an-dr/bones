@@ -28,11 +28,15 @@ Almost every other term is positioned by this one distinction.
 
 **Guest library** — a Rust crate compiled *into* a `.wasm`, not linked by the engine. It owns no native resource and is pure computation over messages. `bones-wasm-sdk`'s `game_ui` module is the one bones ships (ADR-025).
 
-**Service** — a typed value one module publishes into the registry for others to resolve, so a consumer depends on `bus` rather than on the provider's crate. `window-surface`, `bus`, and `draw-target` are the shipped ones, and they are the only way one native module reaches another (ADR-031); see [design/modules.md](design/modules.md).
+**Service** — a typed value one module publishes into the registry for others to resolve, so a consumer depends on `bus` rather than on the provider's crate. `window-surface`, `bus`, `draw-target`, and `ui` are the shipped ones, and they are the only way one native module reaches another (ADR-031); see [design/modules.md](design/modules.md).
 
 ## The two public surfaces
 
 Each has its own version line, and the line is what tells you which surface you are on.
+
+**Widget tree** — the description of an interface the `ui` module draws: layout containers and widgets under a Window or Screen root, rebuilt by its owner every frame. Extensions publish it on `ui/spec`; native modules hand it over through the `ui` service (ADR-048).
+
+**Widget kind** — one entry in the `ui` module's registry: how a widget of that kind is drawn and which events it reports. The standard widgets are kinds bones registers; an embedder registers its own the same way.
 
 **Kernel surface** — `bones-kernel`, what an embedder pins. Moves in lockstep with the kernel infrastructure and native-module crates in `crates/`.
 

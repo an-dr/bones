@@ -1,6 +1,6 @@
 # Presentation
 
-Detailed design of the three presentation backends and input routing. Decisions: [ADR-002](../adr/ADR-002-engine-owned-rendering.md) (engine-owned rendering), [ADR-005](../adr/ADR-005-egui-ui-layer.md) (egui layer), [ADR-006](../adr/ADR-006-wry-web-panels.md) (web panels), [ADR-008](../adr/ADR-008-layered-input-focus.md) (layered focus).
+Detailed design of the three presentation backends and input routing. Decisions: [ADR-002](../adr/ADR-002-engine-owned-rendering.md) (engine-owned rendering), [ADR-005](../adr/ADR-005-egui-ui-layer.md) (egui layer), [ADR-006](../adr/ADR-006-wry-web-panels.md) (web panels), [ADR-008](../adr/ADR-008-layered-input-focus.md) (layered focus), [ADR-048](../adr/ADR-048-one-widget-tree-for-native-modules-and-extensions.md) (one widget tree), [ADR-049](../adr/ADR-049-the-ui-module-follows-the-desktop-look.md) (desktop look).
 
 ## The three backends
 
@@ -25,10 +25,15 @@ One extension may use several backends at once (e.g. a game on `gfx/*` with a se
 
 ## ui — widgets
 
-- Immediate-mode: an extension subscribed to `core/tick` publishes its widget spec each frame it wants UI visible; no spec published = no UI drawn.
-- Interaction events (`ui/clicked`, `ui/changed`, …) are published back to the owning extension only.
-- The widget vocabulary starts small (a dozen core widgets) and is versioned like the draw-command set.
-- egui output is drawn by the renderer above all gfx layers.
+- Immediate-mode: the owner rebuilds its widget tree each frame it wants UI visible; no tree this frame = no UI drawn (ADR-048).
+- A tree is rooted in a **Window**, a floating panel each owner may have, or a **Screen**, the whole window with top, side, bottom, and central panels. One owner holds the Screen at a time; a second claim is refused with an error naming the holder, and Windows float above it.
+- Two doors: an extension publishes the tree encoded on `ui/spec`; a native module hands it over in Rust through the `ui` service. The same tree draws the same way through either.
+- Interactive widgets carry an owner-assigned id. Events name that id: published as `ui/*` to an owning extension only, returned directly to an owning native module. Scroll position, focus, and animation progress are kept by the module per id, so the owner models only its own state.
+- Every widget is drawn through a registry of widget kinds. The standard set is registered first; a native application registers more when composing the engine, and an unknown kind in a tree is reported once with its name and drawn as nothing.
+- Images are uploaded once and referred to by handle, so a tree never carries pixels.
+- The standard set is versioned like the draw-command set; adding a widget is a minor ABI change, changing an encoding a major one.
+- The look follows the desktop by default: system font, light or dark mode, accent colour, and the desktop's spacing and corners, refreshed when the system changes them (ADR-049). Icons are Lucide, picked by name.
+- egui output is drawn by the renderer above all gfx layers, at the display's scale.
 
 ## web — panels
 

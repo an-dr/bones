@@ -12,7 +12,7 @@ Most readers want the [architecture chapter](../architecture/index.md) instead. 
 | [002](ADR-002-engine-owned-rendering.md) | Engine-owned rendering via draw commands | active |
 | [003](ADR-003-hybrid-messaging.md) | Hybrid messaging: pub/sub topics plus direct request/reply | active |
 | [004](ADR-004-event-driven-execution.md) | Event-driven extension execution with optional tick | active |
-| [005](ADR-005-egui-ui-layer.md) | egui UI layer in the core, widgets as bus messages | active |
+| [005](ADR-005-egui-ui-layer.md) | egui UI layer in the core, widgets as bus messages | active — vocabulary size replaced by 048 |
 | [006](ADR-006-wry-web-panels.md) | Web UI via wry web panels (optional feature) | active |
 | [007](ADR-007-watchdog-quarantine.md) | Extension watchdog and quarantine | active |
 | [008](ADR-008-layered-input-focus.md) | Layered input focus, top layer consumes | active — refined by [031](ADR-031-native-modules-reach-each-other-only-through-services.md) |
@@ -55,6 +55,8 @@ Most readers want the [architecture chapter](../architecture/index.md) instead. 
 | [045](ADR-045-os-replies-identify-the-caller-and-outstanding-work-is-bounded.md) | OS replies identify the caller and outstanding work is bounded | active |
 | [046](ADR-046-releases-publish-source-not-binary-archives.md) | Releases publish source, not binary archives | active |
 | [047](ADR-047-bones-develop-installs-engines-by-tag.md) | bones-develop installs engines by tag | active — supersedes the rest of 043 |
+| [048](ADR-048-one-widget-tree-for-native-modules-and-extensions.md) | One widget tree for native modules and extensions | active — extends 005 |
+| [049](ADR-049-the-ui-module-follows-the-desktop-look.md) | The ui module follows the desktop look | active |
 
 ## The two reversals
 

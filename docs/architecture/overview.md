@@ -67,7 +67,7 @@ graph TD
 Ten modules ship first-party. An embedder may replace any of them or add their own.
 
 - **renderer** — owns all drawing. Extensions never draw; they publish batches of draw commands and the renderer executes them against the window ([ADR-002](../adr/ADR-002-engine-owned-rendering.md)).
-- **ui** — egui embedded in the core. Extensions declare widgets; the layer turns them into draw data and sends interaction events back ([ADR-005](../adr/ADR-005-egui-ui-layer.md)).
+- **ui** — egui embedded in the core. Extensions and native modules describe the same widget tree; the layer draws it in the desktop's look and reports interaction events back ([ADR-005](../adr/ADR-005-egui-ui-layer.md), [ADR-048](../adr/ADR-048-one-widget-tree-for-native-modules-and-extensions.md), [ADR-049](../adr/ADR-049-the-ui-module-follows-the-desktop-look.md)).
 - **web** — wry OS webviews for rich or web-technology UI, exchanging JSON with their pages. A presentation may also attach to a live headless engine and release its window when closed ([ADR-006](../adr/ADR-006-wry-web-panels.md), [ADR-028](../adr/ADR-028-detachable-native-modules-and-wry-presentation.md)).
 - **audio** — sound effects and music on `audio/*`.
 - **game-core** — a 2D simulation: entities, collision, tilemaps, sprite animation. It publishes authoritative transform snapshots the presentation draws ([ADR-019](../adr/ADR-019-2d-game-core-module-native-bought-dependencies.md), [ADR-026](../adr/ADR-026-game-core-publishes-authoritative-entity-transform-snapshots.md)).
@@ -90,7 +90,7 @@ Implementation detail for each module lives in its crate README; the module syst
 | Level | Backend | Suits |
 | --- | --- | --- |
 | `gfx/*` | SDL renderer | games, custom drawing |
-| `ui/*` | egui widgets | tools, inspectors, settings |
+| `ui/*` | egui widgets | application screens, tools, inspectors, settings |
 | `web/*` | wry webview | rich or web-technology UI |
 
 None of them leaks toolkit types across the sandbox boundary. An extension names shapes, widgets, or JSON — never an egui or SDL object. That is what lets the backend behind a level change without touching a single extension. Routing between the levels, and how input finds the right one, is in [design/presentation.md](../design/presentation.md).
