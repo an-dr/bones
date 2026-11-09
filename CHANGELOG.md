@@ -9,6 +9,10 @@ An ABI entry concerns every extension in existence, in any language. An engine e
 
 ## Unreleased (engine)
 
+## engine 5.0.0 / ABI 2.0.0
+
+Applications build their interfaces from widgets bones ships, drawn from one widget tree for native modules and extensions (ADR-048), in the desktop's look (ADR-049). A major release on both lines: `ui/spec` changed encoding, and `UiView::view` takes a `Frame`; `bones:extension` stays at 1.0.0.
+
 ### Added
 
 - **Bones ships the widgets desktop applications need** (ADR-048): text, buttons, inputs, selection, images, icons, cards, progress, toasts, media tiles, a full-window image stage, drag and drop, context menus, tooltips, fades, and the window's own title bar. A native module shows them through the new `ui` service (`bones_kernel::ui::ViewModule` runs a view described from state); `Kernel::ui_kind` adds a widget kind of the product's own.
@@ -16,13 +20,15 @@ An ABI entry concerns every extension in existence, in any language. An engine e
 - Lucide icons are bundled; `cargo xtask lucide` brings in a newer release.
 - The ui draws at the display's scale, forwards the mouse wheel, opens links, and uses the clipboard.
 
-## Unreleased (ABI)
-
 ### Changed
+
+- `UiView::view` takes a `Frame`, through which a view shows extra trees such as dialogs, uploads images, and sets zoom and theme.
+
+### Changed (ABI)
 
 - **`ui/spec` is a widget tree** (ADR-048): a root, `Window` or `Screen`, over layout containers and widgets named by kind with their own properties. The flat label, text-edit, and button list is gone; extensions publishing `ui/spec` need rebuilding against the new `bones-messages`.
 
-### Added
+### Added (ABI)
 
 - Layouts for wrapping and right-aligned rows, submenus, justified galleries that draw only what is on screen, and a `Modal` root; hints, focus, and disabled states on inputs.
 - `ui/selected`, `ui/toggled`, `ui/value`, `ui/submitted`, `ui/dropped`, `ui/key`, `ui/appeared`, and `ui/reached-end` events; `ui/image` and `ui/image-free` to upload images once; the standard widget kinds in `ui::kinds` and every Lucide icon in `ui::icons`.

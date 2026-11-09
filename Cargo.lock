@@ -444,7 +444,7 @@ dependencies = [
 
 [[package]]
 name = "bones"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "bones-kernel",
  "serde",
@@ -453,14 +453,14 @@ dependencies = [
 
 [[package]]
 name = "bones-build"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "serde_json",
 ]
 
 [[package]]
 name = "bones-develop"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "bones-build",
  "bones-messages",
@@ -469,7 +469,7 @@ dependencies = [
 
 [[package]]
 name = "bones-kernel"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "anyhow",
  "bones-kernel-infra",
@@ -493,7 +493,7 @@ dependencies = [
 
 [[package]]
 name = "bones-kernel-infra"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "bones-messages",
  "pubsub-bus",
@@ -502,7 +502,7 @@ dependencies = [
 
 [[package]]
 name = "bones-kernel-launch"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "dirs",
  "tempfile",
@@ -510,7 +510,7 @@ dependencies = [
 
 [[package]]
 name = "bones-kernel-watch"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "notify",
  "tempfile",
@@ -518,7 +518,7 @@ dependencies = [
 
 [[package]]
 name = "bones-launcher"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "bones-versioning",
  "tempfile",
@@ -527,11 +527,11 @@ dependencies = [
 
 [[package]]
 name = "bones-messages"
-version = "1.4.0"
+version = "2.0.0"
 
 [[package]]
 name = "bones-module-audio"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "bones-kernel-infra",
  "bones-messages",
@@ -540,7 +540,7 @@ dependencies = [
 
 [[package]]
 name = "bones-module-desktop"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "bones-kernel-infra",
  "bones-messages",
@@ -551,7 +551,7 @@ dependencies = [
 
 [[package]]
 name = "bones-module-devtools"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "bones-kernel-infra",
  "bones-messages",
@@ -560,7 +560,7 @@ dependencies = [
 
 [[package]]
 name = "bones-module-game-core"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "bones-kernel-infra",
  "bones-messages",
@@ -572,7 +572,7 @@ dependencies = [
 
 [[package]]
 name = "bones-module-os"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "arboard",
  "base64",
@@ -587,7 +587,7 @@ dependencies = [
 
 [[package]]
 name = "bones-module-renderer"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "ab_glyph",
  "bones-kernel-infra",
@@ -603,7 +603,7 @@ dependencies = [
 
 [[package]]
 name = "bones-module-single-instance"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "bones-kernel-infra",
  "bones-messages",
@@ -614,7 +614,7 @@ dependencies = [
 
 [[package]]
 name = "bones-module-ui"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "arboard",
  "bones-kernel-infra",
@@ -628,7 +628,7 @@ dependencies = [
 
 [[package]]
 name = "bones-module-upgrade"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "base64",
  "bones-kernel-infra",
@@ -645,7 +645,7 @@ dependencies = [
 
 [[package]]
 name = "bones-module-wasm"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "bones-kernel-infra",
  "bones-messages",
@@ -655,7 +655,7 @@ dependencies = [
 
 [[package]]
 name = "bones-module-web"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "bones-kernel-infra",
  "bones-messages",
@@ -669,7 +669,7 @@ dependencies = [
 
 [[package]]
 name = "bones-test"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "bones-build",
  "bones-kernel",
@@ -680,7 +680,7 @@ dependencies = [
 
 [[package]]
 name = "bones-versioning"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "semver",
 ]
@@ -6291,7 +6291,7 @@ checksum = "ea6fc2961e4ef194dcbfe56bb845534d0dc8098940c7e5c012a258bfec6701bd"
 
 [[package]]
 name = "xtask"
-version = "4.0.0"
+version = "5.0.0"
 dependencies = [
  "bones-build",
  "schemars",
