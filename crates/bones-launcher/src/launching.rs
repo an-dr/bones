@@ -33,10 +33,15 @@ pub fn run(app_exe: &str, install_dir: &Path, args: &[String]) -> Result<(), Str
 /// redirecting the launcher's stderr to a file hung waiting for that file's
 /// handle count to reach zero long after the launcher itself had exited.
 ///
-/// The child is left running rather than returned: dropping a `Child`
-/// neither kills nor waits for it, and a Windows child outlives its parent
-/// by default, so this process exiting immediately afterwards does not
-/// affect the app it just started.
+/// On Windows the child is left running and returned at once: dropping a
+/// `Child` neither kills nor waits for it, and a Windows child outlives its
+/// parent by default.
+///
+/// On Unix this process waits for the child to exit. A desktop that starts
+/// applications as systemd services keeps the child in this process's cgroup,
+/// and when the launcher exits systemd ends the service and kills everything
+/// left in it, including the app just started. Waiting keeps the service alive
+/// for as long as the app runs.
 fn spawn_detached(exe: &Path, args: &[String]) -> std::io::Result<()> {
     let mut command = Command::new(exe);
     command.args(args);
@@ -44,5 +49,9 @@ fn spawn_detached(exe: &Path, args: &[String]) -> std::io::Result<()> {
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
-    command.spawn().map(drop)
+    let mut child = command.spawn()?;
+    if cfg!(unix) {
+        child.wait()?;
+    }
+    Ok(())
 }

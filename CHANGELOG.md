@@ -9,6 +9,10 @@ An ABI entry concerns every extension in existence, in any language. An engine e
 
 ## Unreleased (engine)
 
+### Fixed
+
+- **Linux launcher no longer loses the app inside a systemd service.** On Unix `bones-launcher` waits for the application to exit instead of returning at once, so a desktop that starts it as a service (COSMIC) does not kill the app when the service ends. Windows still returns at once.
+
 ## engine 5.0.0 / ABI 2.0.0
 
 Applications build their interfaces from widgets bones ships, drawn from one widget tree for native modules and extensions (ADR-048), in the desktop's look (ADR-049). A major release on both lines: `ui/spec` changed encoding, and `UiView::view` takes a `Frame`; `bones:extension` stays at 1.0.0.
