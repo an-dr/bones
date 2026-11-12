@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "bones-user",
-  "version": "5.0.0",
+  "version": "5.0.1",
   "description": "Build, run, test, and look at a product on the bones engine: the rules an agent cannot guess, a skill for the whole loop, and an MCP server over the running engine.",
   "author": { "name": "Andrei Gramakov" },
   "homepage": "https://github.com/an-dr/bones",

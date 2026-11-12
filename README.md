@@ -71,7 +71,7 @@ Your application owns `main` and builds the engine with the `Kernel` builder —
 ```toml
 [dependencies]
 # Drop "wasm" for a purely native application: no extensions, and no WASM runtime in the build.
-bones-kernel = { git = "https://github.com/an-dr/bones", tag = "v5.0.0", features = ["wasm"] }
+bones-kernel = { git = "https://github.com/an-dr/bones", tag = "v5.0.1", features = ["wasm"] }
 ```
 
 `bones-develop add` writes that line into an existing crate, pinned to the newest tag. Distributed by git tag, not crates.io; [docs/architecture/structure.md](docs/architecture/structure.md#how-each-one-is-obtained) says what a tag promises. Opt-in modules cover what a desktop application needs around the engine: single instance, self-update, desktop registration, OS access.
@@ -85,7 +85,7 @@ When you need a capability the sandbox cannot reach — a device, a native libra
 A [release](https://github.com/an-dr/bones/releases) is a tag and its notes; it carries no binaries ([ADR-046](docs/adr/ADR-046-releases-publish-source-not-binary-archives.md)). `bones-develop` builds the engine at a tag and caches it in `~/.bones` ([ADR-047](docs/adr/ADR-047-bones-develop-installs-engines-by-tag.md)); a project's commands do this on first use, and you can do it ahead:
 
 ```sh
-bones-develop engine install v5.0.0 --web   # or without --web for the plain build
+bones-develop engine install v5.0.1 --web   # or without --web for the plain build
 ```
 
 It needs `git`, a C compiler, and CMake, and on Linux the packages `cargo xtask linux-packages` prints; [docs/contributing/building.md](docs/contributing/building.md) has the details. Without `bones-develop`, clone the tag with `--recursive` and run `cargo xtask dist [--features web]`: `dist/` then holds the engine, `bones-develop`, an empty `extensions/` folder, the ABI (`wit/`), the `bones-user` agent plugin, a sample `bones.toml` with every default spelled out, the licence, and third-party notices; a zip of it lands beside the repository root. Builds differ by platform and by whether they include [web panels](docs/examples/web-app.md) — HTML interfaces for extensions — which need the operating system's web view at runtime. CI builds each of these with `bones-develop engine install` on every push:
