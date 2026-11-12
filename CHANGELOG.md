@@ -9,6 +9,10 @@ An ABI entry concerns every extension in existence, in any language. An engine e
 
 ## Unreleased (engine)
 
+## engine 5.0.1
+
+A fix release; the ABI stays at 2.0.0.
+
 ### Fixed
 
 - **Linux launcher no longer loses the app inside a systemd service.** On Unix `bones-launcher` waits for the application to exit instead of returning at once, so a desktop that starts it as a service (COSMIC) does not kill the app when the service ends. Windows still returns at once.
