@@ -24,6 +24,7 @@ bones is a native core with a message bus and optional sandboxed WebAssembly ext
 
 - `cargo xtask doctor` names a missing prerequisite and how to install it. SDL builds from source, so cmake and a C compiler are needed.
 - For code or build changes, run focused tests while working, then `cargo xtask test` once at the end: formatting, clippy with warnings denied, both feature sets, the kernel without `wasm`, the standalone crates, and the rustdoc build ([docs/contributing/testing.md](../../../../docs/contributing/testing.md)).
+- For a change anyone can see, look before you report: drive each state it touches with input, capture it (`bones-develop screenshot`, the MCP `screenshot` tool, or `bones-test`'s rendered `App`), and open the image. A passing test does not replace looking. If a state cannot be driven or captured, that gap is part of the change to fix ([references/invariants.md](references/invariants.md)).
 - For documentation-only changes, run the relevant Markdown and link checks; skip the workspace unit tests. Agent instructions are not documentation: a change to `agent-plugins/` also runs `cargo xtask plugins` and, when it changes the rules or MCP configuration a new project receives, the `bones-develop` tests.
 - Generated files are checked for staleness by tests. After changing a source, run its generator and commit both: `wire-format`, `vectors`, `ts-codec`, and `plugin-docs`. `cargo xtask plugins` checks the agent plugins.
 

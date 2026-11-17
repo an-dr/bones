@@ -8,11 +8,13 @@ ADR-044 makes AI-assisted product development an architectural property of bones
 | a way an extension can fail | a diagnostic, reported once per extension and topic, naming the extension, the cause, and the fix; never a silent drop |
 | a capability | a way to observe it from outside the process: a message on the bus, a devtools route, or a log line |
 | something visible | a way to capture it: the canvas through `renderer/capture`, or the whole window when it is a native child window such as a web panel |
+| a visual feature or state | a way to drive it there during development: every interaction that changes how it looks (hover, press, drag, scroll, keys, loading) reachable through `input/*` messages, `bones-develop`, or `bones-test`, and held still with `pause` and `step` so the capture is repeatable; a visual feature that cannot be captured and driven is not finished |
 | a tool or a rule an agent needs | an entry in `agent-plugins/`: a product rule in `bones-user`'s `references/rules.md`, an engine rule here |
 | a power an extension could misuse | a permission the composition root can deny (ADR-042) |
 
 ## How to tell
 
+- **Seen, not assumed.** Visual verification is how bones is used: a visual change is checked by capturing the real thing in each state it changes and looking at the image. Unit tests of layout logic catch regressions; they do not show that it looks right.
 - **Headless and repeatable.** Behaviour a product depends on can be proved in `bones-test` with a fixed frame rate: the same steps give the same frames.
 - **Nothing to read but the build.** An agent with only a `dist/` build and a product repository can find it: in the plugin, in `wit/`, or through `bones-develop`.
 - **Measured.** A change that makes the agent benchmark (`tests/agent/`) worse is a regression.

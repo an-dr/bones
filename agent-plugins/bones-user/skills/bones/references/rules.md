@@ -11,7 +11,7 @@ This product runs on the bones engine. The product's logic is a WebAssembly exte
 - `bones-develop doctor` names anything missing on the machine and how to fix it.
 - The `bones` MCP server (`bones-develop mcp`, registered by `.mcp.json`) lets you launch the engine, send input, step frames, and read messages, logs, the frame as text, and a screenshot.
 
-A change is done when `cargo test` passes and includes a check for the behaviour you added. To see the result, take a screenshot or read the frame through MCP rather than asking a person. Compare draw commands in checks; look at pixels when the question is how it looks.
+A change is done when `cargo test` passes and includes a check for the behaviour you added. A change anyone can see is done only after you have looked at it: drive every state it touches (hover, press, drag, scroll, loading, empty) with input through MCP or `bones-test`, take a screenshot of each, and open it, rather than asking a person or trusting the tests. Compare draw commands in checks; look at pixels when the question is how it looks. When the engine gives you no way to reach or capture a state, report that gap and recommend it upstream (rule 12).
 
 ## Rules
 
