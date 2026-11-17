@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
 
 use bones_messages::ui::kinds::Label;
 use bones_messages::ui::{Event, Layout, Node, PanelSide, Root, Spec, WidgetProps};
@@ -96,14 +95,20 @@ impl Walk<'_> {
                 .show(ctx, |ui| self.children(ui, children));
         }
         for (index, children) in panel(PanelSide::Left) {
-            egui::SidePanel::left(id("left", index))
+            let panel_id = id("left", index);
+            let width = animated_width(ctx, panel_id, self.side_width(ctx, panel_id, children));
+            egui::SidePanel::left(panel_id)
                 .resizable(false)
-                .show(ctx, |ui| self.children(ui, children));
+                .exact_width(width)
+                .show(ctx, |ui| self.side_children(ui, children));
         }
         for (index, children) in panel(PanelSide::Right) {
-            egui::SidePanel::right(id("right", index))
+            let panel_id = id("right", index);
+            let width = animated_width(ctx, panel_id, self.side_width(ctx, panel_id, children));
+            egui::SidePanel::right(panel_id)
                 .resizable(false)
-                .show(ctx, |ui| self.children(ui, children));
+                .exact_width(width)
+                .show(ctx, |ui| self.side_children(ui, children));
         }
         egui::CentralPanel::default().show(ctx, |ui| {
             for child in children {
@@ -156,7 +161,7 @@ impl Walk<'_> {
     ) {
         let texture = self.images.and_then(|images| images.get(&image)).cloned();
         let shown = media::tile(ui, state_id, size, texture, badge, |ui| {
-            self.children(ui, children)
+            self.fitting_children(ui, children)
         });
         if shown.appeared {
             self.outcome.events.push(Event::Appeared { id });
@@ -203,6 +208,155 @@ impl Walk<'_> {
             self.node(ui, child);
             self.tile_size = None;
         });
+    }
+
+    /// egui's `dnd_drag_source`, except that only the primary button drags
+    /// and only once the pointer has moved: egui starts on any button's press,
+    /// so a right-click picked the item up instead of opening its menu, and a
+    /// press on a button inside it, such as Apply, moved it instead.
+    fn draggable(
+        &mut self,
+        ui: &mut egui::Ui,
+        state_id: egui::Id,
+        payload: u32,
+        children: &[Node],
+    ) {
+        let ctx = ui.ctx().clone();
+        let dragging = ctx.is_being_dragged(state_id)
+            && ctx.input(|i| {
+                i.pointer.primary_down()
+                    && !i.pointer.secondary_down()
+                    && !i.pointer.middle_down()
+                    && i.pointer.is_decidedly_dragging()
+            });
+        if !dragging {
+            // Sensed below the children, over the rect they took last frame,
+            // so a button inside keeps its clicks. A new item cannot be
+            // dragged on its first frame, before it has a rect.
+            let area = state_id.with("area");
+            let rect = ctx.data(|data| data.get_temp::<egui::Rect>(area));
+            ui.interact(
+                rect.unwrap_or(egui::Rect::NOTHING),
+                state_id,
+                egui::Sense::drag(),
+            );
+            let response = ui
+                .scope(|ui| {
+                    // Text inside would take the drag to select itself.
+                    ui.style_mut().interaction.selectable_labels = false;
+                    self.children(ui, children)
+                })
+                .response;
+            ctx.data_mut(|data| data.insert_temp(area, response.rect));
+            return;
+        }
+        egui::DragAndDrop::set_payload(&ctx, payload);
+        // Still sensed, or egui drops a drag whose widget disappeared.
+        let area = state_id.with("area");
+        let rect = ctx.data(|data| data.get_temp::<egui::Rect>(area));
+        ui.interact(
+            rect.unwrap_or(egui::Rect::NOTHING),
+            state_id,
+            egui::Sense::drag(),
+        );
+        // Painted on a top layer and moved under the pointer, as egui does.
+        let layer = egui::LayerId::new(egui::Order::Tooltip, state_id);
+        let response = ui
+            .scope_builder(egui::UiBuilder::new().layer_id(layer), |ui| {
+                self.children(ui, children)
+            })
+            .response;
+        if let Some(pointer) = ctx.pointer_interact_pos() {
+            let delta = pointer - response.rect.center();
+            ctx.transform_layer_shapes(layer, egui::emath::TSTransform::from_translation(delta));
+        }
+    }
+
+    /// The width a side panel's children take on one line, measured in an
+    /// invisible pass: egui panels only ever grow, so a panel whose content
+    /// shrinks, such as navigation collapsing to icons, would keep its width.
+    fn side_width(&mut self, ctx: &egui::Context, panel: egui::Id, children: &[Node]) -> f32 {
+        let (events, problems) = (self.outcome.events.len(), self.outcome.problems.len());
+        let mut ui = egui::Ui::new(
+            ctx.clone(),
+            panel.with("measure"),
+            egui::UiBuilder::new()
+                .max_rect(ctx.screen_rect())
+                .sizing_pass()
+                .invisible(),
+        );
+        ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
+        self.children(&mut ui, children);
+        // The pass only measures: whatever it reported is reported again
+        // by the real one.
+        self.outcome.events.truncate(events);
+        self.outcome.problems.truncate(problems);
+        let margin = egui::Frame::side_top_panel(&ctx.style())
+            .total_margin()
+            .sum()
+            .x;
+        ui.min_rect().width() + margin
+    }
+
+    /// A side panel's children, one per line and as wide as the panel, so
+    /// entries line up instead of each taking its own width.
+    fn side_children(&mut self, ui: &mut egui::Ui, children: &[Node]) {
+        // A child the panel does not allocate, clipped to the panel's width
+        // of this frame: egui widens a panel to anything that overflows it, so
+        // entries already at their full width would end a slide at once.
+        let rect = ui.available_rect_before_wrap();
+        let layout = egui::Layout::top_down_justified(egui::Align::Min);
+        let mut inner = ui.new_child(egui::UiBuilder::new().max_rect(rect).layout(layout));
+        inner.shrink_clip_rect(rect);
+        inner.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
+        self.children(&mut inner, children);
+    }
+
+    /// Draws `children` in order while they fit the space left, and stops at
+    /// the first that does not: a tile's actions come rightmost first, so a
+    /// narrow tile drops its credit rather than cutting it to an ellipsis.
+    fn fitting_children(&mut self, ui: &mut egui::Ui, children: &[Node]) {
+        let spacing = ui.spacing().item_spacing.x;
+        let mut left = ui.available_width();
+        for (index, child) in children.iter().enumerate() {
+            let (events, problems) = (self.outcome.events.len(), self.outcome.problems.len());
+            let mut probe = ui.new_child(
+                egui::UiBuilder::new()
+                    .id_salt(("fit", index))
+                    .sizing_pass()
+                    .invisible(),
+            );
+            self.node(&mut probe, child);
+            self.outcome.events.truncate(events);
+            self.outcome.problems.truncate(problems);
+            let width = probe.min_rect().width();
+            if width > left {
+                break;
+            }
+            left -= width + spacing;
+            self.node(ui, child);
+        }
+    }
+
+    /// `children` as a place to drop a draggable, returning what was dropped.
+    /// Unlike egui's drop zone, which always paints a background, it shows
+    /// only while a drag hovers it, so a heading that takes drops still looks
+    /// like a heading.
+    fn drop_target(&mut self, ui: &mut egui::Ui, children: &[Node]) -> Option<u32> {
+        let mut frame = egui::Frame::new().inner_margin(2).begin(ui);
+        self.children(&mut frame.content_ui, children);
+        let response = frame.allocate_space(ui);
+        let carrying = egui::DragAndDrop::has_payload_of_type::<u32>(ui.ctx());
+        if carrying && response.contains_pointer() {
+            let accent = ui.visuals().selection.bg_fill;
+            frame.frame.fill = accent.gamma_multiply(0.25);
+            frame.frame.stroke = egui::Stroke::new(1.0_f32, accent);
+            frame.frame.corner_radius = ui.visuals().widgets.inactive.corner_radius;
+            frame.paint(ui);
+        }
+        response
+            .dnd_release_payload::<u32>()
+            .map(|payload| *payload)
     }
 
     fn children(&mut self, ui: &mut egui::Ui, children: &[Node]) {
@@ -252,19 +406,10 @@ impl Walk<'_> {
                         self.children(ui, children);
                     });
             }
-            Layout::Draggable => {
-                let payload = id;
-                ui.dnd_drag_source(state_id, payload, |ui| self.children(ui, children));
-            }
+            Layout::Draggable => self.draggable(ui, state_id, id, children),
             Layout::DropTarget => {
-                let frame = egui::Frame::new().inner_margin(2);
-                let (_, dropped) =
-                    ui.dnd_drop_zone::<u32, _>(frame, |ui| self.children(ui, children));
-                if let Some(payload) = dropped {
-                    self.outcome.events.push(Event::Dropped {
-                        id,
-                        payload: *payload,
-                    });
+                if let Some(payload) = self.drop_target(ui, children) {
+                    self.outcome.events.push(Event::Dropped { id, payload });
                 }
             }
             Layout::ContextMenu => {
@@ -288,11 +433,21 @@ impl Walk<'_> {
                 let Some((area, tip)) = children.split_first() else {
                     return;
                 };
-                let response = ui.scope(|ui| self.node(ui, area)).response;
-                response.on_hover_ui(|ui| self.children(ui, tip));
+                let rect = ui.scope(|ui| self.node(ui, area)).response.rect;
+                // A hover-only area of its own over what was drawn: the
+                // scope's own response does not count as hovered while a
+                // clickable widget inside it is, so the tip never showed.
+                // Sensing only hover, it leaves clicks to that widget.
+                ui.interact(rect, state_id.with("tip"), egui::Sense::hover())
+                    .on_hover_ui(|ui| {
+                        // On one line: egui sizes a tip from too little room
+                        // beside a narrow widget, and "Collapse" broke in two.
+                        ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
+                        self.children(ui, tip)
+                    });
             }
             Layout::Fade => {
-                let progress = transition(ui, state_id, children);
+                let progress = transition(ui, state_id);
                 ui.scope(|ui| {
                     ui.set_opacity(progress);
                     ui.add_space((1.0 - progress) * RISE);
@@ -365,6 +520,15 @@ impl Walk<'_> {
     }
 }
 
+/// Eases a side panel toward `target`, so collapsing or expanding it, or an
+/// entry growing, slides instead of snapping; the first sight takes it at once.
+fn animated_width(ctx: &egui::Context, panel: egui::Id, target: f32) -> f32 {
+    ctx.animate_value_with_time(panel.with("width"), target, PANEL_SECONDS)
+}
+
+/// How long a side panel takes to reach a new width.
+const PANEL_SECONDS: f32 = 0.1;
+
 /// The width and height of the tile `node` is or wraps: a gallery child may
 /// be a tile inside a `draggable`, `context-menu`, or `tooltip`, whose first
 /// child is what is drawn.
@@ -411,16 +575,18 @@ const RISE: f32 = 8.0;
 
 /// Eased progress from 0 to 1 since `children` last changed under `id`;
 /// 1 the first time they are seen.
-fn transition(ui: &egui::Ui, id: egui::Id, children: &[Node]) -> f32 {
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    children.hash(&mut hasher);
-    let fingerprint = hasher.finish();
+fn transition(ui: &egui::Ui, id: egui::Id) -> f32 {
+    // Restarts when the node was not drawn on the previous pass: it just
+    // appeared, or came back. What is inside may change freely meanwhile,
+    // such as photos loading, without the whole area fading again.
+    let pass = ui.ctx().cumulative_pass_nr();
     let time = ui.input(|i| i.time);
     let started = ui.ctx().data_mut(|data| {
-        let entry = data.get_temp_mut_or_insert_with(id, || (fingerprint, f64::NEG_INFINITY));
-        if entry.0 != fingerprint {
-            *entry = (fingerprint, time);
+        let entry = data.get_temp_mut_or_insert_with(id, || (0u64, time));
+        if entry.0 + 1 < pass {
+            entry.1 = time;
         }
+        entry.0 = pass;
         entry.1
     });
     let linear = ((time - started) / TRANSITION_SECONDS).clamp(0.0, 1.0) as f32;

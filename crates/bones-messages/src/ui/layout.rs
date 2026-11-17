@@ -40,12 +40,14 @@ pub enum Layout {
     /// The first child is drawn; the others appear while the pointer
     /// rests on it.
     Tooltip,
-    /// Top to bottom; whenever anything inside changes, the new content
-    /// fades in and rises into place. Not on first appearance.
+    /// Top to bottom; fades in and rises into place when it appears, or
+    /// comes back after a frame without it. Changes inside do not restart
+    /// it, so give each view its own id to fade between views.
     Fade,
     /// A media tile: an uploaded image cover-cropped into the box, pulsing
-    /// until it arrives. The children appear in a bar along the bottom
-    /// while the pointer is over it. A click elsewhere on it reports
+    /// until it arrives. The children appear in a bar along the bottom,
+    /// rightmost first, while the pointer is over it; those that no longer
+    /// fit are left out, so put the least important last. A click elsewhere on it reports
     /// `Clicked` with this container's id.
     Tile {
         /// The owner's image handle.
@@ -54,8 +56,8 @@ pub enum Layout {
         width: u16,
         /// Box height in points.
         height: u16,
-        /// A Unicode code point drawn in the top-right corner while the
-        /// pointer is elsewhere, such as a `ui::icons` glyph; `0` for none.
+        /// A Unicode code point drawn in the accent colour in the top-right
+        /// corner, such as a `ui::icons` glyph; `0` for none.
         badge: u32,
     },
     /// A full-window preview over everything: the image fitted on a dark

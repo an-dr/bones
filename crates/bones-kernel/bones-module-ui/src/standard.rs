@@ -5,6 +5,7 @@ mod button;
 mod checkbox;
 mod empty_state;
 mod heading;
+mod highlight;
 mod hyperlink;
 mod icon;
 mod icon_button;

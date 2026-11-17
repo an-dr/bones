@@ -9,6 +9,21 @@ An ABI entry concerns every extension in existence, in any language. An engine e
 
 ## Unreleased (engine)
 
+### Added
+
+- **Animated highlights.** Buttons, icon buttons, selects, and selectables fade their hover highlight, and a selection fades between entries.
+- **Sliding side panels.** A side panel is as wide as its entries on one line and slides to a new width, such as when a navigation collapses to icons.
+- **An idle progress bar.** A `Progress` with a NaN fraction draws nothing but keeps its room; the bar is one height in every state, so what is below it never moves.
+
+### Fixed
+
+- **Drag and drop.** Only the primary button drags, and only once the pointer moves, so a right-click opens a context menu and a button inside a draggable gets its click.
+- **Flicker.** A `Fade` plays when its node appears or comes back, no longer whenever anything inside it changes.
+- **Tiles.** Their actions no longer reflow a gallery on hover; those that do not fit are left out, and the badge shows at all times in the accent colour.
+- **Drop targets** paint nothing until a drag hovers them.
+- **Icon-only buttons** stay square in a stretched layout.
+- **Tooltips** show over a clickable widget and keep their text on one line.
+
 ### Changed
 
 - **Agents verify visual work by looking at it.** The agent instructions make visual verification a rule: a visual change is checked by driving each state it touches and looking at a capture of the running engine, and every visual feature must offer a way to capture it and drive it into each state during development.
