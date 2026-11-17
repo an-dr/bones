@@ -9,6 +9,10 @@ An ABI entry concerns every extension in existence, in any language. An engine e
 
 ## Unreleased (engine)
 
+### Changed
+
+- **Agents verify visual work by looking at it.** The agent instructions make visual verification a rule: a visual change is checked by driving each state it touches and looking at a capture of the running engine, and every visual feature must offer a way to capture it and drive it into each state during development.
+
 ## engine 5.0.1
 
 A fix release; the ABI stays at 2.0.0.
