@@ -84,17 +84,28 @@ pub(crate) fn tile(
     }
     let hovered = ui.rect_contains_pointer(rect);
     let shown = appear(ui, id.with("hover"), hovered);
-    if let Some(glyph) = char::from_u32(badge).filter(|_| badge != 0 && shown < 0.5) {
+    // A mark in the accent colour, always shown: hiding it on hover made it
+    // look like a stray control. A soft shadow keeps it readable on any photo.
+    if let Some(glyph) = char::from_u32(badge).filter(|_| badge != 0) {
         let at = rect.right_top() + egui::vec2(-16.0, 16.0);
-        ui.painter()
-            .circle_filled(at, 11.0, egui::Color32::from_black_alpha(140));
-        ui.painter().text(
-            at,
-            egui::Align2::CENTER_CENTER,
-            glyph,
-            egui::FontId::proportional(13.0),
-            egui::Color32::WHITE,
-        );
+        let font = egui::FontId::proportional(18.0);
+        let painter = ui.painter();
+        let shadow = egui::Color32::from_black_alpha(150);
+        for offset in [
+            egui::vec2(1.0, 1.0),
+            egui::vec2(-1.0, 1.0),
+            egui::vec2(0.0, 1.5),
+        ] {
+            painter.text(
+                at + offset,
+                egui::Align2::CENTER_CENTER,
+                glyph,
+                font.clone(),
+                shadow,
+            );
+        }
+        let accent = ui.visuals().selection.bg_fill;
+        painter.text(at, egui::Align2::CENTER_CENTER, glyph, font, accent);
     }
     if shown > 0.0 {
         let bar = egui::Rect::from_min_max(
@@ -118,17 +129,20 @@ pub(crate) fn tile(
             egui::pos2(rect.left() + 8.0, rect.bottom() - 40.0),
             rect.right_bottom() - egui::vec2(8.0, 0.0),
         );
+        // A child the parent does not allocate, clipped to the bar: actions
+        // wider than a narrow tile must neither spill out nor resize the
+        // layout around it, which would reflow a gallery on every hover.
         let layout = egui::Layout::right_to_left(egui::Align::Center);
-        ui.scope_builder(
+        let mut bar_ui = ui.new_child(
             egui::UiBuilder::new()
                 .id_salt(id.with("actions"))
                 .max_rect(bar)
                 .layout(layout),
-            |ui| {
-                on_dark(ui);
-                actions(ui);
-            },
         );
+        bar_ui.shrink_clip_rect(bar);
+        bar_ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
+        on_dark(&mut bar_ui);
+        actions(&mut bar_ui);
     }
     TileShown {
         clicked: response.clicked(),

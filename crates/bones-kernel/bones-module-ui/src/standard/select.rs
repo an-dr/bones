@@ -34,16 +34,19 @@ impl Kind for SelectKind {
                 ui.end_row();
             }
         }
-        egui::ComboBox::from_id_salt(("select", id))
-            .selected_text(shown)
-            .show_ui(ui, |ui| {
-                for (index, option) in props.options.iter().enumerate() {
-                    let index = index as u32;
-                    let chosen = props.selected == Some(index);
-                    if ui.selectable_label(chosen, option).clicked() && !chosen {
-                        cx.emit(Event::Selected { id, index });
+        super::highlight::button(ui, |ui| {
+            egui::ComboBox::from_id_salt(("select", id))
+                .selected_text(shown)
+                .show_ui(ui, |ui| {
+                    for (index, option) in props.options.iter().enumerate() {
+                        let index = index as u32;
+                        let chosen = props.selected == Some(index);
+                        if super::highlight::selectable(ui, chosen, option).clicked() && !chosen {
+                            cx.emit(Event::Selected { id, index });
+                        }
                     }
-                }
-            });
+                })
+                .response
+        });
     }
 }
