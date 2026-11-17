@@ -9,6 +9,10 @@ An ABI entry concerns every extension in existence, in any language. An engine e
 
 ## Unreleased (engine)
 
+## engine 5.1.0
+
+Animated, steadier standard widgets, and agents that verify visual work by looking at it; the ABI stays at 2.0.0.
+
 ### Added
 
 - **Animated highlights.** Buttons, icon buttons, selects, and selectables fade their hover highlight, and a selection fades between entries.
